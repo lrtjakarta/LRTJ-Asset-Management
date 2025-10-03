@@ -1,0 +1,133 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\MasterSumber;
+use App\Models\MasterTransaction;
+use App\Models\MasterAssetType;
+use App\Models\MasterCategory;
+use App\Models\MasterCategory2;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Yajra\DataTables\Facades\DataTables;
+
+
+
+class TrashController extends Controller
+{
+    /**
+     * Map of all soft-deleted resources we want to show.
+     * Add your models/tables here (one place).
+     */
+    protected function map(): array
+    {
+        return [
+            'master_sumber' => [
+                'table'     => 'master_sumber',
+                'model'     => MasterSumber::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_transaction' => [
+                'table'     => 'master_transaction',
+                'model'     => MasterTransaction::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_asset_type' => [
+                'table'     => 'master_asset_type',
+                'model'     => MasterAssetType::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_category' => [
+                'table'     => 'master_category',
+                'model'     => MasterCategory::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            // 'master_category_2' => [
+            //     'table'     => 'master_category_2',
+            //     'model'     => MasterCategory2::class,
+            //     'pk'        => 'uuid',
+            //     'label_col' => 'name',
+            // ],
+        ];
+    }
+
+    /** Page */
+    public function index()
+    {
+        return view('trash.trash');
+    }
+
+    /** DataTables JSON: union soft-deleted rows from all mapped tables */
+    public function data(Request $request)
+    {
+        $map = $this->map();
+        if (empty($map)) {
+            return DataTables::of(collect())->make(true);
+        }
+
+        $builders = [];
+        foreach ($map as $type => $cfg) {
+            $tbl   = $cfg['table'];
+            $pk    = $cfg['pk'];
+            $label = $cfg['label_col'];
+
+            // PG: cast id & label to text so UNION aligns
+            $builders[] = DB::table($tbl)
+                ->selectRaw('?::text as type, ' . $pk . '::text as id, ' . $label . '::text as label, deleted_at', [$type])
+                ->whereNotNull('deleted_at');
+        }
+
+        $union = array_shift($builders);
+        foreach ($builders as $b) {
+            $union->unionAll($b);
+        }
+
+        $query = DB::query()->fromSub($union, 't');
+
+        return DataTables::of($query)
+            ->editColumn('deleted_at', fn($r) => $r->deleted_at ? \Carbon\Carbon::parse($r->deleted_at)->format('Y-m-d H:i') : '')
+            ->addColumn('actions', function ($r) {
+                return '
+                <div class="btn-group">
+                  <button type="button" class="btn btn-sm btn-light-success btn-restore" data-type="' . $r->type . '" data-id="' . $r->id . '">Restore</button>
+                  <button type="button" class="btn btn-sm btn-light-danger btn-force" data-type="' . $r->type . '" data-id="' . $r->id . '">Force Delete</button>
+                </div>';
+            })
+            ->rawColumns(['actions'])
+            ->make(true);
+    }
+
+    /** Restore a row by type/id */
+    public function restore(string $type, string $id)
+    {
+        $cfg = $this->map()[$type] ?? null;
+        abort_unless($cfg, 404, 'Unknown type');
+
+        $model = $cfg['model'];
+        $pk    = $cfg['pk'];
+
+        $row = $model::onlyTrashed()->where($pk, $id)->firstOrFail();
+        $row->restore();
+
+        return response()->json(['ok' => true, 'message' => 'Restored']);
+    }
+
+    /** Permanently delete a row by type/id */
+    public function force(string $type, string $id)
+    {
+        $cfg = $this->map()[$type] ?? null;
+        abort_unless($cfg, 404, 'Unknown type');
+
+        $model = $cfg['model'];
+        $pk    = $cfg['pk'];
+
+        $row = $model::onlyTrashed()->where($pk, $id)->firstOrFail();
+        $row->forceDelete();
+
+        return response()->json(['ok' => true, 'message' => 'Permanently deleted']);
+    }
+}

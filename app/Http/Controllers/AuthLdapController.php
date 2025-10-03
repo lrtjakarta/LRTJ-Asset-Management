@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AuthLdapController extends Controller
 {
@@ -21,11 +24,47 @@ class AuthLdapController extends Controller
         $username = $data['username'];
         $password = $data['password'];
 
+        $key = 'ldap-login:' . Str::lower($request->input('username')) . '|' . $request->ip();
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
+
+            throw ValidationException::withMessages([
+                'username' => "Too many login attempts. Try again in {$seconds} seconds.",
+            ])->status(429);
+        }
+
+        RateLimiter::hit($key, 60);
+
+
+        // --- STATIC ADMIN SHORT-CIRCUIT ---
+        $staticUser = strtolower((string) config('auth.static_admin.username'));
+        $staticPass = (string) config('auth.static_admin.password');
+
+        if (
+            $staticUser !== '' && $staticPass !== ''
+            && hash_equals($staticUser, $username)
+            && hash_equals($staticPass, $password)
+        ) {
+
+            $request->session()->put('ldap_user', [
+                'uid'   => $username,
+                'name'  => 'Administrator',
+                'dn'    => 'cn=admin,dc=local',
+                'ou'    => 'local',
+                'auth_via' => 'static',
+            ]);
+            $request->session()->regenerate();
+
+            RateLimiter::clear($key);
+            return redirect()->intended(route('dashboard'))
+                ->with('success', 'Welcome, admin!');
+        }
+
         $host    = env('LDAP_HOST', 'ldap.forumsys.com');
         $port    = (int) env('LDAP_PORT', 389);
         $baseDn  = env('LDAP_BASE_DN', 'dc=example,dc=com');
         $roDn    = env('LDAP_BIND_DN');           // cn=read-only-admin,dc=example,dc=com
-        $roPass  = env('LDAP_BIND_PASSWORD');     // password
+        $roPass  = env('LDAP_BIND_PASSWORD');
         $timeout = (int) env('LDAP_TIMEOUT', 5);
 
         // 1) Try direct bind with uid DN
@@ -51,8 +90,10 @@ class AuthLdapController extends Controller
                 'name' => $cn,
                 'ou'   => $ous[0] ?? null,
                 'ous'  => $ous,
+                'auth_via' => 'ldap',
             ]);
             $request->session()->regenerate();
+            RateLimiter::clear($key);
 
             return redirect()->intended(route('dashboard'));
         }
@@ -80,9 +121,10 @@ class AuthLdapController extends Controller
                 'name' => $cn,
                 'ou'   => $ous[0] ?? null,
                 'ous'  => $ous,
+                'auth_via' => 'ldap',
             ]);
             $request->session()->regenerate();
-            session()->flash('success', 'Successfully Login!');
+            RateLimiter::clear($key);
             return redirect()->route('dashboard');
         }
 

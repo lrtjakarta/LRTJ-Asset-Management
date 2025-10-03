@@ -5,11 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class MasterSumber extends Model
+class MasterCategory2 extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'master_sumber';
+    protected $table = 'master_category_2';
     protected $primaryKey = 'uuid';
     public $incrementing = false;
     protected $keyType = 'string';

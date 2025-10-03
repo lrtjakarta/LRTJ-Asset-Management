@@ -28,31 +28,29 @@
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->is('dashboard') ? 'active' : ''}}" href="{{ route('dashboard') }}">
+                        <a class="menu-link {{ request()->is('dashboard') ? 'active' : '' }}"
+                            href="{{ route('dashboard') }}">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-element-11 fs-2">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                    <span class="path3"></span>
-                                    <span class="path4"></span>
+                                <i class="ki-duotone ki-home fs-2">
                                 </i>
                             </span>
                             <span class="menu-title">Dashboard</span>
                         </a>
                         <!--end:Menu link-->
                     </div>
+                    <!--end:Menu item-->
 
                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item {{ request()->segment(1) == 'master-data' ? 'show here' : '' }} menu-accordion">
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'master-data' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-element-plus fs-2">
+                                <i class="ki-duotone ki-category fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
                                     <span class="path3"></span>
                                     <span class="path4"></span>
-                                    <span class="path5"></span>
                                 </i>
                             </span>
                             <span class="menu-title">Master Data</span>
@@ -64,7 +62,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-transaction' ? 'active' : '' }}" 
+                                    href="{{ route('master.transaction') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -76,7 +75,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-asset-type' ? 'active' : '' }}" 
+                                    href="{{ route('master.asset_type') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -88,7 +88,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-category' ? 'active' : '' }}" 
+                                    href="{{ route('master.category') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -100,7 +101,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-category-2' ? 'active' : '' }}"
+                                    href="{{ route('master.category_2') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -172,7 +174,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-sumber' ? 'active' : '' }}" href="{{ route('master.sumber') }}">
+                                <a class="menu-link {{ request()->segment(2) == 'master-sumber' ? 'active' : '' }}"
+                                    href="{{ route('master.sumber') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -258,9 +261,12 @@
                         <!--begin:Menu link-->
                         <span class="menu-link" href="#">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-file fs-2">
+                                <i class="ki-duotone ki-printer fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
+                                    <span class="path3"></span>
+                                    <span class="path4"></span>
+                                    <span class="path5"></span>
                                 </i>
                             </span>
                             <span class="menu-title">Printing Label</span>
@@ -274,28 +280,9 @@
                         <!--begin:Menu link-->
                         <span class="menu-link" href="#">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-color-swatch fs-2">
+                                <i class="ki-duotone ki-abstract-26 fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
-                                    <span class="path3"></span>
-                                    <span class="path4"></span>
-                                    <span class="path5"></span>
-                                    <span class="path6"></span>
-                                    <span class="path7"></span>
-                                    <span class="path8"></span>
-                                    <span class="path9"></span>
-                                    <span class="path10"></span>
-                                    <span class="path11"></span>
-                                    <span class="path12"></span>
-                                    <span class="path13"></span>
-                                    <span class="path14"></span>
-                                    <span class="path15"></span>
-                                    <span class="path16"></span>
-                                    <span class="path17"></span>
-                                    <span class="path18"></span>
-                                    <span class="path19"></span>
-                                    <span class="path20"></span>
-                                    <span class="path21"></span>
                                 </i>
                             </span>
                             <span class="menu-title">Assets</span>
@@ -309,7 +296,7 @@
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-chart fs-2">
+                                <i class="ki-duotone ki-arrow-right-left fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
                                 </i>
@@ -344,18 +331,7 @@
                                 <!--end:Menu link-->
                             </div>
                             <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Acquisition</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
+                            
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
@@ -388,14 +364,32 @@
                         <!--begin:Menu link-->
                         <a class="menu-link" href="#">
                             <span class="menu-icon">
-                                <i class="ki-duotone ki-menu fs-2">
+                                <i class="ki-duotone ki-document fs-2">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
+                            </span>
+                            <span class="menu-title">Reporting</span>
+                        </a>
+                        <!--end:Menu link-->
+                    </div>
+                    <!--end:Menu item-->
+
+                    <!--begin:Menu item-->
+                    <div class="menu-item">
+                        <!--begin:Menu link-->
+                        <a class="menu-link {{ request()->is('trash') ? 'active' : '' }}"
+                            href="{{ route('trash.index') }}">
+                            <span class="menu-icon">
+                                <i class="ki-duotone ki-trash fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
                                     <span class="path3"></span>
                                     <span class="path4"></span>
+                                    <span class="path5"></span>
                                 </i>
                             </span>
-                            <span class="menu-title">Reporting</span>
+                            <span class="menu-title">Trash</span>
                         </a>
                         <!--end:Menu link-->
                     </div>

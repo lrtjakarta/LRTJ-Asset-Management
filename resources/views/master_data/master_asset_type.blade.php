@@ -4,10 +4,10 @@
     <script>
         (function() {
             // DataTable
-            const table = $('#tableMasterSumber').DataTable({
+            const table = $('#tableMasterAssetType').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: "{{ route('master.sumber.data') }}",
+                ajax: "{{ route('master.asset_type.data') }}",
                 order: [
                     [4, 'desc']
                 ],
@@ -61,11 +61,11 @@
                     },
                 ]
             });
-            
+
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
-                $.get("{{ route('master.sumber.show', ':uuid') }}".replace(':uuid', uuid))
+                $.get("{{ route('master.asset_type.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
                             icon: 'error',
@@ -73,7 +73,7 @@
                             text: 'Failed to load'
                         });
                         const d = res.data;
-                        const $f = $('#formMasterSumber');
+                        const $f = $('#formMasterAssetType');
                         $f.find('[name="uuid"]').val(d.uuid);
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
@@ -90,12 +90,12 @@
             });
 
             // One submit handler for create/update
-            $('#formMasterSumber').on('submit', function(e) {
+            $('#formMasterAssetType').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
                 const payload = $f.serialize(); // includes uuid (if any), name, status
 
-                $.post("{{ route('master.sumber.save') }}", payload)
+                $.post("{{ route('master.asset_type.save') }}", payload)
                     .done(function(res) {
                         $('#kt_modal_add').modal('hide');
                         table.ajax.reload(null, false);
@@ -135,7 +135,7 @@
                 }).then(function(r) {
                     if (!r.isConfirmed) return;
                     $.ajax({
-                        url: "{{ route('master.sumber.delete', ':uuid') }}".replace(':uuid',
+                        url: "{{ route('master.asset_type.delete', ':uuid') }}".replace(':uuid',
                             uuid),
                         type: 'DELETE',
                         data: {
@@ -146,7 +146,7 @@
                         Swal.fire({
                             icon: 'success',
                             title: 'Deleted',
-                            text: res.message || 'Sumber deleted.'
+                            text: res.message || 'Asset Type deleted.'
                         });
                     }).fail(function(xhr) {
                         Swal.fire({
@@ -171,7 +171,7 @@
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
                 <!--begin::Title-->
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                    Master Sumber
+                    Master Asset Type
                 </h1>
                 <!--end::Title-->
                 <!--begin::Breadcrumb-->
@@ -188,7 +188,7 @@
                     <!--end::Item-->
                     <!--begin::Item-->
                     <li class="breadcrumb-item text-muted">
-                        Master Sumber
+                        Master Asset Type
                     </li>
                     <!--end::Item-->
                 </ul>
@@ -196,10 +196,6 @@
 
             </div>
             <!--end::Page title-->
-            {{-- <div class="d-flex align-items-center gap-2 gap-lg-3">
-                <a href="#" class="btn btn-sm fw-bold btn-danger" data-bs-toggle="modal"
-                    data-bs-target="#kt_modal_new_target">Add Sumber</a>
-            </div> --}}
 
         </div>
         <!--end::Toolbar container-->
@@ -216,7 +212,7 @@
                             <!--begin::Header-->
                             <div class="card-header border-0 pt-5">
                                 <h3 class="card-title align-items-start flex-column">
-                                    <span class="card-label fw-bold fs-3 mb-1">Master Sumber Data</span>
+                                    <span class="card-label fw-bold fs-3 mb-1">Master Asset Type Data</span>
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
@@ -228,7 +224,7 @@
                             <!--begin::Body-->
                             <div class="card-body py-3">
                                 <!--begin::Table container-->
-                                <table id="tableMasterSumber"
+                                <table id="tableMasterAssetType"
                                     class="table table-striped table-row-bordered gy-5 gs-7 border rounded ">
                                     <thead class="table-light">
                                         <tr>
@@ -269,7 +265,7 @@
                     <!--end::Close-->
                 </div>
 
-                <form id="formMasterSumber">
+                <form id="formMasterAssetType">
                     @csrf
                     <div class="modal-body">
                         <input type="hidden" name="uuid">

@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Asset Management - LRT JAKARTA</title>
     <link rel="shortcut icon" href="{{ asset('metronic/demo1/assets/media/logos/logo-lrtj-icon-color-large.png') }}" />
     <!--begin::Fonts(mandatory for all pages)-->
@@ -22,6 +23,9 @@
         body {
             font-family: 'Montserrat';
             font-size: 22px;
+        }
+        th {
+            font-weight: bold !important;
         }
     </style>
 
@@ -93,69 +97,6 @@
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/upgrade-plan.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/create-app.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/users-search.js') }}"></script>
-    <script>
-        $(document).ready(function() {
-            // Inisialisasi bsCustomFileInput
-            // bsCustomFileInput.init();
-            console.log('{{ url()->current() }}');
-        });
-        // Menampilkan pesan Sweet Alert jika session success atau error ada
-        @if (session('success'))
-        Swal.fire({
-            icon: 'success',
-            title: 'Success!',
-            text: '{{ session('success') }}'
-        });
-        @endif
-        @if (session('error'))
-        Swal.fire({
-            icon: 'error',
-            title: "<b style='color:red;'>Oops...</b>",
-            text: '{{ session('error') }}'
-        });
-        @endif
-
-        $(document).on('click', '.tombol-hapus', function(e) {
-            e.preventDefault();
-            var href = $(this).attr('href');
-            console.log('clicked');
-
-            Swal.fire({
-                title: 'Are you sure?',
-                text: "Data will be deleted permanently!",
-                type: 'warning',
-                showCancelButton: true,
-                cancelButtonColor: '#B5B5B6',
-                confirmButtonColor: '#EA242A',
-                confirmButtonText: 'Delete'
-            }).then((result) => {
-                if (result.value) {
-                    document.location.href = href;
-                }
-            })
-
-        });
-
-        $(document).on('click', '.tombol-confirm', function(e) {
-            e.preventDefault();
-            var href = $(this).attr('href');
-
-            Swal.fire({
-                title: 'Are you sure?',
-                text: "Please make sure before you do this action!",
-                icon: 'warning',
-                showCancelButton: true,
-                cancelButtonColor: '#B5B5B6',
-                confirmButtonColor: '#EA242A',
-                confirmButtonText: 'Confirm'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    document.location.href = href;
-                }
-            });
-        });
-    </script>
-
     @stack('scripts')
 </body>
 
