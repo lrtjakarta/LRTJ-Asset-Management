@@ -137,6 +137,8 @@
                     title: 'Permanently delete?',
                     text: 'This cannot be undone.',
                     showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
                     confirmButtonText: 'Delete'
                 }).then(function(r) {
                     if (!r.isConfirmed) return;

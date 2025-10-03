@@ -9,7 +9,7 @@
                 serverSide: true,
                 ajax: "{{ route('master.category_2.data') }}",
                 order: [
-                    [4, 'desc']
+                    [5, 'desc']
                 ],
                 columns: [{
                         data: 'uuid',
@@ -23,6 +23,10 @@
                     {
                         data: 'name',
                         name: 'name'
+                    },
+                    {
+                        data: 'category_label',
+                        name: 'kode_category'
                     },
                     {
                         data: 'status_badge',
@@ -61,6 +65,36 @@
                     },
                 ]
             });
+
+            // Init select2 (if you load it) or Metronic KT bindings
+            if ($.fn.select2) {
+                $('#kodeCategory').select2({
+                    dropdownParent: $('#kt_modal_add'),
+                    placeholder: 'Choose category',
+                    allowClear: true,
+                    ajax: {
+                        url: "{{ route('master.category.options') }}",
+                        data: params => ({
+                            q: params.term || ''
+                        }),
+                        processResults: data => data,
+                        delay: 150
+                    }
+                });
+            } else {
+                // fallback: load once
+                fetch("{{ route('master.category.options') }}")
+                    .then(r => r.json())
+                    .then(data => {
+                        const sel = document.getElementById('kodeCategory');
+                        data.results.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.id;
+                            opt.textContent = o.text;
+                            sel.appendChild(opt);
+                        });
+                    });
+            }
             
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
@@ -77,7 +111,13 @@
                         $f.find('[name="uuid"]').val(d.uuid);
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
-                        $f.find('[name="status"]').val(d.status).change?.();
+                        $f.find('[name="status"]').val(d.status).change?.();// set select (select2 or plain)
+                        if ($.fn.select2) {
+                            const opt = new Option(d.kode_category, d.kode_category, true, true);
+                            $('#kodeCategory').append(opt).trigger('change');
+                        } else {
+                            $('#kodeCategory').val(d.kode_category);
+                        }
                         $('#kt_modal_add').modal('show');
                     })
                     .fail(function(xhr) {
@@ -230,6 +270,7 @@
                                             <th>UUID</th>
                                             <th>Kode</th>
                                             <th>Name</th>
+                                            <th>Category</th>
                                             <th>Status</th>
                                             <th>Updated</th>
                                             <th class="text-end">Actions</th>
@@ -276,6 +317,10 @@
                         <div class="mb-5">
                             <label class="form-label required">Name</label>
                             <input type="text" name="name" class="form-control" required maxlength="191">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label required">Category</label>
+                            <select name="kode_category" id="kodeCategory" class="form-select" required></select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label">Status</label>

@@ -4,12 +4,12 @@
     <script>
         (function() {
             // DataTable
-            const table = $('#tableMasterCategory').DataTable({
+            const table = $('#tableMasterStatus').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: "{{ route('master.category.data') }}",
+                ajax: "{{ route('master.status.data') }}",
                 order: [
-                    [5, 'desc']
+                    [4, 'desc']
                 ],
                 columns: [{
                         data: 'uuid',
@@ -25,8 +25,8 @@
                         name: 'name'
                     },
                     {
-                        data: 'asset_type_label',
-                        name: 'kode_asset_type'
+                        data: 'type',
+                        name: 'type'
                     },
                     {
                         data: 'status_badge',
@@ -65,41 +65,11 @@
                     },
                 ]
             });
-
-            // Init select2 (if you load it) or Metronic KT bindings
-            if ($.fn.select2) {
-                $('#kodeAssetType').select2({
-                    dropdownParent: $('#kt_modal_add'),
-                    placeholder: 'Choose asset type',
-                    allowClear: true,
-                    ajax: {
-                        url: "{{ route('master.asset_type.options') }}",
-                        data: params => ({
-                            q: params.term || ''
-                        }),
-                        processResults: data => data,
-                        delay: 150
-                    }
-                });
-            } else {
-                // fallback: load once
-                fetch("{{ route('master.asset_type.options') }}")
-                    .then(r => r.json())
-                    .then(data => {
-                        const sel = document.getElementById('kodeAssetType');
-                        data.results.forEach(o => {
-                            const opt = document.createElement('option');
-                            opt.value = o.id;
-                            opt.textContent = o.text;
-                            sel.appendChild(opt);
-                        });
-                    });
-            }
-
+            
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
-                $.get("{{ route('master.category.show', ':uuid') }}".replace(':uuid', uuid))
+                $.get("{{ route('master.status.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
                             icon: 'error',
@@ -107,18 +77,12 @@
                             text: 'Failed to load'
                         });
                         const d = res.data;
-                        const $f = $('#formMasterCategory');
+                        const $f = $('#formMasterStatus');
                         $f.find('[name="uuid"]').val(d.uuid);
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
+                        $f.find('[name="type"]').val(d.type);
                         $f.find('[name="status"]').val(d.status).change?.();
-                        // set select (select2 or plain)
-                        if ($.fn.select2) {
-                            const opt = new Option(d.kode_asset_type, d.kode_asset_type, true, true);
-                            $('#kodeAssetType').append(opt).trigger('change');
-                        } else {
-                            $('#kodeAssetType').val(d.kode_asset_type);
-                        }
                         $('#kt_modal_add').modal('show');
                     })
                     .fail(function(xhr) {
@@ -131,12 +95,12 @@
             });
 
             // One submit handler for create/update
-            $('#formMasterCategory').on('submit', function(e) {
+            $('#formMasterStatus').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
                 const payload = $f.serialize(); // includes uuid (if any), name, status
 
-                $.post("{{ route('master.category.save') }}", payload)
+                $.post("{{ route('master.status.save') }}", payload)
                     .done(function(res) {
                         $('#kt_modal_add').modal('hide');
                         table.ajax.reload(null, false);
@@ -176,7 +140,7 @@
                 }).then(function(r) {
                     if (!r.isConfirmed) return;
                     $.ajax({
-                        url: "{{ route('master.category.delete', ':uuid') }}".replace(':uuid',
+                        url: "{{ route('master.status.delete', ':uuid') }}".replace(':uuid',
                             uuid),
                         type: 'DELETE',
                         data: {
@@ -187,7 +151,7 @@
                         Swal.fire({
                             icon: 'success',
                             title: 'Deleted',
-                            text: res.message || 'Category deleted.'
+                            text: res.message || 'Status deleted.'
                         });
                     }).fail(function(xhr) {
                         Swal.fire({
@@ -212,7 +176,7 @@
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
                 <!--begin::Title-->
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                    Master Category
+                    Master Status
                 </h1>
                 <!--end::Title-->
                 <!--begin::Breadcrumb-->
@@ -229,13 +193,14 @@
                     <!--end::Item-->
                     <!--begin::Item-->
                     <li class="breadcrumb-item text-muted">
-                        Master Category
+                        Master Status
                     </li>
                     <!--end::Item-->
                 </ul>
                 <!--end::Breadcrumb-->
 
             </div>
+            <!--end::Page title-->
 
         </div>
         <!--end::Toolbar container-->
@@ -252,7 +217,7 @@
                             <!--begin::Header-->
                             <div class="card-header border-0 pt-5">
                                 <h3 class="card-title align-items-start flex-column">
-                                    <span class="card-label fw-bold fs-3 mb-1">Master Category Data</span>
+                                    <span class="card-label fw-bold fs-3 mb-1">Master Status Data</span>
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
@@ -264,14 +229,14 @@
                             <!--begin::Body-->
                             <div class="card-body py-3">
                                 <!--begin::Table container-->
-                                <table id="tableMasterCategory"
+                                <table id="tableMasterStatus"
                                     class="table table-striped table-row-bordered gy-5 gs-7 border rounded ">
                                     <thead class="table-light">
                                         <tr>
                                             <th>UUID</th>
                                             <th>Kode</th>
                                             <th>Name</th>
-                                            <th>Asset Type</th>
+                                            <th>Type</th>
                                             <th>Status</th>
                                             <th>Updated</th>
                                             <th class="text-end">Actions</th>
@@ -306,7 +271,7 @@
                     <!--end::Close-->
                 </div>
 
-                <form id="formMasterCategory">
+                <form id="formMasterStatus">
                     @csrf
                     <div class="modal-body">
                         <input type="hidden" name="uuid">
@@ -320,8 +285,13 @@
                             <input type="text" name="name" class="form-control" required maxlength="191">
                         </div>
                         <div class="mb-5">
-                            <label class="form-label required">Asset Type</label>
-                            <select name="kode_asset_type" id="kodeAssetType" class="form-select" required></select>
+                            <label class="form-label">Status</label>
+                            <select name="type" data-control="select2" data-placeholder="Select Type" class="form-select">
+                                <option>Transaction</option>
+                                <option>Disposal</option>
+                                <option>Return</option>
+                                <option>Stock Opname</option>
+                            </select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label">Status</label>

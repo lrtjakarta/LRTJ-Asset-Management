@@ -2,11 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MasterAssetClass;
 use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
 use App\Models\MasterAssetType;
 use App\Models\MasterCategory;
 use App\Models\MasterCategory2;
+use App\Models\MasterGroupCategory;
+use App\Models\MasterLocation;
+use App\Models\MasterStatus;
+use App\Models\MasterSubCategory;
+use App\Models\MasterUOM;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -46,12 +52,48 @@ class TrashController extends Controller
                 'pk'        => 'uuid',
                 'label_col' => 'name',
             ],
-            // 'master_category_2' => [
-            //     'table'     => 'master_category_2',
-            //     'model'     => MasterCategory2::class,
-            //     'pk'        => 'uuid',
-            //     'label_col' => 'name',
-            // ],
+            'master_category_2' => [
+                'table'     => 'master_category_2',
+                'model'     => MasterCategory2::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_sub_category' => [
+                'table'     => 'master_sub_category',
+                'model'     => MasterSubCategory::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_location' => [
+                'table'     => 'master_location',
+                'model'     => MasterLocation::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_group_category' => [
+                'table'     => 'master_group_category',
+                'model'     => MasterGroupCategory::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_uom' => [
+                'table'     => 'master_uom',
+                'model'     => MasterUOM::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_status' => [
+                'table'     => 'master_status',
+                'model'     => MasterStatus::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
+            'master_asset_class' => [
+                'table'     => 'master_asset_class',
+                'model'     => MasterAssetClass::class,
+                'pk'        => 'uuid',
+                'label_col' => 'name',
+            ],
         ];
     }
 

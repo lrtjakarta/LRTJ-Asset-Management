@@ -114,7 +114,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-sub-category' ? 'active' : '' }}"
+                                    href="{{ route('master.sub_category') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -126,7 +127,21 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-group-category' ? 'active' : '' }}"
+                                    href="{{ route('master.group_category') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Master Group Category</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(2) == 'master-location' ? 'active' : '' }}" 
+                                    href="{{ route('master.location') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -138,11 +153,12 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-uom' ? 'active' : '' }}" 
+                                    href="{{ route('master.uom') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
-                                    <span class="menu-title">Master UOM Quantity</span>
+                                    <span class="menu-title">Master UOM</span>
                                 </a>
                                 <!--end:Menu link-->
                             </div>
@@ -150,7 +166,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-status' ? 'active' : '' }}" 
+                                    href="{{ route('master.status') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -162,7 +179,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'master-asset-class' ? 'active' : '' }}" 
+                                    href="{{ route('master.asset_class') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
