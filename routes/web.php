@@ -25,7 +25,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-category-2', [MasterDataController::class, 'master_category_2'])->name('category_2');
         Route::get('/master-sub-category', [MasterDataController::class, 'master_sub_category'])->name('sub_category');
         Route::get('/master-location', [MasterDataController::class, 'master_location'])->name('location');
-        Route::get('/master-group_category', [MasterDataController::class, 'master_group_category'])->name('group_category');
+        Route::get('/master-group-category', [MasterDataController::class, 'master_group_category'])->name('group_category');
         Route::get('/master-uom', [MasterDataController::class, 'master_uom'])->name('uom');
         Route::get('/master-status', [MasterDataController::class, 'master_status'])->name('status');
         Route::get('/master-asset-class', [MasterDataController::class, 'master_asset_class'])->name('asset_class');

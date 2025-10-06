@@ -28,7 +28,7 @@
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->is('dashboard') ? 'active' : '' }}"
+                        <a class="menu-link {{ request()->segment(1) == 'dashboard' ? 'active' : '' }}"
                             href="{{ route('dashboard') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-home fs-2">
@@ -297,7 +297,7 @@
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->is('assets.index') ? 'active' : '' }}"
+                        <a class="menu-link {{ request()->segment(1) == 'assets' ? 'active' : '' }}"
                             href="{{ route('assets.index') }}">
                             
                             <span class="menu-icon">
@@ -399,7 +399,7 @@
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->is('trash') ? 'active' : '' }}"
+                        <a class="menu-link {{ request()->segment(1) == 'trash' ? 'active' : '' }}"
                             href="{{ route('trash.index') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-trash fs-2">
