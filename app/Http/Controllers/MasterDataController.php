@@ -1059,6 +1059,40 @@ class MasterDataController
     }
 
     // AJAX CALL FOR OPTIONS
+    public function select_master_sumber(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterSumber::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_transaction(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterTransaction::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
     public function select_master_asset_type(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
@@ -1080,6 +1114,125 @@ class MasterDataController
     {
         $search = trim((string) $request->get('q', ''));
         $q = MasterCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_category_2(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterCategory2::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_sub_category(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterSubCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_location(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterLocation::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_group_category(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterGroupCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_uom(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterUOM::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_status(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterStatus::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('name', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_asset_class(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterAssetClass::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {

@@ -43,8 +43,17 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-asset-class/datatable', [MasterDataController::class, 'master_asset_class_data'])->name('asset_class.data');
 
         // SELECT MASTER DATA (AJAX)
+        Route::get('/select-master-sumber',   [MasterDataController::class, 'select_master_sumber'])->name('sumber.options');
+        Route::get('/select-master-transaction',   [MasterDataController::class, 'select_master_transaction'])->name('transaction.options');
         Route::get('/select-master-asset-type',   [MasterDataController::class, 'select_master_asset_type'])->name('asset_type.options');
         Route::get('/select-master-category',   [MasterDataController::class, 'select_master_category'])->name('category.options');
+        Route::get('/select-master-category-2',   [MasterDataController::class, 'select_master_category_2'])->name('category_2.options');
+        Route::get('/select-master-sub-category',   [MasterDataController::class, 'select_master_sub_category'])->name('sub_category.options');
+        Route::get('/select-master-location',   [MasterDataController::class, 'select_master_location'])->name('location.options');
+        Route::get('/select-master-group-category',   [MasterDataController::class, 'select_master_group_category'])->name('group_category.options');
+        Route::get('/select-master-uom',   [MasterDataController::class, 'select_master_uom'])->name('uom.options');
+        Route::get('/select-master-status',   [MasterDataController::class, 'select_master_status'])->name('status.options');
+        Route::get('/select-master-asset-class',   [MasterDataController::class, 'select_master_asset_class'])->name('asset_class.options');
 
         // CRUD MASTER DATA
         // MASTER SUMBER
