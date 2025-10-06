@@ -40,5 +40,11 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(200)->by('ldap-global'),
             ];
         });
+        RateLimiter::for('api', function (Request $request) {
+            return [
+                // per-minute limit; key by user id if present, otherwise IP
+                Limit::perMinute(60)->by($request->user()?->id ?? $request->ip()),
+            ];
+        });
     }
 }

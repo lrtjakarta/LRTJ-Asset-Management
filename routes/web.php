@@ -80,7 +80,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/master-category-2/save', [MasterDataController::class, 'master_category_2_save'])->name('category_2.save');
         Route::get('/master-category-2/{uuid}', [MasterDataController::class, 'master_category_2_show'])->name('category_2.show');
         Route::delete('/master-category-2/{uuid}', [MasterDataController::class, 'master_category_2_delete'])->name('category_2.delete');
-        //  SUB CATEGORY
+        // MASTER SUB CATEGORY
         Route::post('/master-sub-category/save', [MasterDataController::class, 'master_sub_category_save'])->name('sub_category.save');
         Route::get('/master-sub-category/{uuid}', [MasterDataController::class, 'master_sub_category_show'])->name('sub_category.show');
         Route::delete('/master-sub-category/{uuid}', [MasterDataController::class, 'master_sub_category_delete'])->name('sub_category.delete');
