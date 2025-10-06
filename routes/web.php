@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AssetsController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
@@ -28,6 +29,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-uom', [MasterDataController::class, 'master_uom'])->name('uom');
         Route::get('/master-status', [MasterDataController::class, 'master_status'])->name('status');
         Route::get('/master-asset-class', [MasterDataController::class, 'master_asset_class'])->name('asset_class');
+        Route::get('/master-user-code', [MasterDataController::class, 'master_user_code'])->name('user_code');
 
         // DATATABLE MASTER DATA
         Route::get('/master-sumber/datatable', [MasterDataController::class, 'master_sumber_data'])->name('sumber.data');
@@ -41,6 +43,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-uom/datatable', [MasterDataController::class, 'master_uom_data'])->name('uom.data');
         Route::get('/master-status/datatable', [MasterDataController::class, 'master_status_data'])->name('status.data');
         Route::get('/master-asset-class/datatable', [MasterDataController::class, 'master_asset_class_data'])->name('asset_class.data');
+        Route::get('/master-user-code/datatable', [MasterDataController::class, 'master_user_code_data'])->name('user_code.data');
 
         // SELECT MASTER DATA (AJAX)
         Route::get('/select-master-sumber',   [MasterDataController::class, 'select_master_sumber'])->name('sumber.options');
@@ -54,6 +57,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/select-master-uom',   [MasterDataController::class, 'select_master_uom'])->name('uom.options');
         Route::get('/select-master-status',   [MasterDataController::class, 'select_master_status'])->name('status.options');
         Route::get('/select-master-asset-class',   [MasterDataController::class, 'select_master_asset_class'])->name('asset_class.options');
+        Route::get('/select-master-user-code',   [MasterDataController::class, 'select_master_user_code'])->name('user_code.options');
 
         // CRUD MASTER DATA
         // MASTER SUMBER
@@ -100,6 +104,16 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/master-asset-class/save', [MasterDataController::class, 'master_asset_class_save'])->name('asset_class.save');
         Route::get('/master-asset-class/{uuid}', [MasterDataController::class, 'master_asset_class_show'])->name('asset_class.show');
         Route::delete('/master-asset-class/{uuid}', [MasterDataController::class, 'master_asset_class_delete'])->name('asset_class.delete');
+        // MASTER USER CODE
+        Route::post('/master-user-code/save', [MasterDataController::class, 'master_user_code_save'])->name('user_code.save');
+        Route::get('/master-user-code/{uuid}', [MasterDataController::class, 'master_user_code_show'])->name('user_code.show');
+        Route::delete('/master-user-code/{uuid}', [MasterDataController::class, 'master_user_code_delete'])->name('user_code.delete');
+    });
+
+
+    // ASSETS ROUTE    
+    Route::prefix('assets')->name('assets.')->group(function () {
+        Route::get('/', [AssetsController::class, 'index'])->name('index');
     });
 
     // TRASH ROUTE

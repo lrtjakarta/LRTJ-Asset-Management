@@ -13,6 +13,7 @@ use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterSubCategory;
 use App\Models\MasterUOM;
+use App\Models\MasterUserCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -93,6 +94,12 @@ class TrashController extends Controller
                 'model'     => MasterAssetClass::class,
                 'pk'        => 'uuid',
                 'label_col' => 'name',
+            ],
+            'master_user_code' => [
+                'table'     => 'master_user_code',
+                'model'     => MasterUserCode::class,
+                'pk'        => 'uuid',
+                'label_col' => 'department',
             ],
         ];
     }

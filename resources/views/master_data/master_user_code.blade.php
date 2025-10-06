@@ -1,0 +1,315 @@
+@extends('layouts.app')
+
+@push('scripts')
+    <script>
+        (function() {
+            // DataTable
+            const table = $('#tableMasterUserCode').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: "{{ route('master.user_code.data') }}",
+                order: [
+                    [4, 'desc']
+                ],
+                columns: [{
+                        data: 'uuid',
+                        name: 'uuid',
+                        visible: false
+                    },
+                    {
+                        data: 'kode',
+                        name: 'kode'
+                    },
+                    {
+                        data: 'department',
+                        name: 'department'
+                    },
+                    {
+                        data: 'description',
+                        name: 'description'
+                    },
+                    {
+                        data: 'status_badge',
+                        name: 'status',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'updated_at',
+                        name: 'updated_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false,
+                        className: 'text-end'
+                    },
+                ]
+            });
+            
+            // Edit click -> load row then show modal
+            $(document).on('click', '.btn-edit', function() {
+                const uuid = $(this).data('uuid');
+                $.get("{{ route('master.user_code.show', ':uuid') }}".replace(':uuid', uuid))
+                    .done(function(res) {
+                        if (!res?.ok) return Swal.fire({
+                            icon: 'error',
+                            title: 'Oops',
+                            text: 'Failed to load'
+                        });
+                        const d = res.data;
+                        const $f = $('#formMasterUserCode');
+                        $f.find('[name="uuid"]').val(d.uuid);
+                        $f.find('[name="kode"]').val(d.kode);
+                        $f.find('[name="department"]').val(d.department);
+                        $f.find('[name="description"]').val(d.description);
+                        $f.find('[name="status"]').val(d.status).change?.();
+                        $('#kt_modal_add').modal('show');
+                    })
+                    .fail(function(xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops',
+                            text: xhr.responseJSON?.message || 'Failed to load'
+                        });
+                    });
+            });
+
+            // One submit handler for create/update
+            $('#formMasterUserCode').on('submit', function(e) {
+                e.preventDefault();
+                const $f = $(this);
+                const payload = $f.serialize(); // includes uuid (if any), name, status
+
+                $.post("{{ route('master.user_code.save') }}", payload)
+                    .done(function(res) {
+                        $('#kt_modal_add').modal('hide');
+                        table.ajax.reload(null, false);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success',
+                            text: res.message || 'Saved.'
+                        });
+                    })
+                    .fail(function(xhr) {
+                        // Show first validation error or fallback message
+                        let msg = xhr.responseJSON?.message || 'Failed to save';
+                        const errs = xhr.responseJSON?.errors;
+                        if (errs) {
+                            const firstKey = Object.keys(errs)[0];
+                            if (firstKey) msg = errs[firstKey][0] || msg;
+                        }
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops',
+                            text: msg
+                        });
+                    });
+            });
+
+            // Delete
+            $(document).on('click', '.btn-delete', function() {
+                const uuid = $(this).data('uuid');
+                Swal.fire({
+                    icon: 'question',
+                    title: 'Delete?',
+                    text: 'This item will be moved to trash.',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes, delete'
+                }).then(function(r) {
+                    if (!r.isConfirmed) return;
+                    $.ajax({
+                        url: "{{ route('master.user_code.delete', ':uuid') }}".replace(':uuid',
+                            uuid),
+                        type: 'DELETE',
+                        data: {
+                            _token: document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    }).done(function(res) {
+                        table.ajax.reload(null, false);
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Deleted',
+                            text: res.message || 'User Code deleted.'
+                        });
+                    }).fail(function(xhr) {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops',
+                            text: xhr.responseJSON?.message || 'Delete failed'
+                        });
+                    });
+                });
+            });
+        })();
+    </script>
+@endpush
+
+
+
+@section('content')
+    <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
+        <!--begin::Toolbar container-->
+        <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
+            <!--begin::Page title-->
+            <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
+                <!--begin::Title-->
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                    Master User Code
+                </h1>
+                <!--end::Title-->
+                <!--begin::Breadcrumb-->
+                <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
+                    <!--begin::Item-->
+                    <li class="breadcrumb-item text-muted">
+                        Master Data
+                    </li>
+                    <!--end::Item-->
+                    <!--begin::Item-->
+                    <li class="breadcrumb-item">
+                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                    </li>
+                    <!--end::Item-->
+                    <!--begin::Item-->
+                    <li class="breadcrumb-item text-muted">
+                        Master User Code
+                    </li>
+                    <!--end::Item-->
+                </ul>
+                <!--end::Breadcrumb-->
+
+            </div>
+            <!--end::Page title-->
+            {{-- <div class="d-flex align-items-center gap-2 gap-lg-3">
+                <a href="#" class="btn btn-sm fw-bold btn-danger" data-bs-toggle="modal"
+                    data-bs-target="#kt_modal_new_target">Add User Code</a>
+            </div> --}}
+
+        </div>
+        <!--end::Toolbar container-->
+    </div>
+
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <!--begin::Row-->
+            <div class="row g-5 gx-xl-10 mb-5 mb-xl-10">
+                <div class="col-md-12">
+                    <div class="table-responsive">
+                        <div class="card mb-5 mb-xl-8">
+                            <!--begin::Header-->
+                            <div class="card-header border-0 pt-5">
+                                <h3 class="card-title align-items-start flex-column">
+                                    <span class="card-label fw-bold fs-3 mb-1">Master User Code Data</span>
+                                </h3>
+                                <div class="card-toolbar">
+                                    <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
+                                        class="btn btn-sm btn-danger">
+                                        <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
+                                </div>
+                            </div>
+                            <!--end::Header-->
+                            <!--begin::Body-->
+                            <div class="card-body py-3">
+                                <!--begin::Table container-->
+                                <table id="tableMasterUserCode"
+                                    class="table table-striped table-row-bordered gy-5 gs-7 border rounded ">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>UUID</th>
+                                            <th>Kode</th>
+                                            <th>Department</th>
+                                            <th>Description</th>
+                                            <th>Status</th>
+                                            <th>Updated</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                </table>
+                                <!--end::Table container-->
+                            </div>
+                            <!--begin::Body-->
+                        </div>
+                    </div>
+                </div>
+
+
+            </div>
+            <!--end::Row-->
+        </div>
+        <!--end::Content container-->
+    </div>
+
+    <div class="modal fade" tabindex="-1" id="kt_modal_add">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Add New</h3>
+
+                    <!--begin::Close-->
+                    <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal"
+                        aria-label="Close">
+                        <i class="ki-duotone ki-cross fs-1"><span class="path1"></span><span class="path2"></span></i>
+                    </div>
+                    <!--end::Close-->
+                </div>
+
+                <form id="formMasterUserCode">
+                    @csrf
+                    <div class="modal-body">
+                        <input type="hidden" name="uuid">
+                        <div class="mb-5">
+                            <label class="form-label required">Kode</label>
+                            <input type="text" name="kode" class="form-control" required maxlength="50"
+                                placeholder="e.g. KD-1">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label required">Department</label>
+                            <input type="text" name="department" class="form-control" required maxlength="191">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label">Description</label>
+                            <input type="text" name="description" class="form-control">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <div class="text-end">
+                            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Save</button>
+                        </div>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+@endsection

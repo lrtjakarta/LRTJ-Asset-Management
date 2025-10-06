@@ -13,6 +13,7 @@ use App\Models\MasterSubCategory;
 use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
 use App\Models\MasterUOM;
+use App\Models\MasterUserCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -64,6 +65,10 @@ class MasterDataController
     public function master_asset_class()
     {
         return view('master_data.master_asset_class');
+    }
+    public function master_user_code()
+    {
+        return view('master_data.master_user_code');
     }
 
     // DATA TABLE
@@ -288,6 +293,27 @@ class MasterDataController
     public function master_asset_class_data(Request $request)
     {
         $q = MasterAssetClass::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
+
+        return DataTables::of($q)
+            ->addColumn('status_badge', function ($row) {
+                return $row->status
+                    ? '<span class="badge badge-light-success">Active</span>'
+                    : '<span class="badge badge-light-danger">Inactive</span>';
+            })
+            ->addColumn('actions', function ($row) {
+                // data-uuid used by JS to open modal / delete
+                return '
+                <div class="btn-group">
+                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
+                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
+                </div>';
+            })
+            ->rawColumns(['status_badge', 'actions'])
+            ->make(true);
+    }
+    public function master_user_code_data(Request $request)
+    {
+        $q = MasterUserCode::query()->select(['uuid', 'kode', 'department', 'description', 'status', 'updated_at']);
 
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
@@ -797,6 +823,53 @@ class MasterDataController
             ]);
         }
     }
+    public function master_user_code_save(Request $request)
+    {
+        $uuid = $request->string('uuid')->trim()->toString() ?: null;
+
+        // Validation: unique name; ignore current uuid if updating
+        $departmentRule = Rule::unique('master_user_code', 'department')->whereNull('deleted_at');
+        $kodeRule = Rule::unique('master_user_code', 'kode')->whereNull('deleted_at');
+        if ($uuid) {
+            $departmentRule = $departmentRule->ignore($uuid, 'uuid');
+            $kodeRule = $kodeRule->ignore($uuid, 'uuid');
+        }
+
+        $data = $request->validate([
+            'kode'   => ['required', 'string', 'max:50', $kodeRule],
+            'department'   => ['required', 'string', 'max:191', $departmentRule],
+            'description' => ['nullable', 'string'],
+            'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
+        ]);
+
+        $payload = [
+            'kode'   => $data['kode'],
+            'department'   => $data['department'],
+            'description'   => $data['description'] ?? '',
+            'status' => (bool) $data['status'],
+        ];
+
+        if ($uuid) {
+            // update
+            $item = MasterUserCode::where('uuid', $uuid)->firstOrFail();
+            $item->update($payload);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'User Code updated.',
+                'uuid' => $item->uuid,
+            ]);
+        } else {
+            // create
+            $item = MasterUserCode::create($payload);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'User Code created.',
+                'uuid' => $item->uuid,
+            ]);
+        }
+    }
 
     // GET DATA TO SHOW IT IN MODAL
     public function master_sumber_show(string $uuid)
@@ -946,6 +1019,21 @@ class MasterDataController
         ]);
     }
 
+    public function master_user_code_show(string $uuid)
+    {
+        $it = MasterUserCode::where('uuid', $uuid)->firstOrFail();
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'uuid'   => $it->uuid,
+                'kode'   => $it->kode,
+                'department'   => $it->department,
+                'description'   => $it->description,
+                'status' => $it->status ? 1 : 0,
+            ],
+        ]);
+    }
+
     // SOFT DELETE
     public function master_sumber_delete(string $uuid)
     {
@@ -1055,6 +1143,16 @@ class MasterDataController
         return response()->json([
             'ok' => true,
             'message' => 'Asset Class deleted.',
+        ]);
+    }
+    public function master_user_code_delete(string $uuid)
+    {
+        $it = MasterUserCode::where('uuid', $uuid)->firstOrFail();
+        $it->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'User Code deleted.',
         ]);
     }
 
@@ -1243,6 +1341,23 @@ class MasterDataController
 
         $rows = $q->limit(20)->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+
+        return response()->json(['results' => $rows]);
+    }
+    public function select_master_user_code(Request $request)
+    {
+        $search = trim((string) $request->get('q', ''));
+        $q = MasterUserCode::query()->select(['kode', 'department'])->where('status', true)->orderBy('kode');
+
+        if ($search !== '') {
+            $q->where(function ($w) use ($search) {
+                $w->where('kode', 'ilike', "%{$search}%")
+                    ->orWhere('department', 'ilike', "%{$search}%");
+            });
+        }
+
+        $rows = $q->limit(20)->get()
+            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->department}"]);
 
         return response()->json(['results' => $rows]);
     }
