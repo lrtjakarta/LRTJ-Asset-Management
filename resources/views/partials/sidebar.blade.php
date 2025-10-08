@@ -125,7 +125,7 @@
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-group-category' ? 'active' : '' }}"
                                     href="{{ route('master.group_category') }}">
@@ -135,7 +135,7 @@
                                     <span class="menu-title">Master Group Category</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
                             <div class="menu-item">

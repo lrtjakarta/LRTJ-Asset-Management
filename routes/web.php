@@ -25,7 +25,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-category-2', [MasterDataController::class, 'master_category_2'])->name('category_2');
         Route::get('/master-sub-category', [MasterDataController::class, 'master_sub_category'])->name('sub_category');
         Route::get('/master-location', [MasterDataController::class, 'master_location'])->name('location');
-        Route::get('/master-group-category', [MasterDataController::class, 'master_group_category'])->name('group_category');
+        // Route::get('/master-group-category', [MasterDataController::class, 'master_group_category'])->name('group_category');
         Route::get('/master-uom', [MasterDataController::class, 'master_uom'])->name('uom');
         Route::get('/master-status', [MasterDataController::class, 'master_status'])->name('status');
         Route::get('/master-asset-class', [MasterDataController::class, 'master_asset_class'])->name('asset_class');
@@ -39,7 +39,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-category-2/datatable', [MasterDataController::class, 'master_category_2_data'])->name('category_2.data');
         Route::get('/master-sub-category/datatable', [MasterDataController::class, 'master_sub_category_data'])->name('sub_category.data');
         Route::get('/master-location/datatable', [MasterDataController::class, 'master_location_data'])->name('location.data');
-        Route::get('/master-group-category/datatable', [MasterDataController::class, 'master_group_category_data'])->name('group_category.data');
+        // Route::get('/master-group-category/datatable', [MasterDataController::class, 'master_group_category_data'])->name('group_category.data');
         Route::get('/master-uom/datatable', [MasterDataController::class, 'master_uom_data'])->name('uom.data');
         Route::get('/master-status/datatable', [MasterDataController::class, 'master_status_data'])->name('status.data');
         Route::get('/master-asset-class/datatable', [MasterDataController::class, 'master_asset_class_data'])->name('asset_class.data');
@@ -53,7 +53,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/select-master-category-2',   [MasterDataController::class, 'select_master_category_2'])->name('category_2.options');
         Route::get('/select-master-sub-category',   [MasterDataController::class, 'select_master_sub_category'])->name('sub_category.options');
         Route::get('/select-master-location',   [MasterDataController::class, 'select_master_location'])->name('location.options');
-        Route::get('/select-master-group-category',   [MasterDataController::class, 'select_master_group_category'])->name('group_category.options');
+        // Route::get('/select-master-group-category',   [MasterDataController::class, 'select_master_group_category'])->name('group_category.options');
         Route::get('/select-master-uom',   [MasterDataController::class, 'select_master_uom'])->name('uom.options');
         Route::get('/select-master-status',   [MasterDataController::class, 'select_master_status'])->name('status.options');
         Route::get('/select-master-asset-class',   [MasterDataController::class, 'select_master_asset_class'])->name('asset_class.options');
@@ -89,9 +89,9 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-location/{uuid}', [MasterDataController::class, 'master_location_show'])->name('location.show');
         Route::delete('/master-location/{uuid}', [MasterDataController::class, 'master_location_delete'])->name('location.delete');
         // MASTER GROUP CATEGORY
-        Route::post('/master-group-category/save', [MasterDataController::class, 'master_group_category_save'])->name('group_category.save');
-        Route::get('/master-group-category/{uuid}', [MasterDataController::class, 'master_group_category_show'])->name('group_category.show');
-        Route::delete('/master-group-category/{uuid}', [MasterDataController::class, 'master_group_category_delete'])->name('group_category.delete');
+        // Route::post('/master-group-category/save', [MasterDataController::class, 'master_group_category_save'])->name('group_category.save');
+        // Route::get('/master-group-category/{uuid}', [MasterDataController::class, 'master_group_category_show'])->name('group_category.show');
+        // Route::delete('/master-group-category/{uuid}', [MasterDataController::class, 'master_group_category_delete'])->name('group_category.delete');
         // MASTER UOM
         Route::post('/master-uom/save', [MasterDataController::class, 'master_uom_save'])->name('uom.save');
         Route::get('/master-uom/{uuid}', [MasterDataController::class, 'master_uom_show'])->name('uom.show');

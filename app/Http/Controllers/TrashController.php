@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Assets;
 use App\Models\MasterAssetClass;
 use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
@@ -71,12 +72,12 @@ class TrashController extends Controller
                 'pk'        => 'uuid',
                 'label_col' => 'name',
             ],
-            'master_group_category' => [
-                'table'     => 'master_group_category',
-                'model'     => MasterGroupCategory::class,
-                'pk'        => 'uuid',
-                'label_col' => 'name',
-            ],
+            // 'master_group_category' => [
+            //     'table'     => 'master_group_category',
+            //     'model'     => MasterGroupCategory::class,
+            //     'pk'        => 'uuid',
+            //     'label_col' => 'name',
+            // ],
             'master_uom' => [
                 'table'     => 'master_uom',
                 'model'     => MasterUOM::class,
@@ -100,6 +101,12 @@ class TrashController extends Controller
                 'model'     => MasterUserCode::class,
                 'pk'        => 'uuid',
                 'label_col' => 'department',
+            ],
+            'assets' => [
+                'table'      => 'assets',
+                'model'      => Assets::class,
+                'pk'         => 'uuid',
+                'label_col'  => 'asset_code',
             ],
         ];
     }

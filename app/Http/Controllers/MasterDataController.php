@@ -50,10 +50,10 @@ class MasterDataController
     {
         return view('master_data.master_location');
     }
-    public function master_group_category()
-    {
-        return view('master_data.master_group_category');
-    }
+    // public function master_group_category()
+    // {
+    //     return view('master_data.master_group_category');
+    // }
     public function master_uom()
     {
         return view('master_data.master_uom');
@@ -227,27 +227,27 @@ class MasterDataController
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
-    public function master_group_category_data(Request $request)
-    {
-        $q = MasterGroupCategory::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
+    // public function master_group_category_data(Request $request)
+    // {
+    //     $q = MasterGroupCategory::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
-        return DataTables::of($q)
-            ->addColumn('status_badge', function ($row) {
-                return $row->status
-                    ? '<span class="badge badge-light-success">Active</span>'
-                    : '<span class="badge badge-light-danger">Inactive</span>';
-            })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
-            })
-            ->rawColumns(['status_badge', 'actions'])
-            ->make(true);
-    }
+    //     return DataTables::of($q)
+    //         ->addColumn('status_badge', function ($row) {
+    //             return $row->status
+    //                 ? '<span class="badge badge-light-success">Active</span>'
+    //                 : '<span class="badge badge-light-danger">Inactive</span>';
+    //         })
+    //         ->addColumn('actions', function ($row) {
+    //             // data-uuid used by JS to open modal / delete
+    //             return '
+    //             <div class="btn-group">
+    //               <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
+    //               <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
+    //             </div>';
+    //         })
+    //         ->rawColumns(['status_badge', 'actions'])
+    //         ->make(true);
+    // }
     public function master_uom_data(Request $request)
     {
         $q = MasterUOM::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
@@ -639,51 +639,51 @@ class MasterDataController
             ]);
         }
     }
-    public function master_group_category_save(Request $request)
-    {
-        $uuid = $request->string('uuid')->trim()->toString() ?: null;
+    // public function master_group_category_save(Request $request)
+    // {
+    //     $uuid = $request->string('uuid')->trim()->toString() ?: null;
 
-        // Validation: unique name; ignore current uuid if updating
-        $nameRule = Rule::unique('master_group_category', 'name')->whereNull('deleted_at');
-        $kodeRule = Rule::unique('master_group_category', 'kode')->whereNull('deleted_at');
-        if ($uuid) {
-            $nameRule = $nameRule->ignore($uuid, 'uuid');
-            $kodeRule = $kodeRule->ignore($uuid, 'uuid');
-        }
+    //     // Validation: unique name; ignore current uuid if updating
+    //     $nameRule = Rule::unique('master_group_category', 'name')->whereNull('deleted_at');
+    //     $kodeRule = Rule::unique('master_group_category', 'kode')->whereNull('deleted_at');
+    //     if ($uuid) {
+    //         $nameRule = $nameRule->ignore($uuid, 'uuid');
+    //         $kodeRule = $kodeRule->ignore($uuid, 'uuid');
+    //     }
 
-        $data = $request->validate([
-            'kode'   => ['required', 'string', 'max:50', $kodeRule],
-            'name'   => ['required', 'string', 'max:191', $nameRule],
-            'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
-        ]);
+    //     $data = $request->validate([
+    //         'kode'   => ['required', 'string', 'max:50', $kodeRule],
+    //         'name'   => ['required', 'string', 'max:191', $nameRule],
+    //         'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
+    //     ]);
 
-        $payload = [
-            'kode'   => $data['kode'],
-            'name'   => $data['name'],
-            'status' => (bool) $data['status'],
-        ];
+    //     $payload = [
+    //         'kode'   => $data['kode'],
+    //         'name'   => $data['name'],
+    //         'status' => (bool) $data['status'],
+    //     ];
 
-        if ($uuid) {
-            // update
-            $item = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
-            $item->update($payload);
+    //     if ($uuid) {
+    //         // update
+    //         $item = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
+    //         $item->update($payload);
 
-            return response()->json([
-                'ok' => true,
-                'message' => 'Group Category updated.',
-                'uuid' => $item->uuid,
-            ]);
-        } else {
-            // create
-            $item = MasterGroupCategory::create($payload);
+    //         return response()->json([
+    //             'ok' => true,
+    //             'message' => 'Group Category updated.',
+    //             'uuid' => $item->uuid,
+    //         ]);
+    //     } else {
+    //         // create
+    //         $item = MasterGroupCategory::create($payload);
 
-            return response()->json([
-                'ok' => true,
-                'message' => 'Group Category created.',
-                'uuid' => $item->uuid,
-            ]);
-        }
-    }
+    //         return response()->json([
+    //             'ok' => true,
+    //             'message' => 'Group Category created.',
+    //             'uuid' => $item->uuid,
+    //         ]);
+    //     }
+    // }
     public function master_uom_save(Request $request)
     {
         $uuid = $request->string('uuid')->trim()->toString() ?: null;
@@ -965,19 +965,19 @@ class MasterDataController
             ],
         ]);
     }
-    public function master_group_category_show(string $uuid)
-    {
-        $it = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
-        return response()->json([
-            'ok' => true,
-            'data' => [
-                'uuid'   => $it->uuid,
-                'kode'   => $it->kode,
-                'name'   => $it->name,
-                'status' => $it->status ? 1 : 0,
-            ],
-        ]);
-    }
+    // public function master_group_category_show(string $uuid)
+    // {
+    //     $it = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
+    //     return response()->json([
+    //         'ok' => true,
+    //         'data' => [
+    //             'uuid'   => $it->uuid,
+    //             'kode'   => $it->kode,
+    //             'name'   => $it->name,
+    //             'status' => $it->status ? 1 : 0,
+    //         ],
+    //     ]);
+    // }
     public function master_uom_show(string $uuid)
     {
         $it = MasterUOM::where('uuid', $uuid)->firstOrFail();
@@ -1105,16 +1105,16 @@ class MasterDataController
             'message' => 'Location deleted.',
         ]);
     }
-    public function master_group_category_delete(string $uuid)
-    {
-        $it = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
-        $it->delete();
+    // public function master_group_category_delete(string $uuid)
+    // {
+    //     $it = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
+    //     $it->delete();
 
-        return response()->json([
-            'ok' => true,
-            'message' => 'Group Category deleted.',
-        ]);
-    }
+    //     return response()->json([
+    //         'ok' => true,
+    //         'message' => 'Group Category deleted.',
+    //     ]);
+    // }
     public function master_uom_delete(string $uuid)
     {
         $it = MasterUOM::where('uuid', $uuid)->firstOrFail();
@@ -1276,23 +1276,23 @@ class MasterDataController
 
         return response()->json(['results' => $rows]);
     }
-    public function select_master_group_category(Request $request)
-    {
-        $search = trim((string) $request->get('q', ''));
-        $q = MasterGroupCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+    // public function select_master_group_category(Request $request)
+    // {
+    //     $search = trim((string) $request->get('q', ''));
+    //     $q = MasterGroupCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
 
-        if ($search !== '') {
-            $q->where(function ($w) use ($search) {
-                $w->where('kode', 'ilike', "%{$search}%")
-                    ->orWhere('name', 'ilike', "%{$search}%");
-            });
-        }
+    //     if ($search !== '') {
+    //         $q->where(function ($w) use ($search) {
+    //             $w->where('kode', 'ilike', "%{$search}%")
+    //                 ->orWhere('name', 'ilike', "%{$search}%");
+    //         });
+    //     }
 
-        $rows = $q->limit(20)->get()
-            ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
+    //     $rows = $q->limit(20)->get()
+    //         ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
-        return response()->json(['results' => $rows]);
-    }
+    //     return response()->json(['results' => $rows]);
+    // }
     public function select_master_uom(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
