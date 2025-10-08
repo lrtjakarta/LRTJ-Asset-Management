@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\AssetReferenceGuard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 class MasterCategory extends Model
 {
@@ -15,7 +17,7 @@ class MasterCategory extends Model
     public $incrementing = false;
     protected $keyType = 'string';
 
-    protected $fillable = ['kode','name','kode_asset_type'];
+    protected $fillable = ['kode','name','kode_asset_type', 'status'];
 
     protected $casts = [
         'status' => 'boolean',
@@ -28,20 +30,19 @@ class MasterCategory extends Model
 
     protected static function booted(): void
     {
-        static::deleting(function (self $type) {
-            if ($type->isForceDeleting()) {
-                // DB will restrict anyway, but we can pre-empt:
-                if ($type->categories2()->exists()) {
-                    throw new \Exception('Cannot delete: categories 2 still exist.');
-                }
-                return true;
+        static::deleting(function (self $model) {
+            if (AssetReferenceGuard::isUsed('master_category', $model->kode)) {
+                throw ValidationException::withMessages([
+                    'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",
+                ]);
             }
 
-            // Soft delete path
-            if ($type->categories2()->exists()) {
-                throw new \Exception('Cannot archive asset type: categories 2 still exist.');
+            if ($model->categories2()->exists()) {
+                $action = $model->isForceDeleting() ? 'delete' : 'archive';
+                throw ValidationException::withMessages([
+                    'delete' => "Cannot {$action} category '{$model->name}' because Category 2 entries still exist.",
+                ]);
             }
-            return true;
         });
     }
 

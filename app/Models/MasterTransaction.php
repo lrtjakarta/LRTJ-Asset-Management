@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\AssetReferenceGuard;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\ValidationException;
 
 class MasterTransaction extends Model
 {
@@ -19,6 +21,19 @@ class MasterTransaction extends Model
     protected $casts = [
         'status' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $model) {
+            // Block delete (soft or force) if used by Assets
+            if (AssetReferenceGuard::isUsed('master_transaction', $model->kode)) {
+                throw ValidationException::withMessages([
+                    'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",
+                ]);
+            }
+
+        });
+    }
 
     // If you want route-model binding by uuid:
     public function getRouteKeyName(): string
