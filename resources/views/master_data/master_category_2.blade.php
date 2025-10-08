@@ -65,15 +65,44 @@
                     },
                 ]
             });
-
-            // Init select2 (if you load it) or Metronic KT bindings
+            get_cat_extra = () => {
+                const p = {
+                    kode_asset_type: $('#kodeAssetType').val() || '',
+                    q: ''
+                };
+                console.log('cat->extra', p);
+                return p;
+            }
             if ($.fn.select2) {
                 $('#kodeCategory').select2({
                     dropdownParent: $('#kt_modal_add'),
-                    placeholder: 'Choose category',
+                    placeholder: 'Choose Asset Type First',
                     allowClear: true,
                     ajax: {
                         url: "{{ route('master.category.options') }}",
+                        dataType: 'json',
+                        delay: 150,
+                        cache: false,
+                        data: function(params) {
+                            const base = {
+                                q: params.term || '',
+                                page: params.page || 1
+                            };
+                            if (typeof get_cat_extra === 'function')
+                                return Object.assign(base, get_cat_extra());
+                            if (get_cat_extra && typeof get_cat_extra === 'object') return Object.assign(
+                                base, get_cat_extra);
+                            return base;
+                        },
+                        processResults: data => data
+                    }
+                });
+                $('#kodeAssetType').select2({
+                    dropdownParent: $('#kt_modal_add'),
+                    placeholder: 'Choose asset type',
+                    allowClear: true,
+                    ajax: {
+                        url: "{{ route('master.asset_type.options') }}",
                         data: params => ({
                             q: params.term || ''
                         }),
@@ -81,6 +110,7 @@
                         delay: 150
                     }
                 });
+
             } else {
                 // fallback: load once
                 fetch("{{ route('master.category.options') }}")
@@ -94,11 +124,23 @@
                             sel.appendChild(opt);
                         });
                     });
+                fetch("{{ route('master.asset_type.options') }}")
+                    .then(r => r.json())
+                    .then(data => {
+                        const sel = document.getElementById('kodeAssetType');
+                        data.results.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.id;
+                            opt.textContent = o.text;
+                            sel.appendChild(opt);
+                        });
+                    });
             }
-            
+
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
+
                 $.get("{{ route('master.category_2.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
@@ -111,12 +153,20 @@
                         $f.find('[name="uuid"]').val(d.uuid);
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
-                        $f.find('[name="status"]').val(d.status).change?.();// set select (select2 or plain)
+                        $f.find('[name="status"]').val(d.status).change?.
+                            (); // set select (select2 or plain)
                         if ($.fn.select2) {
                             const opt = new Option(d.kode_category, d.kode_category, true, true);
                             $('#kodeCategory').append(opt).trigger('change');
+                            const opt2 = new Option(d.kode_asset_type, d.kode_asset_type, true, true);
+                            $('#kodeAssetType').append(opt2);
+
+                            $('#kodeAssetType').on('change', function() {
+                                $('#kodeCategory').val(null).trigger('change');
+                            });
                         } else {
                             $('#kodeCategory').val(d.kode_category);
+                            $('#kodeAssetType').val(d.kode_asset_type);
                         }
                         $('#kt_modal_add').modal('show');
                     })
@@ -317,6 +367,10 @@
                         <div class="mb-5">
                             <label class="form-label required">Name</label>
                             <input type="text" name="name" class="form-control" required maxlength="191">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label required">Asset Type</label>
+                            <select name="kode_asset_type" id="kodeAssetType" class="form-select" required></select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label required">Category</label>

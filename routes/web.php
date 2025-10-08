@@ -114,6 +114,11 @@ Route::middleware('ldap.session')->group(function () {
     // ASSETS ROUTE    
     Route::prefix('assets')->name('assets.')->group(function () {
         Route::get('/', [AssetsController::class, 'index'])->name('index');
+        Route::get('/datatable', [AssetsController::class, 'datatable'])->name('datatable');
+        Route::get('/create',     [AssetsController::class, 'create'])->name('create');
+        Route::post('/save', [AssetsController::class, 'store'])->name('store');
+        Route::delete('/{asset}', [AssetsController::class, 'show'])->name('show');
+        Route::get('/{asset}', [AssetsController::class, 'destroy'])->name('destroy');
     });
 
     // TRASH ROUTE

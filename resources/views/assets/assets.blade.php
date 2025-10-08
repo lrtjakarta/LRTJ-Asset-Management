@@ -104,6 +104,163 @@
                 }
             });
         })(jQuery);
+
+        const table = $('#assetsTable').DataTable({
+            serverSide: true,
+            processing: true,
+            ajax: '{{ route('assets.datatable') }}',
+            scrollX: true,
+            columns: [{
+                    title: 'Code',
+                    data: 'asset_code'
+                },
+                {
+                    title: 'Group',
+                    data: 'kode_group_category'
+                },
+                {
+                    title: 'Parent',
+                    data: 'asset_number_parent'
+                },
+                {
+                    title: 'Child',
+                    data: 'asset_number_child'
+                },
+
+                {
+                    title: 'Description',
+                    data: 'description'
+                },
+
+                {
+                    title: 'Maximo',
+                    data: 'asset_number_maximo'
+                },
+                {
+                    title: 'D365',
+                    data: 'asset_number_dynamic_365'
+                },
+                {
+                    title: 'Internal',
+                    data: 'asset_number_internal'
+                },
+
+                {
+                    title: 'Owner',
+                    data: 'asset_owner_label'
+                },
+                {
+                    title: 'User',
+                    data: 'asset_user_label'
+                },
+                {
+                    title: 'Maintenance',
+                    data: 'asset_maintenance_label'
+                },
+
+                {
+                    title: 'Location',
+                    data: 'kode_location_label'
+                },
+                {
+                    title: 'Class',
+                    data: 'kode_asset_class_label'
+                },
+                {
+                    title: 'Status',
+                    data: 'kode_status_label'
+                },
+
+                {
+                    title: 'Price',
+                    data: 'price',
+                    render: d => d != null ? Number(d).toLocaleString() : ''
+                },
+                {
+                    title: 'Qty',
+                    data: 'quantity'
+                },
+                {
+                    title: 'VAT In',
+                    data: 'vat_in',
+                    render: d => d != null ? Number(d).toLocaleString() : ''
+                },
+                {
+                    title: 'UOM',
+                    data: 'kode_uom_label'
+                },
+                {
+                    title: 'Total',
+                    data: 'total',
+                    render: d => d != null ? Number(d).toLocaleString() : ''
+                },
+                {
+                    title: 'UL (mo)',
+                    data: 'useful_life_month'
+                },
+                {
+                    title: 'UL (yr)',
+                    data: 'useful_life_year'
+                },
+
+                {
+                    title: 'No PO/SPK',
+                    data: 'no_po_perjanjian_spk'
+                },
+                {
+                    title: 'Nota Referensi',
+                    data: 'nota_referensi'
+                },
+                {
+                    title: 'No Document',
+                    data: 'no_document'
+                },
+
+                {
+                    title: 'Sumber',
+                    data: 'kode_sumber_label'
+                },
+
+                {
+                    title: 'Updated',
+                    data: 'updated_at'
+                },
+
+                {
+                    title: 'Actions',
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    render: d => `
+      <div class="btn-group">
+        <button class="btn btn-sm btn-light-primary" onclick="editAsset('${d.uuid}')">Edit</button>
+        <button class="btn btn-sm btn-light-danger"  onclick="delAsset('${d.uuid}')">Delete</button>
+      </div>`
+                }
+            ]
+        });
+
+        async function editAsset(uuid) {
+            const res = await fetch(`/assets/${uuid}`, {
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            const data = await res.json();
+            // TODO: fill your modal with data and show it
+        }
+
+        async function delAsset(uuid) {
+            if (!confirm('Move this asset to trash?')) return;
+            const res = await fetch(`/assets/${uuid}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) table.ajax.reload(null, false);
+        }
     </script>
 @endpush
 
@@ -150,9 +307,9 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Assets Data</span>
                                 </h3>
                                 <div class="card-toolbar">
-                                    <button class="btn btn-sm btn-danger">
+                                    <a href="{{ route('assets.create') }}" class="btn btn-sm btn-danger">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New
-                                    </button>
+                                    </a>
                                     &nbsp;
                                     <button class="btn btn-sm btn-danger" data-card="fullscreen" title="Fullscreen">
                                         <i class="ki-duotone ki-exit-right-corner fs-2">
@@ -165,6 +322,7 @@
                             <!--end::Header-->
                             <!--begin::Body-->
                             <div class="card-body py-3">
+                                <table id="assetsTable" class="table table-striped w-100"></table>
                             </div>
                             <!--begin::Body-->
                         </div>

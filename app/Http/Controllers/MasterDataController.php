@@ -928,6 +928,7 @@ class MasterDataController
     public function master_category_2_show(string $uuid)
     {
         $it = MasterCategory2::where('uuid', $uuid)->firstOrFail();
+        $getAt = MasterCategory::where('kode', $it->kode_category)->firstOrFail();
         return response()->json([
             'ok' => true,
             'data' => [
@@ -936,6 +937,7 @@ class MasterDataController
                 'name'   => $it->name,
                 'status' => $it->status ? 1 : 0,
                 'kode_category' => $it->kode_category,
+                'kode_asset_type' => $getAt->kode_asset_type
             ],
         ]);
     }
@@ -1210,8 +1212,18 @@ class MasterDataController
     }
     public function select_master_category(Request $request)
     {
+        $type = trim((string) $request->get('kode_asset_type'));
         $search = trim((string) $request->get('q', ''));
-        $q = MasterCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($type === '') {
+            return response()->json(['results' => []]);
+        }
+
+        $q = MasterCategory::query()
+            ->select(['kode', 'name'])
+            ->where('kode_asset_type', $type)
+            ->where('status', true)
+            ->orderBy('kode');
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {
@@ -1227,14 +1239,20 @@ class MasterDataController
     }
     public function select_master_category_2(Request $request)
     {
+        $cat = (string) $request->get('kode_category');
         $search = trim((string) $request->get('q', ''));
-        $q = MasterCategory2::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if ($cat === '') return response()->json(['results' => []]);
+
+        $q = MasterCategory2::query()
+            ->select(['kode', 'name'])
+            ->where('kode_category', $cat)
+            ->where('status', true)
+            ->orderBy('kode');
 
         if ($search !== '') {
-            $q->where(function ($w) use ($search) {
-                $w->where('kode', 'ilike', "%{$search}%")
-                    ->orWhere('name', 'ilike', "%{$search}%");
-            });
+            $q->where(fn($w) => $w->where('kode', 'ilike', "%{$search}%")
+                ->orWhere('name', 'ilike', "%{$search}%"));
         }
 
         $rows = $q->limit(20)->get()
@@ -1276,23 +1294,6 @@ class MasterDataController
 
         return response()->json(['results' => $rows]);
     }
-    // public function select_master_group_category(Request $request)
-    // {
-    //     $search = trim((string) $request->get('q', ''));
-    //     $q = MasterGroupCategory::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
-
-    //     if ($search !== '') {
-    //         $q->where(function ($w) use ($search) {
-    //             $w->where('kode', 'ilike', "%{$search}%")
-    //                 ->orWhere('name', 'ilike', "%{$search}%");
-    //         });
-    //     }
-
-    //     $rows = $q->limit(20)->get()
-    //         ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
-
-    //     return response()->json(['results' => $rows]);
-    // }
     public function select_master_uom(Request $request)
     {
         $search = trim((string) $request->get('q', ''));

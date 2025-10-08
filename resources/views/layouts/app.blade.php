@@ -11,8 +11,8 @@
     <link href='https://fonts.googleapis.com/css?family=Montserrat' rel='stylesheet'>
     <!--end::Fonts-->
     <!--begin::Vendor Stylesheets(used for this page only)-->
-    <link href="{{ asset('metronic/demo1/assets/plugins/custom/fullcalendar/fullcalendar.bundle.css') }}" rel="stylesheet"
-        type="text/css" />
+    <link href="{{ asset('metronic/demo1/assets/plugins/custom/fullcalendar/fullcalendar.bundle.css') }}"
+        rel="stylesheet" type="text/css" />
     <link href="{{ asset('metronic/demo1/assets/plugins/custom/datatables/datatables.bundle.css') }}" rel="stylesheet"
         type="text/css" />
 
@@ -24,8 +24,33 @@
             font-family: 'Montserrat';
             font-size: 22px;
         }
+
         th {
             font-weight: bold !important;
+        }
+
+        /* Make select2 height match .form-select */
+        .select2-container .select2-selection--single {
+            height: calc(1.5em + .75rem + 2px);
+            padding: .375rem .75rem;
+            border: 1px solid var(--bs-border-color);
+            border-radius: .475rem;
+            /* Metronic-ish rounding */
+        }
+
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {
+            line-height: calc(1.5em + .75rem);
+            padding-left: 0;
+        }
+
+        .select2-container--bootstrap-5 .select2-selection--single .select2-selection__arrow {
+            height: 100%;
+            right: .75rem;
+        }
+
+        .select2-container .select2-dropdown {
+            border-color: var(--bs-border-color);
+            border-radius: .475rem;
         }
     </style>
 
