@@ -40,35 +40,47 @@ class AssetNumberingService
     }
 
     /** Next child code for a parent, **2 digits starting at 00** (00..99) */
+
     public function nextChild(string $parentCode): string
     {
+        // Return "00" if no (non-deleted) asset currently uses this parent.
+        // Otherwise bump counter and return "01","02",...
         return DB::transaction(function () use ($parentCode) {
-            // Ensure counter row exists
-            DB::statement("
-                INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
-                VALUES (?, 0, NOW(), NOW())
-                ON CONFLICT (parent_code) DO NOTHING
-            ", [$parentCode]);
 
-            // Lock and read current (first is 0 => "00")
-            $seq = (int) DB::table('asset_parent_counters')
+            // ensure a counter row exists, then LOCK it so concurrent calls serialize
+            DB::statement("
+            INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
+            VALUES (?, 0, NOW(), NOW())
+            ON CONFLICT (parent_code) DO NOTHING
+        ", [$parentCode]);
+
+            // lock the row before we check the assets table to avoid races
+            $row = DB::table('asset_parent_counters')
                 ->where('parent_code', $parentCode)
                 ->lockForUpdate()
-                ->value('last_child_seq');
+                ->first();
 
-            if ($seq > 99) {
-                throw new \RuntimeException("Child sequence overflow for parent {$parentCode} (max 99).");
+            // first child is "00" iff no active asset uses this parent
+            $exists = DB::table('assets')
+                ->where('asset_number_parent', $parentCode)
+                ->whereNull('deleted_at')
+                ->exists();
+
+            if (! $exists) {
+                return '00';
             }
 
-            // Current value is the code we return ("00" for first)
-            $code = str_pad((string) $seq, 2, '0', STR_PAD_LEFT);
+            // otherwise bump
+            $seq = (int) ($row->last_child_seq ?? 0) + 1;
 
-            // Bump to next
             DB::table('asset_parent_counters')
                 ->where('parent_code', $parentCode)
-                ->update(['last_child_seq' => $seq + 1, 'updated_at' => now()]);
+                ->update([
+                    'last_child_seq' => $seq,
+                    'updated_at'     => now(),
+                ]);
 
-            return $code;
+            return str_pad((string) $seq, 2, '0', STR_PAD_LEFT);
         });
     }
 
@@ -125,45 +137,52 @@ class AssetNumberingService
     }
 
     /**
-     * If you increment child counters (when first child isn’t "00"),
-     * you can also roll the parent’s child counter back.
-     */
+     * increment child counters (when first child isn’t "00"),
+     */ 
     public function rollbackChildIfLatest(string $oldParentCode, string $oldChildSeq2, string $assetUuid): void
     {
-        // Only needed if you used nextChild() to allocate children (not when using fixed "00").
         DB::transaction(function () use ($oldParentCode, $oldChildSeq2, $assetUuid) {
-
             DB::statement("
-                INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
-                VALUES (?, 0, NOW(), NOW())
-                ON CONFLICT (parent_code) DO NOTHING
-            ", [$oldParentCode]);
+            INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
+            VALUES (?, 0, NOW(), NOW())
+            ON CONFLICT (parent_code) DO NOTHING
+        ", [$oldParentCode]);
 
             $row = DB::table('asset_parent_counters')
                 ->where('parent_code', $oldParentCode)
                 ->lockForUpdate()
                 ->first();
 
-            if (!$row) return;
+            if (! $row) return;
 
-            $oldChildInt = (int) ltrim($oldChildSeq2, '0'); // '03' -> 3, '00' -> 0
+            $oldChildInt = (int) ltrim($oldChildSeq2, '0'); // '00' -> 0, '03' -> 3
 
-            if ((int)$row->last_child_seq !== $oldChildInt) return;
+            // if our row held the latest number AND no other asset still uses this exact child
+            if ((int)$row->last_child_seq === $oldChildInt) {
+                $stillUsesThisChild = DB::table('assets')
+                    ->where('asset_number_parent', $oldParentCode)
+                    ->where('asset_number_child',  $oldChildSeq2)
+                    ->where('uuid', '!=', $assetUuid)
+                    ->whereNull('deleted_at')
+                    ->exists();
 
-            $stillUsed = DB::table('assets')
-                ->where('asset_number_parent', $oldParentCode)
-                ->where('asset_number_child', $oldChildSeq2)
-                ->where('uuid', '!=', $assetUuid)
-                ->exists();
+                if ($stillUsesThisChild) return;
 
-            if ($stillUsed) return;
+                // if parent now has NO assets left, reset to 0; else step back by 1
+                $parentEmpty = ! DB::table('assets')
+                    ->where('asset_number_parent', $oldParentCode)
+                    ->whereNull('deleted_at')
+                    ->exists();
 
-            DB::table('asset_parent_counters')
-                ->where('parent_code', $oldParentCode)
-                ->update([
-                    'last_child_seq' => DB::raw('GREATEST(last_child_seq - 1, 0)'),
-                    'updated_at'     => now(),
-                ]);
+                $newSeq = $parentEmpty ? 0 : max(0, $oldChildInt - 1);
+
+                DB::table('asset_parent_counters')
+                    ->where('parent_code', $oldParentCode)
+                    ->update([
+                        'last_child_seq' => $newSeq,
+                        'updated_at'     => now(),
+                    ]);
+            }
         });
     }
 }

@@ -279,7 +279,7 @@ class AssetsController extends Controller
         string $uuid
     ) {
         $v = (object) $request->validated();
-        
+
         $asset = Assets::findOrFail($uuid);
 
         $asset->load('classification');
@@ -303,13 +303,9 @@ class AssetsController extends Controller
         DB::transaction(function () use ($v, $asset, $recode, $newGroup, $num, $vatRate, $uuid) {
 
             if ($recode) {
-                if ($asset->kode_group_category && $asset->asset_number_parent) {
-                    $num->rollbackParentIfLatest(
-                        $asset->kode_group_category,
-                        $asset->asset_number_parent,
-                        $asset->uuid
-                    );
-                }
+
+                $num->rollbackParentIfLatest($asset->kode_group_category, $asset->asset_number_parent, $asset->uuid);
+                $num->rollbackChildIfLatest($asset->asset_number_parent, $asset->asset_number_child, $asset->uuid);
                 $newParent = $num->nextParent($newGroup);
                 $newChild  = $num->nextChild($newParent);
 
