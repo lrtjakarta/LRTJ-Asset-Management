@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Assets extends Model
 {
@@ -13,6 +14,20 @@ class Assets extends Model
     protected $primaryKey = 'uuid';
     public $incrementing = false;
     protected $keyType = 'string';
+    
+    protected static function booted(): void
+    {
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
+    }
+    
+    public function getRouteKeyName(): string
+    {
+        return 'uuid';
+    }
 
     protected $fillable = [
         'uuid',
@@ -110,7 +125,7 @@ class Assets extends Model
     /* ------------- Helpers ------------- */
     public function getDisplayCodeAttribute(): string
     {
-        return $this->asset_number_parent .'-'. $this->asset_number_child; // equals asset_code in your design
+        return $this->asset_number_parent . '-' . $this->asset_number_child; // equals asset_code in your design
     }
 
     public function activeQr()

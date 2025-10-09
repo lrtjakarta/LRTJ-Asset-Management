@@ -17,6 +17,7 @@ class AssetUpdateRequest extends FormRequest
             'kode_sumber'             => ['required', 'string', 'max:50'],
             'kode_location'           => ['required', 'string', 'max:50'],
             'kode_asset_class'        => ['required', 'string', 'max:50'],
+            'kode_status'             => ['required', 'string', 'max:50'],
             
             // identifiers (optional)
             'asset_number_maximo'       => ['nullable', 'string', 'max:120'],
@@ -28,7 +29,7 @@ class AssetUpdateRequest extends FormRequest
             'kode_asset_type'         => ['required', 'string', 'max:50'],
             'kode_category'           => ['required', 'string', 'max:50'],
             'kode_category_2'         => ['required', 'string', 'max:50'],
-            'sub_category'            => ['required', 'string', 'max:10'],
+            'kode_sub_category'            => ['required', 'string', 'max:10'],
 
             // assignment
             'asset_owner'          => ['required', 'string', 'max:50'],
@@ -46,10 +47,9 @@ class AssetUpdateRequest extends FormRequest
             'rfid_epc'              => ['nullable', 'string', 'max:128'],
 
             // document
-            'no_po_perjanjian_spk' => ['required', 'string', 'max:120'],
+            'no_po_perjanjian_spk' => ['nullable', 'string', 'max:120'],
             'nota_referensi'       => ['required', 'string', 'max:120'],
             'no_document'          => ['required', 'string', 'max:120'],
-
         ];
     }
 }

@@ -113,12 +113,18 @@ Route::middleware('ldap.session')->group(function () {
 
     // ASSETS ROUTE    
     Route::prefix('assets')->name('assets.')->group(function () {
+        // FRONTEND
         Route::get('/', [AssetsController::class, 'index'])->name('index');
+        Route::get('/detail/{uuid}', [AssetsController::class, 'detail'])->name('detail');
+        Route::get('/edit/{uuid}', [AssetsController::class, 'edit'])->name('edit');
+        //DATATABLE
         Route::get('/datatable', [AssetsController::class, 'datatable'])->name('datatable');
+        //FUNCTION
+        // Route::get('/generate-qr/{uuid}',     [AssetsController::class, 'generate_qr'])->name('generate_qr');
         Route::get('/create',     [AssetsController::class, 'create'])->name('create');
+        Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
         Route::post('/save', [AssetsController::class, 'store'])->name('store');
-        Route::delete('/{asset}', [AssetsController::class, 'show'])->name('show');
-        Route::get('/{asset}', [AssetsController::class, 'destroy'])->name('destroy');
+        Route::get('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
     });
 
     // TRASH ROUTE

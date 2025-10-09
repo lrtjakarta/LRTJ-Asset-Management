@@ -17,11 +17,38 @@
             overflow: hidden;
             /* prevent page scroll behind fullscreen card */
         }
+
+        th,
+        td {
+            text-align: center !important;
+        }
     </style>
 @endpush
 
 @push('scripts')
+    @if (session('success'))
+        <script>
+            Swal.fire({
+                icon: 'success',
+                title: 'Success',
+                text: @json(session('success')),
+                timer: 2000,
+                showConfirmButton: false
+            });
+        </script>
+    @endif
+
+    @if ($errors->any())
+        <script>
+            Swal.fire({
+                icon: 'error',
+                title: 'Validation failed',
+                html: `{!! implode('<br>', $errors->all()) !!}`
+            });
+        </script>
+    @endif
     <script>
+        const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__')); 
         (function($) {
             const FS_BTN = '[data-card="fullscreen"]';
 
@@ -110,133 +137,146 @@
             processing: true,
             ajax: '{{ route('assets.datatable') }}',
             scrollX: true,
+            "dom": "<'row mb-2'" +
+                "<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>" +
+                ">" +
+
+                "<'table-responsive'tr>" +
+
+                "<'row'" +
+                "<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>" +
+                ">",
+            searching: true,
+            order: [
+                [24, 'desc']
+            ],
             columns: [{
-                    title: 'Code',
-                    data: 'asset_code'
-                },
-                {
-                    title: 'Group',
-                    data: 'kode_group_category'
-                },
-                {
-                    title: 'Parent',
-                    data: 'asset_number_parent'
-                },
-                {
-                    title: 'Child',
-                    data: 'asset_number_child'
-                },
+                    data: 'asset_code',
+                    name: 'a.asset_code',
+                    "render": function(data, type, row, meta) {
+                        if (type !== 'display') return data;
 
-                {
-                    title: 'Description',
-                    data: 'description'
-                },
-
-                {
-                    title: 'Maximo',
-                    data: 'asset_number_maximo'
+                        const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row.uuid));
+                        return `<a href="${url}" class="text-primary fw-semibold">${data ?? ''}</a>`;
+                    }
                 },
                 {
-                    title: 'D365',
-                    data: 'asset_number_dynamic_365'
+                    data: 'kode_group_category',
+                    name: 'a.kode_group_category'
                 },
                 {
-                    title: 'Internal',
-                    data: 'asset_number_internal'
-                },
-
-                {
-                    title: 'Owner',
-                    data: 'asset_owner_label'
+                    data: 'asset_number_parent',
+                    name: 'a.asset_number_parent'
                 },
                 {
-                    title: 'User',
-                    data: 'asset_user_label'
+                    data: 'asset_number_child',
+                    name: 'a.asset_number_child'
                 },
                 {
-                    title: 'Maintenance',
-                    data: 'asset_maintenance_label'
-                },
-
-                {
-                    title: 'Location',
-                    data: 'kode_location_label'
+                    data: 'description',
+                    name: 'a.description'
                 },
                 {
-                    title: 'Class',
-                    data: 'kode_asset_class_label'
+                    data: 'asset_number_maximo',
+                    name: 'i.asset_number_maximo'
                 },
                 {
-                    title: 'Status',
-                    data: 'kode_status_label'
+                    data: 'asset_number_dynamic_365',
+                    name: 'i.asset_number_dynamic_365'
                 },
-
                 {
-                    title: 'Price',
+                    data: 'asset_number_internal',
+                    name: 'i.asset_number_internal'
+                },
+                {
+                    data: 'asset_owner_label',
+                    name: 'g.asset_owner'
+                },
+                {
+                    data: 'asset_user_label',
+                    name: 'g.asset_user'
+                },
+                {
+                    data: 'asset_maintenance_label',
+                    name: 'g.asset_maintenance'
+                },
+                {
+                    data: 'kode_location_label',
+                    name: 'a.kode_location'
+                },
+                {
+                    data: 'kode_asset_class_label',
+                    name: 'a.kode_asset_class'
+                },
+                {
+                    data: 'kode_status_label',
+                    name: 'a.kode_status'
+                },
+                {
                     data: 'price',
+                    name: 'v.price',
                     render: d => d != null ? Number(d).toLocaleString() : ''
                 },
                 {
-                    title: 'Qty',
-                    data: 'quantity'
+                    data: 'quantity',
+                    name: 'v.quantity'
                 },
                 {
-                    title: 'VAT In',
                     data: 'vat_in',
+                    name: 'v.vat_in',
                     render: d => d != null ? Number(d).toLocaleString() : ''
                 },
                 {
-                    title: 'UOM',
-                    data: 'kode_uom_label'
+                    data: 'kode_uom',
+                    name: 'v.kode_uom'
                 },
                 {
-                    title: 'Total',
                     data: 'total',
+                    name: 'v.total',
                     render: d => d != null ? Number(d).toLocaleString() : ''
                 },
                 {
-                    title: 'UL (mo)',
-                    data: 'useful_life_month'
+                    data: 'useful_life_month',
+                    name: 'v.useful_life_month'
                 },
                 {
-                    title: 'UL (yr)',
-                    data: 'useful_life_year'
-                },
-
-                {
-                    title: 'No PO/SPK',
-                    data: 'no_po_perjanjian_spk'
-                },
-                {
-                    title: 'Nota Referensi',
-                    data: 'nota_referensi'
-                },
-                {
-                    title: 'No Document',
-                    data: 'no_document'
+                    data: 'useful_life_year',
+                    name: 'v.useful_life_year'
                 },
 
                 {
-                    title: 'Sumber',
-                    data: 'kode_sumber_label'
+                    data: 'no_po_perjanjian_spk',
+                    name: 'd.no_po_perjanjian_spk'
+                },
+                {
+                    data: 'nota_referensi',
+                    name: 'd.nota_referensi'
+                },
+                {
+                    data: 'no_document',
+                    name: 'd.no_document'
+                },
+                // {
+                //     data: 'kode_sumber_label'
+                // },
+                {
+                    data: 'updated_at',
+                    name: 'a.updated_at'
                 },
 
-                {
-                    title: 'Updated',
-                    data: 'updated_at'
-                },
-
-                {
-                    title: 'Actions',
-                    data: null,
-                    orderable: false,
-                    searchable: false,
-                    render: d => `
-      <div class="btn-group">
-        <button class="btn btn-sm btn-light-primary" onclick="editAsset('${d.uuid}')">Edit</button>
-        <button class="btn btn-sm btn-light-danger"  onclick="delAsset('${d.uuid}')">Delete</button>
-      </div>`
-                }
+                //             {
+                //                 title: 'Actions',
+                //                 data: null,
+                //                 orderable: false,
+                //                 searchable: false,
+                //                 render: d => `
+            //   <div class="btn-group">
+            //     <button class="btn btn-sm btn-light-primary" onclick="editAsset('${d.uuid}')">Edit</button>
+            //     <button class="btn btn-sm btn-light-danger"  onclick="delAsset('${d.uuid}')">Delete</button>
+            //   </div>`
+                //             }
             ]
         });
 
@@ -322,7 +362,68 @@
                             <!--end::Header-->
                             <!--begin::Body-->
                             <div class="card-body py-3">
-                                <table id="assetsTable" class="table table-striped w-100"></table>
+                                <table id="assetsTable"
+                                    class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded ">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th class="min-w-200px">Code (Parent + Child)</th>
+                                            <th class="min-w-100px">Group Category</th>
+                                            <th class="min-w-150px">Parent</th>
+                                            <th>Child</th>
+                                            <th class="min-w-250px">Description</th>
+                                            <th class="min-w-150px">Asset Number Maximo</th>
+                                            <th class="min-w-150px">Asset Number D365</th>
+                                            <th class="min-w-150px">Asset Number Internal</th>
+                                            <th class="min-w-150px">Asset Owner</th>
+                                            <th class="min-w-150px">Asset User</th>
+                                            <th class="min-w-150px">Asset Maintenance</th>
+                                            <th class="min-w-150px">Location</th>
+                                            <th class="min-w-150px">Asset Class</th>
+                                            <th class="min-w-150px">Status</th>
+                                            <th class="min-w-100px">Price</th>
+                                            <th>Quantity</th>
+                                            <th class="min-w-150px">VAT In</th>
+                                            <th>UOM</th>
+                                            <th class="min-w-150px">Total</th>
+                                            <th>Useful Life (Month)</th>
+                                            <th>Useful Life (Year)</th>
+                                            <th class="min-w-200px">No PO/Perjanjian/SPK</th>
+                                            <th class="min-w-200px">Note Reference</th>
+                                            <th class="min-w-200px">No Document</th>
+                                            {{-- <th class="min-w-120px">Sumber</th> --}}
+                                            <th class="min-w-120px">Updated</th>
+                                            {{-- <th class="text-center min-w-120px">Actions</th> --}}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            {{-- <td></td> --}}
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                             <!--begin::Body-->
                         </div>

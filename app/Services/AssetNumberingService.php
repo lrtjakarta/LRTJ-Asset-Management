@@ -71,4 +71,99 @@ class AssetNumberingService
             return $code;
         });
     }
+
+    /** Extract numeric parent sequence from full code like AT123000001 -> 1 */
+    public function extractParentSeq(string $parentCode): int
+    {
+        $last6 = substr($parentCode, -6);
+        return (int) ltrim($last6, '0');
+    }
+
+    /**
+     * If this asset was the last one issued for its old group, and no one else uses that parent,
+     * roll the group's `last_parent_seq` back by 1.
+     */
+    public function rollbackParentIfLatest(string $oldGroup, string $oldParentCode, string $assetUuid): void
+    {
+        $oldSeq = $this->extractParentSeq($oldParentCode);
+
+        DB::transaction(function () use ($oldGroup, $oldParentCode, $assetUuid, $oldSeq) {
+            // Ensure row exists + lock it
+            DB::statement("
+                INSERT INTO asset_group_counters (group_code, last_parent_seq, created_at, updated_at)
+                VALUES (?, 0, NOW(), NOW())
+                ON CONFLICT (group_code) DO NOTHING
+            ", [$oldGroup]);
+
+            // Lock the counter row
+            $row = DB::table('asset_group_counters')
+                ->where('group_code', $oldGroup)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$row) return;
+
+            // Only if our seq is exactly the latest
+            if ((int)$row->last_parent_seq !== $oldSeq) return;
+
+            // Verify no other asset still uses that parent (excluding this one)
+            $stillUsed = DB::table('assets')
+                ->where('asset_number_parent', $oldParentCode)
+                ->where('uuid', '!=', $assetUuid)
+                ->exists();
+
+            if ($stillUsed) return;
+
+            // Roll back by 1
+            DB::table('asset_group_counters')
+                ->where('group_code', $oldGroup)
+                ->update([
+                    'last_parent_seq' => DB::raw('GREATEST(last_parent_seq - 1, 0)'),
+                    'updated_at'      => now(),
+                ]);
+        });
+    }
+
+    /**
+     * If you increment child counters (when first child isn’t "00"),
+     * you can also roll the parent’s child counter back.
+     */
+    public function rollbackChildIfLatest(string $oldParentCode, string $oldChildSeq2, string $assetUuid): void
+    {
+        // Only needed if you used nextChild() to allocate children (not when using fixed "00").
+        DB::transaction(function () use ($oldParentCode, $oldChildSeq2, $assetUuid) {
+
+            DB::statement("
+                INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
+                VALUES (?, 0, NOW(), NOW())
+                ON CONFLICT (parent_code) DO NOTHING
+            ", [$oldParentCode]);
+
+            $row = DB::table('asset_parent_counters')
+                ->where('parent_code', $oldParentCode)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$row) return;
+
+            $oldChildInt = (int) ltrim($oldChildSeq2, '0'); // '03' -> 3, '00' -> 0
+
+            if ((int)$row->last_child_seq !== $oldChildInt) return;
+
+            $stillUsed = DB::table('assets')
+                ->where('asset_number_parent', $oldParentCode)
+                ->where('asset_number_child', $oldChildSeq2)
+                ->where('uuid', '!=', $assetUuid)
+                ->exists();
+
+            if ($stillUsed) return;
+
+            DB::table('asset_parent_counters')
+                ->where('parent_code', $oldParentCode)
+                ->update([
+                    'last_child_seq' => DB::raw('GREATEST(last_child_seq - 1, 0)'),
+                    'updated_at'     => now(),
+                ]);
+        });
+    }
 }

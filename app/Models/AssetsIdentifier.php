@@ -9,7 +9,7 @@ class AssetsIdentifier extends Model
 {
     use SoftDeletes;
     protected $table = 'assets_identifiers';
-    protected $primaryKey = 'uuid';
+    protected $primaryKey = 'asset_uuid';
     public $incrementing = false;
     protected $keyType = 'string';
 

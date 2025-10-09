@@ -9,7 +9,7 @@ class AssetsDocument extends Model
 {
     use SoftDeletes;
     protected $table = 'assets_document';
-    protected $primaryKey = 'uuid';
+    protected $primaryKey = 'asset_uuid';
     public $incrementing = false;
     protected $keyType = 'string';
 

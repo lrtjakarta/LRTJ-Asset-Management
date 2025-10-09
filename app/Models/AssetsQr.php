@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class AssetsQr extends Model
 {
@@ -25,6 +26,15 @@ class AssetsQr extends Model
         'created_at'   => 'datetime',
         'updated_at'   => 'datetime',
     ];
+
+    protected static function booted()
+    {
+        static::deleting(function ($qr) {
+            if ($qr->image_path && Storage::disk('public')->exists($qr->image_path)) {
+                Storage::disk('public')->delete($qr->image_path);
+            }
+        });
+    }
 
     public function asset() { return $this->belongsTo(Assets::class, 'asset_uuid'); }
 
