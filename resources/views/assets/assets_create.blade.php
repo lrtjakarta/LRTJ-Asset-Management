@@ -63,41 +63,75 @@
                                         </div>
                                     @endif
 
+
                                     {{-- Classification (drives kode_group_category on server) --}}
                                     <div class="row g-5">
                                         <div class="col-12">
                                             <h5 class="fw-bold">Classification</h5>
                                         </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Asset Transaction</label>
-                                            <select name="kode_asset_transaction" id="sel-transaction" class="form-select"
-                                                required></select>
+                                        {{-- Mode toggle --}}
+                                        <div class="row g-5">
+                                            <div class="col-12">
+                                                <label class="form-label fw-bold required">Parent Mode</label>
+                                                <div class="d-flex gap-6">
+                                                    <label class="form-check form-check-custom form-check-solid">
+                                                        <input class="form-check-input" type="radio" name="mode"
+                                                            value="new" checked>
+                                                        <span class="form-check-label">Create NEW parent</span>
+                                                    </label>
+                                                    <label class="form-check form-check-custom form-check-solid">
+                                                        <input class="form-check-input" type="radio" name="mode"
+                                                            value="existing">
+                                                        <span class="form-check-label">Use EXISTING parent</span>
+                                                    </label>
+                                                </div>
+                                                <br>
+                                            </div>
+                                            <div class="col-md-12" id="wrap-parent-picker" style="display:none">
+                                                <label class="form-label required">Select Parent</label>
+                                                <select name="parent_uuid" id="sel-parent" class="form-select"></select>
+                                                <div class="form-text">Search by parent asset code / description</div>
+                                            </div>
+
+                                            <div class="col-md-12" id="wrap-classification">
+                                                <div class="row g-5">
+                                                    <div class="col-md-3">
+                                                        <label class="form-label required">Asset Transaction</label>
+                                                        <select name="kode_asset_transaction" id="sel-transaction"
+                                                            class="form-select" required></select>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <label class="form-label required">Asset Type</label>
+                                                        <select name="kode_asset_type" id="sel-asset-type"
+                                                            class="form-select" required></select>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <label class="form-label required">Category</label>
+                                                        <select name="kode_category" id="sel-category" class="form-select"
+                                                            data-placeholder="Select Asset Type First" required></select>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <label class="form-label required">Category 2</label>
+                                                        <select name="kode_category_2" id="sel-category-2"
+                                                            class="form-select" data-placeholder="Select Category First"
+                                                            required></select>
+                                                    </div>
+
+                                                    <div class="col-md-3">
+                                                        <label class="form-label required">Sub Category</label>
+                                                        <select name="kode_sub_category" id="sel-sub-category"
+                                                            class="form-select" required></select>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
                                         </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Asset Type</label>
-                                            <select name="kode_asset_type" id="sel-asset-type" class="form-select"
-                                                required></select>
-                                        </div>
-
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Category</label>
-                                            <select name="kode_category" id="sel-category" class="form-select"
-                                                data-placeholder="Select Asset Type First" required></select>
-                                        </div>
-
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Category 2</label>
-                                            <select name="kode_category_2" id="sel-category-2" class="form-select"
-                                                data-placeholder="Select Category First" required></select>
-                                        </div>
-
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Sub Category</label>
-                                            <select name="kode_sub_category" id="sel-sub-category" class="form-select"
-                                                required></select>
-                                        </div>
                                     </div>
 
                                     <hr class="my-6" />
@@ -328,6 +362,8 @@
 
         // base endpoints (you already defined routes)
         const R = {
+            parent: '{{ route('assets.parent.options') }}',
+            parentMeta: (uuid) => '{{ route('assets.parent.meta', ':id') }}'.replace(':id', uuid),
             sumber: '{{ route('master.sumber.options') }}',
             trx: '{{ route('master.transaction.options') }}',
             type: '{{ route('master.asset_type.options') }}',
@@ -341,8 +377,10 @@
             usercode: '{{ route('master.user_code.options') }}',
         };
 
+
         $(function() {
             // Independent dropdowns
+            initSelect2('#sel-parent', R.parent);
             initSelect2('#sel-sumber', R.sumber);
             initSelect2('#sel-transaction', R.trx);
             initSelect2('#sel-asset-type', R.type);
@@ -405,6 +443,45 @@
             preloadOld('#sel-owner', '{{ old('asset_owner') }}', R.usercode);
             preloadOld('#sel-user', '{{ old('asset_user') }}', R.usercode);
             preloadOld('#sel-maintenance', '{{ old('asset_maintenance') }}', R.usercode);
+            // Mode toggle
+            $('input[name="mode"]').on('change', function() {
+                const mode = this.value;
+                if (mode === 'existing') {
+                    $('#wrap-parent-picker').show();
+                    $('#wrap-classification').hide();
+
+                    // Optional: clear classification inputs so backend won’t validate them
+                    $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category')
+                        .val(null).trigger('change');
+                } else {
+                    $('#wrap-parent-picker').hide();
+                    $('#wrap-classification').show();
+                    $('#sel-parent').val(null).trigger('change');
+                }
+            });
+
+            // When user picks a parent → autofill classification
+            $('#sel-parent').on('select2:select', function(e) {
+                const uuid = e.params.data.id;
+                if (!uuid) return;
+
+                $.getJSON(R.parentMeta(uuid), function(meta) {
+                    const cl = meta.classification || {};
+                    // Set each select with a single preselected option (text can be 'code' only; select2 will refresh later)
+                    setSelectValue('#sel-transaction', cl.kode_asset_transaction);
+                    setSelectValue('#sel-asset-type', cl.kode_asset_type);
+                    setSelectValue('#sel-category', cl.kode_category);
+                    setSelectValue('#sel-category-2', cl.kode_category_2);
+                    setSelectValue('#sel-sub-category', cl.kode_sub_category);
+                });
+            });
+
+            function setSelectValue(sel, code) {
+                if (!code) return;
+                const $el = $(sel);
+                const opt = new Option(code, code, true, true);
+                $el.append(opt).trigger('change');
+            }
         });
 
         function preloadOld(selector, id, url) {

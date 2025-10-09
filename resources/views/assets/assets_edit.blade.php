@@ -17,9 +17,9 @@
                 </ul>
             </div>
 
-            <div class="d-flex align-items-center gap-3">
+            {{-- <div class="d-flex align-items-center gap-3">
                 <a href="{{ route('assets.detail', $asset->uuid) }}" class="btn btn-light">Back to Detail</a>
-            </div>
+            </div> --}}
         </div>
     </div>
 
@@ -41,7 +41,8 @@
                             </div>
 
                             <div class="card-body py-3">
-                                 <form method="POST" action="{{ route('assets.update', $asset->uuid) }}" class="card-body" id="assetEditForm">
+                                <form method="POST" action="{{ route('assets.update', $asset->uuid) }}" class="card-body"
+                                    id="assetEditForm">
                                     @csrf
                                     @method('PUT')
 
@@ -56,40 +57,73 @@
                                     @endif
 
                                     {{-- Classification --}}
+                                    @php
+                                        // If this asset is a child (child != '00'), default mode = existing
+                                        $defaultMode = $asset->asset_number_child !== '00' ? 'existing' : 'new';
+                                    @endphp
                                     <input type="hidden" value="{{ old('uuid', $asset->uuid) }}" name="uuid">
                                     <div class="row g-5">
                                         <div class="col-12">
                                             <h5 class="fw-bold">Classification</h5>
                                         </div>
-
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Asset Transaction</label>
-                                            <select name="kode_asset_transaction" id="sel-transaction" class="form-select"
-                                                required></select>
+                                        {{-- Mode toggle --}}
+                                        <div class="col-12">
+                                            <label class="form-label fw-bold required">Parent Mode</label>
+                                            <div class="d-flex gap-6">
+                                                <label class="form-check form-check-custom form-check-solid">
+                                                    <input class="form-check-input" type="radio" name="mode"
+                                                        value="new" {{ $defaultMode === 'new' ? 'checked' : '' }}>
+                                                    <span class="form-check-label">Create NEW parent</span>
+                                                </label>
+                                                <label class="form-check form-check-custom form-check-solid">
+                                                    <input class="form-check-input" type="radio" name="mode"
+                                                        value="existing"
+                                                        {{ $defaultMode === 'existing' ? 'checked' : '' }}>
+                                                    <span class="form-check-label">Use EXISTING parent</span>
+                                                </label>
+                                            </div>
+                                            <br>
                                         </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Asset Type</label>
-                                            <select name="kode_asset_type" id="sel-asset-type" class="form-select"
-                                                required></select>
+                                        <div class="col-md-12" id="wrap-parent-picker" style="display:none">
+                                            <label
+                                                class="form-label  {{ $defaultMode === 'existing' ? 'required' : '' }}">Select
+                                                Parent</label>
+                                            <select name="parent_uuid" id="sel-parent" class="form-select"></select>
+                                            <div class="form-text">Search by parent asset code / description</div>
                                         </div>
+                                        <div class="col-md-12" id="wrap-classification">
+                                            <div class="row g-5">
+                                                <div class="col-md-3">
+                                                    <label class="form-label required">Asset Transaction</label>
+                                                    <select name="kode_asset_transaction" id="sel-transaction"
+                                                        class="form-select" required></select>
+                                                </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Category</label>
-                                            <select name="kode_category" id="sel-category" class="form-select"
-                                                data-placeholder="Select Asset Type First" required></select>
-                                        </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label required">Asset Type</label>
+                                                    <select name="kode_asset_type" id="sel-asset-type" class="form-select"
+                                                        required></select>
+                                                </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Category 2</label>
-                                            <select name="kode_category_2" id="sel-category-2" class="form-select"
-                                                data-placeholder="Select Category First" required></select>
-                                        </div>
+                                                <div class="col-md-3">
+                                                    <label class="form-label required">Category</label>
+                                                    <select name="kode_category" id="sel-category" class="form-select"
+                                                        data-placeholder="Select Asset Type First" required></select>
+                                                </div>
 
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Sub Category</label>
-                                            <select name="kode_sub_category" id="sel-sub-category" class="form-select"
-                                                required></select>
+                                                <div class="col-md-3">
+                                                    <label class="form-label required">Category 2</label>
+                                                    <select name="kode_category_2" id="sel-category-2" class="form-select"
+                                                        data-placeholder="Select Category First" required></select>
+                                                </div>
+
+                                                <div class="col-md-3">
+                                                    <label class="form-label required">Sub Category</label>
+                                                    <select name="kode_sub_category" id="sel-sub-category"
+                                                        class="form-select" required></select>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -230,10 +264,10 @@
                                             <h5 class="fw-bold">Document</h5>
                                         </div>
                                         <div class="col-md-4">
-                                            <label class="form-label required">No PO/Perjanjian/SPK</label>
+                                            <label class="form-label">No PO/Perjanjian/SPK</label>
                                             <input name="no_po_perjanjian_spk"
                                                 value="{{ old('no_po_perjanjian_spk', $asset->documents?->no_po_perjanjian_spk) }}"
-                                                class="form-control" required>
+                                                class="form-control">
                                         </div>
                                         <div class="col-md-4">
                                             <label class="form-label required">Nota Referensi</label>
@@ -269,6 +303,7 @@
 @push('scripts')
     @php
         $current = [
+            'mode' => $defaultMode,
             'trx' => optional($asset->classification)->kode_asset_transaction,
             'type' => optional($asset->classification)->kode_asset_type,
             'cat' => optional($asset->classification)->kode_category,
@@ -282,6 +317,12 @@
             'owner' => optional($asset->assignment)->asset_owner,
             'user' => optional($asset->assignment)->asset_user,
             'maintenance' => optional($asset->assignment)->asset_maintenance,
+            'parent_uuid' =>
+                $asset->asset_number_child !== '00'
+                    ? (function () {
+                        return null;
+                    })()
+                    : null,
         ];
     @endphp
     <script>
@@ -353,6 +394,12 @@
             });
         }
 
+        function setSelectValue(selector, code) {
+            if (!code) return;
+            const opt = new Option(code, code, true, true);
+            $(selector).append(opt).trigger('change');
+        }
+
         /* endpoints */
         const R = {
             sumber: '{{ route('master.sumber.options') }}',
@@ -366,6 +413,8 @@
             status: '{{ route('master.status.options') }}',
             aclass: '{{ route('master.asset_class.options') }}',
             usercode: '{{ route('master.user_code.options') }}',
+            parent: '{{ route('assets.parent.options') }}',
+            parentMeta: (uuid) => '{{ route('assets.parent.meta', ':id') }}'.replace(':id', uuid),
         };
 
         /* current values from server */
@@ -384,6 +433,7 @@
             initSelect2('#sel-user', R.usercode);
             initSelect2('#sel-maintenance', R.usercode);
             initSelect2('#sel-sub-category', R.subcat);
+            initSelect2('#sel-parent', R.parent);
 
             // dependent
             initSelect2('#sel-category', R.cat, () => ({
@@ -423,6 +473,47 @@
                 }, 250);
             }, 250);
 
+            if (CURRENT['parent_uuid']) {
+                preloadSelect('#sel-parent', CURRENT['parent_uuid'], R.parent);
+            }
+
+            // Mode toggle display
+            function applyModeUI(mode) {
+                if (mode === 'existing') {
+                    $('#wrap-parent-picker').show();
+                    $('#wrap-classification').hide();
+                } else {
+                    $('#wrap-parent-picker').hide();
+                    $('#wrap-classification').show();
+                }
+            }
+            applyModeUI(CURRENT.mode || '{{ $defaultMode }}');
+            $('input[name="mode"]').on('change', function() {
+                const mode = this.value;
+                applyModeUI(mode);
+
+                if (mode === 'existing') {
+                    // optional: clear classification so backend won’t validate them
+                    $('#sel-transaction,#sel-asset-type,#sel-category,#sel-category-2,#sel-sub-category')
+                        .val(null).trigger('change');
+                } else {
+                    // optional: clear selected parent
+                    $('#sel-parent').val(null).trigger('change');
+                }
+            });
+            // When a parent is selected, autofill classification (read-only or hidden)
+            $('#sel-parent').on('select2:select', function(e) {
+                const uuid = e.params.data.id;
+                if (!uuid) return;
+                $.getJSON(R.parentMeta(uuid), function(meta) {
+                    const cl = meta.classification || {};
+                    setSelectValue('#sel-transaction', cl.kode_asset_transaction);
+                    setSelectValue('#sel-asset-type', cl.kode_asset_type);
+                    setSelectValue('#sel-category', cl.kode_category);
+                    setSelectValue('#sel-category-2', cl.kode_category_2);
+                    setSelectValue('#sel-sub-category', cl.kode_sub_category);
+                });
+            });
             preloadValue('#sel-sub-category', CURRENT['subcat'], R.subcat);
             preloadValue('#sel-asset-class', CURRENT['aclass'], R.aclass);
             preloadValue('#sel-location', CURRENT['loc'], R.location);

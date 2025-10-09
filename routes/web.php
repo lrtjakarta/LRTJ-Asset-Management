@@ -119,8 +119,10 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/edit/{uuid}', [AssetsController::class, 'edit'])->name('edit');
         //DATATABLE
         Route::get('/datatable', [AssetsController::class, 'datatable'])->name('datatable');
+        // AJAX SELECTED OPTION
+        Route::get('/select-asset-parent', [AssetsController::class, 'select_asset_parent'])->name('parent.options');
+        Route::get('/asset-parent-meta/{uuid}/', [AssetsController::class, 'asset_parent_meta'])->name('parent.meta');
         //FUNCTION
-        // Route::get('/generate-qr/{uuid}',     [AssetsController::class, 'generate_qr'])->name('generate_qr');
         Route::get('/create',     [AssetsController::class, 'create'])->name('create');
         Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
         Route::post('/save', [AssetsController::class, 'store'])->name('store');

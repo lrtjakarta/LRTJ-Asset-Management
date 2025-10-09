@@ -6,10 +6,18 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AssetUpdateRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
     public function rules(): array
     {
         return [
+            'mode' => ['required', 'in:new,existing'],
+
+            // existing-mode: require a valid parent
+            'parent_uuid' => ['required_if:mode,existing', 'uuid', 'exists:assets,uuid,deleted_at,NULL'],
+
             // identity
             'description'             => ['required', 'string', 'max:500'],
 
@@ -18,7 +26,7 @@ class AssetUpdateRequest extends FormRequest
             'kode_location'           => ['required', 'string', 'max:50'],
             'kode_asset_class'        => ['required', 'string', 'max:50'],
             'kode_status'             => ['required', 'string', 'max:50'],
-            
+
             // identifiers (optional)
             'asset_number_maximo'       => ['nullable', 'string', 'max:120'],
             'asset_number_dynamic_365'  => ['nullable', 'string', 'max:120'],

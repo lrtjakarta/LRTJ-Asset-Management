@@ -176,21 +176,35 @@ class AssetsController extends Controller
         AssetNumberingService $num
     ) {
         $v = (object) $request->validated();
-
-        $group  = $groupBuilder->handle(
-            $v->kode_asset_transaction,
-            $v->kode_asset_type,
-            $v->kode_category,
-            $v->kode_category_2,
-            $v->kode_sub_category
-        );
-
-        // Generate numbers
-        $parent = $num->nextParent($group);
-        $child  = $num->nextChild($parent);
-        $code   = $parent . '-' . $child;
+        $mode = $v->mode;
         $uuid   = (string) Str::uuid();
         $vatRate = (float) env('NILAI_PAJAK', 10);
+        
+        if ($mode === 'existing') {
+            $parent_get = Assets::query()
+                ->where('uuid', $v->parent_uuid)
+                ->firstOrFail();
+            abort_if($parent_get->asset_number_child !== '00', 422, 'Selected asset is not a parent.');
+
+            // Generate numbers
+            $group  = $parent_get->kode_group_category;
+            $parent = $parent_get->asset_number_parent;
+            $child  = $num->nextChild($parent);
+            $code   = $parent . '-' . $child;
+        } else {
+            $group  = $groupBuilder->handle(
+                $v->kode_asset_transaction,
+                $v->kode_asset_type,
+                $v->kode_category,
+                $v->kode_category_2,
+                $v->kode_sub_category
+            );
+
+            // Generate numbers
+            $parent = $num->nextParent($group);
+            $child  = $num->nextChild($parent);
+            $code   = $parent . '-' . $child;
+        }
 
         $asset = DB::transaction(function () use ($v, $group, $parent, $child, $code, $uuid, $vatRate) {
             $asset = Assets::create([
@@ -267,6 +281,8 @@ class AssetsController extends Controller
 
             return $asset;
         });
+
+
 
         return redirect()->route('assets.index')->with('success', 'Asset has been created.');
     }
@@ -414,5 +430,50 @@ class AssetsController extends Controller
     {
         $asset->delete();
         return response()->json(['ok' => true, 'message' => 'Asset moved to trash']);
+    }
+    public function select_asset_parent(Request $req)
+    {
+        $q = trim((string) $req->get('q', ''));
+
+        $rows = Assets::query()
+            ->where('asset_number_child', '00')
+            ->when($q !== '', function ($w) use ($q) {
+                $w->where(function ($t) use ($q) {
+                    $t->where('asset_code', 'ilike', "%{$q}%")
+                        ->orWhere('description', 'ilike', "%{$q}%")
+                        ->orWhere('kode_group_category', 'ilike', "%{$q}%");
+                });
+            })
+            ->orderBy('asset_code')
+            ->limit(20)
+            ->get(['uuid', 'asset_code', 'description', 'kode_group_category']);
+
+        return response()->json([
+            'results' => $rows->map(fn($r) => [
+                'id'   => $r->uuid,
+                'text' => "{$r->asset_code} — {$r->description}",
+                'group' => $r->kode_group_category,
+            ]),
+        ]);
+    }
+    public function asset_parent_meta(string $uuid)
+    {
+        $asset = Assets::findOrFail($uuid);
+        $asset->load('classification');
+
+        abort_unless($asset->asset_number_child === '00', 422, 'Selected asset is not a parent.');
+
+        $c = $asset->classification;
+        return [
+            'kode_group_category'     => $asset->kode_group_category,
+            'asset_number_parent'     => $asset->asset_number_parent,
+            'classification' => [
+                'kode_asset_transaction' => $c?->kode_asset_transaction,
+                'kode_asset_type'        => $c?->kode_asset_type,
+                'kode_category'          => $c?->kode_category,
+                'kode_category_2'        => $c?->kode_category_2,
+                'kode_sub_category'      => $c?->kode_sub_category,
+            ]
+        ];
     }
 }
