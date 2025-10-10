@@ -48,7 +48,7 @@
         </script>
     @endif
     <script>
-        const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__')); 
+        const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
         (function($) {
             const FS_BTN = '[data-card="fullscreen"]';
 
@@ -261,9 +261,28 @@
                 // {
                 //     data: 'kode_sumber_label'
                 // },
+
                 {
                     data: 'updated_at',
-                    name: 'a.updated_at'
+                    name: 'updated_at',
+                    render: function(iso, type) {
+                        if (!iso) return '';
+                        if (type === 'sort' || type === 'type') return iso;
+                        const d = new Date(iso);
+                        const dateStr = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Jakarta',
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric'
+                        }).format(d);
+                        const timeStr = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Jakarta',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }).format(d);
+                        return `${dateStr} ${timeStr}`;
+                    }
                 },
 
                 //             {
@@ -391,7 +410,7 @@
                                             <th class="min-w-200px">Note Reference</th>
                                             <th class="min-w-200px">No Document</th>
                                             {{-- <th class="min-w-120px">Sumber</th> --}}
-                                            <th class="min-w-120px">Updated</th>
+                                            <th class="min-w-150px">Updated</th>
                                             {{-- <th class="text-center min-w-120px">Actions</th> --}}
                                         </tr>
                                     </thead>

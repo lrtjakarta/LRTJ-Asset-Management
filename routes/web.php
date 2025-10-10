@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\TransferController;
 use App\Http\Controllers\TrashController;
 
 // LOGIN ROUTE
@@ -127,6 +128,14 @@ Route::middleware('ldap.session')->group(function () {
         Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
         Route::post('/save', [AssetsController::class, 'store'])->name('store');
         Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
+    });
+
+    // TRANSFER ROUTE
+    Route::prefix('transfer')->name('transfer.')->group(function () {
+        Route::get('/',              [TransferController::class, 'index'])->name('index');
+        Route::get('/datatable/{asset}',     [TransferController::class, 'datatable'])->name('data');
+        Route::post('/create', [TransferController::class, 'store'])->name('store');
+        Route::post('/decide/{uuid}', [TransferController::class, 'decide'])->name('decide');
     });
 
     // TRASH ROUTE

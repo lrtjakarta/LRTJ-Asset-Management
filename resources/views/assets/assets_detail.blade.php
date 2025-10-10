@@ -5,9 +5,7 @@
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
         <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 my-0">
-                    Asset Detail
-                </h1>
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 my-0">Asset Detail</h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item">
                         <a href="{{ route('assets.index') }}" class="text-muted text-hover-primary">Assets</a>
@@ -15,12 +13,14 @@
                     <li class="breadcrumb-item">
                         <span class="bullet bg-gray-500 w-5px h-2px"></span>
                     </li>
-                    <li class="breadcrumb-item text-muted">Detail {{ $asset->asset_code }} ({{ $asset->description }})</li>
+                    <li class="breadcrumb-item text-muted">
+                        Detail {{ $asset->asset_code }} ({{ $asset->description }})
+                    </li>
                 </ul>
             </div>
 
             <div class="d-flex align-items-center gap-2 gap-lg-3">
-                <a href="#" class="btn btn-sm fw-bold btn-secondary">Transfer</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary">Disposal</a>
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
                 <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
@@ -43,13 +43,9 @@
                     <div class="d-flex flex-wrap align-items-center justify-content-between">
                         <div class="d-flex flex-column">
                             <div class="d-flex align-items-center gap-3 flex-wrap">
-                                <h3 class="fw-bold mb-0">
-                                    {{ $asset->description }}
-                                </h3>
+                                <h3 class="fw-bold mb-0">{{ $asset->description }}</h3>
                             </div>
-                            <div class="text-gray-700 mt-3">
-                                {{ $asset->asset_code }}
-                            </div>
+                            <div class="text-gray-700 mt-3">{{ $asset->asset_code }}</div>
                         </div>
 
                         <div class="text-end">
@@ -66,7 +62,7 @@
             {{-- Two columns --}}
             <div class="row g-6">
 
-                {{-- LEFT: Classification + Identifiers + Assignment --}}
+                {{-- LEFT: Identification + Classification + Assignment --}}
                 <div class="col-xl-6">
 
                     {{-- Identifiers --}}
@@ -78,25 +74,28 @@
                             <dl class="row mb-0">
                                 <dt class="col-sm-5">Group Category</dt>
                                 <dd class="col-sm-7"> : {{ $asset->kode_group_category }}</dd>
+
                                 <dt class="col-sm-5">Asset Number Parent</dt>
                                 <dd class="col-sm-7"> : {{ $asset->asset_number_parent }}</dd>
+
                                 <dt class="col-sm-5">Asset Number Child</dt>
                                 <dd class="col-sm-7"> : {{ $asset->asset_number_child }}</dd>
+
                                 <dt class="col-sm-5">Asset Number Maximo</dt>
                                 <dd class="col-sm-7"> : {{ $asset->identifiers?->asset_number_maximo }}</dd>
+
                                 <dt class="col-sm-5">Asset Number D365</dt>
                                 <dd class="col-sm-7"> : {{ $asset->identifiers?->asset_number_dynamic_365 }}</dd>
+
                                 <dt class="col-sm-5">Asset Number Internal</dt>
                                 <dd class="col-sm-7"> : {{ $asset->identifiers?->asset_number_internal }}</dd>
+
                                 <dt class="col-sm-5">Asset Status</dt>
                                 <dd class="col-sm-7"> :
-                                    @php
-                                        $statusName = $asset->status?->name;
-                                    @endphp
-                                    @if ($statusName)
+                                    @if ($asset->status?->name)
                                         <span
-                                            class="badge badge-light-{{ $statusName === 'Active' ? 'success' : 'danger' }}">
-                                            {{ $asset->kode_status }} - {{ $statusName }}
+                                            class="badge badge-light-{{ $asset->status->name === 'Active' ? 'success' : 'danger' }}">
+                                            {{ $asset->kode_status }} - {{ $asset->status->name }}
                                         </span>
                                     @endif
                                 </dd>
@@ -237,7 +236,7 @@
                     </div>
                 </div>
 
-                {{-- RIGHT: Value + Document + Meta --}}
+                {{-- RIGHT: Value + Document + QR --}}
                 <div class="col-xl-6">
 
                     {{-- Value --}}
@@ -305,22 +304,21 @@
                         </div>
                     </div>
 
-                    {{-- Meta --}}
+                    {{-- QR --}}
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title fw-bold">QR</h3>
                         </div>
                         <div class="card-body">
-                            <dl class="row mb-0">
-                                <img src="{{ asset('storage/qrcodes/'.$asset->uuid.'.svg') }}" alt="QR Code" width="300" height="300">
-                            </dl>
+                            <img src="{{ asset('storage/qrcodes/' . $asset->uuid . '.svg') }}" alt="QR Code"
+                                width="300" height="300">
                         </div>
                     </div>
                 </div>
             </div>
 
-
-            <div class="card py-3">
+            {{-- History Tabs --}}
+            <div class="card py-3 mt-6">
                 <div class="card-header card-header-tabs-line">
                     <div class="card-title">
                         <h3 class="card-title align-items-start flex-column">
@@ -351,8 +349,7 @@
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-so-link" data-bs-toggle="tab"
                                     href="#tab_stock_opname" role="tab" aria-controls="tab_stock_opname"
-                                    aria-selected="false">Stock
-                                    Opname</a>
+                                    aria-selected="false">Stock Opname</a>
                             </li>
                         </ul>
                     </div>
@@ -362,7 +359,24 @@
                     <div class="tab-content" id="historyTabsContent">
                         <div class="tab-pane fade show active" id="tab_transfer" role="tabpanel"
                             aria-labelledby="tab-transfer-link">
-                            Transfer
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-transfers">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-200px">Code</th>
+                                        <th class="min-w-100px">Type</th>
+                                        <th class="min-w-150px">Before</th>
+                                        <th class="min-w-150px">After</th>
+                                        <th class="min-w-100px">Requester</th>
+                                        <th class="min-w-100px">Approver</th>
+                                        <th class="min-w-250px">Note</th>
+                                        <th class="min-w-100px">Status Transfer</th>
+                                        <th class="min-w-200px">Created</th>
+                                        <th class="min-w-200px">Action</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                         <div class="tab-pane fade" id="tab_return" role="tabpanel" aria-labelledby="tab-return-link">
                             Return
@@ -381,14 +395,63 @@
                 </div>
             </div>
 
+        </div>
+    </div>
 
+    {{-- ===== Transfer Modal ===== --}}
+    <div class="modal fade" id="modal-transfer" tabindex="-1" aria-labelledby="modalTransferLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formTransfer" method="POST">
+                    @csrf
+                    <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalTransferLabel">Request Transfer — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-4">
+                                <label class="form-label required">Transfer Type</label>
+                                <select name="type" id="tf-type" class="form-select" required>
+                                    <option value="owner">Owner</option>
+                                    <option value="user">User</option>
+                                    <option value="maintenance">Maintenance</option>
+                                    <option value="status">Status</option>
+                                    <option value="location">Location</option>
+                                </select>
+                                <div class="form-text">Select Transfer Type</div>
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label required">Transfer To</label>
+                                <select id="tf-target" class="form-select" required></select>
+                                <input type="hidden" name="after[value]" id="tf-target-hidden">
+                                <div class="form-text" id="tf-target-help">Select the new target.</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Request</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 @endsection
 
 @push('scripts')
     <script>
-        $(function() {
+        (function() {
             // Delete confirmation
             $('#btnDeleteAsset').on('click', function() {
                 Swal.fire({
@@ -401,11 +464,225 @@
                     confirmButtonText: 'Yes, delete',
                     cancelButtonText: 'Cancel'
                 }).then(res => {
-                    if (res.isConfirmed) {
-                        $('#assetDeleteForm').trigger('submit');
-                    }
+                    if (res.isConfirmed) $('#assetDeleteForm').trigger('submit');
                 });
             });
-        });
+
+            // Endpoints
+            const R = {
+                usercode: '{{ route('master.user_code.options') }}',
+                status: '{{ route('master.status.options') }}',
+                location: '{{ route('master.location.options') }}',
+                transfers: '{{ route('transfer.data', $asset->uuid) }}',
+                create: '{{ route('transfer.store') }}'
+            };
+
+            // Open modal
+            $('#btnOpenTransfer').on('click', function(e) {
+                e.preventDefault();
+                $('#formTransfer')[0].reset();
+                $('#tf-type').val('owner');
+                initTargetSelect('owner');
+                $('#modal-transfer').modal('show');
+            });
+
+            // Select2 helper
+            function initSelect2(el, url, extra = {}) {
+                $(el).empty().select2({
+                    dropdownParent: $('#modal-transfer'),
+                    placeholder: 'Select...',
+                    width: '100%',
+                    allowClear: true,
+                    ajax: {
+                        url,
+                        dataType: 'json',
+                        delay: 150,
+                        data: function(params) {
+                            const base = {
+                                q: params.term || '',
+                                page: params.page || 1
+                            };
+                            if (typeof extra === 'function') return Object.assign(base, extra());
+                            if (extra && typeof extra === 'object') return Object.assign(base, extra);
+                            return base;
+                        },
+                        processResults: data => data
+                    }
+                }).on('select2:select', function(e) {
+                    const id = e.params.data.id;
+                    $('#tf-target-hidden').val(id);
+                });
+            }
+
+            function initTargetSelect(type) {
+                $('#tf-target').off('select2:select').val(null).trigger('change');
+                $('#tf-target-hidden').val('');
+                if (type === 'owner' || type === 'user' || type === 'maintenance') {
+                    initSelect2('#tf-target', R.usercode);
+                    $('#tf-target-help').text('Pick a User Code (department) as new ' + type + '.');
+                } else if (type === 'status') {
+                    initSelect2('#tf-target', R.status, {
+                        type: 'Asset'
+                    });
+                    $('#tf-target-help').text('Pick the new Asset Status (type = Asset).');
+                } else if (type === 'location') {
+                    initSelect2('#tf-target', R.location);
+                    $('#tf-target-help').text('Pick the new Location.');
+                }
+            }
+
+            // Type change
+            $('#tf-type').on('change', function() {
+                initTargetSelect(this.value);
+            });
+
+            // Submit Transfer
+            $('#formTransfer').on('submit', function(e) {
+                e.preventDefault();
+
+                const afterVal = $('#tf-target-hidden').val() || $('#tf-target').val();
+                if (!afterVal) return Swal.fire('Target required', 'Please select a transfer target.',
+                    'warning');
+
+                Swal.fire({
+                    title: 'Submit transfer request?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, submit',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+
+                    Swal.fire({
+                        title: 'Saving…',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    $.post(R.create, {
+                            _token: $('input[name="_token"]').first().val(),
+                            asset_uuid: '{{ $asset->uuid }}',
+                            type: $('#tf-type').val(),
+                            note: $('textarea[name="note"]').val() || '',
+                            'after[value]': afterVal
+                        })
+                        .done(() => {
+                            $('#modal-transfer').modal('hide');
+                            Swal.fire('Success', 'Transfer request created.', 'success');
+                            $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                        })
+                        .fail(xhr => {
+                            let msg = 'Failed to submit.';
+                            if (xhr.responseJSON?.message) msg = xhr.responseJSON.message;
+                            if (xhr.status === 422 && xhr.responseJSON?.errors) {
+                                msg = Object.values(xhr.responseJSON.errors).flat().join('\n');
+                            }
+                            Swal.fire('Error', msg, 'error');
+                        });
+                });
+            });
+
+            // Transfer history DataTable
+            $('#tbl-transfers').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: R.transfers,
+                    type: 'GET'
+                },
+                order: [
+                    [8, 'desc']
+                ],
+                columns: [{
+                        data: 'transfer_code',
+                        name: 'transfer_code'
+                    },
+                    {
+                        data: 'type',
+                        name: 'type',
+                        render: d => (d || '').toUpperCase()
+                    },
+                    {
+                        data: 'before_display',
+                        name: 'before_display'
+                    },
+                    {
+                        data: 'after_display',
+                        name: 'after_display'
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'pic_request_uid'
+                    },
+                    {
+                        data: 'pic_approve_uid',
+                        name: 'pic_approve_uid',
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'note',
+                        name: 'note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'workflow_label',
+                        name: 'workflow_label',
+                        "render": function(data, type, row, meta) {
+                            if (row.kode_status == 'APR') {
+                                return `<span class="badge badge-light-primary">${data||''}</span>`;
+                            } else if (row.kode_status == 'ACC') {
+                                return `<span class="badge badge-light-success">${data||''}</span>`;
+                            } else {
+                                return `<span class="badge badge-light-danger">${data||''}</span>`;
+                            }
+                        }
+                    },
+                    {
+                        data: 'created_at',
+                        name: 'created_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function(row) {
+                            const pending = row.kode_status === 'APR';
+                            let html = `<div class="btn-group btn-group-sm">`;
+                            if (pending) {
+                                html +=
+                                    `<button class="btn btn-light-primary btn-tf-edit" data-id="${row.uuid}">Edit</button>`;
+                                html +=
+                                    `<button class="btn btn-light-success btn-tf-approve" data-id="${row.uuid}">Accept</button>`;
+                                html +=
+                                    `<button class="btn btn-light-warning btn-tf-reject" data-id="${row.uuid}">Reject</button>`;
+                            }
+                            html +=
+                                `<button class="btn btn-light-danger btn-tf-delete" data-id="${row.uuid}">Delete</button>`;
+                            html += `</div>`;
+                            return html;
+                        }
+                    }
+                ]
+            });
+        })();
     </script>
 @endpush
