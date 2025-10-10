@@ -462,12 +462,9 @@
 
             // When user picks a parent → autofill classification
             $('#sel-parent').on('select2:select', function(e) {
-                const uuid = e.params.data.id;
-                if (!uuid) return;
-
-                $.getJSON(R.parentMeta(uuid), function(meta) {
+                const id = e.params.data.id;
+                $.getJSON(R.parentMeta(id), function(meta) {
                     const cl = meta.classification || {};
-                    // Set each select with a single preselected option (text can be 'code' only; select2 will refresh later)
                     setSelectValue('#sel-transaction', cl.kode_asset_transaction);
                     setSelectValue('#sel-asset-type', cl.kode_asset_type);
                     setSelectValue('#sel-category', cl.kode_category);
@@ -484,19 +481,19 @@
             }
         });
 
-        function preloadOld(selector, id, url) {
+        function preloadOld(selector, id, url, extraFn) {
             if (!id) return;
-            $.get(url, {
+            const params = {
                 q: id
-            }, function(resp) {
-                const found = (resp.results || []).find(x => x.id === id);
-                if (found) {
-                    const opt = new Option(found.text, found.id, true, true);
-                    $(selector).append(opt).trigger('change');
-                } else {
-                    const opt = new Option(id, id, true, true);
-                    $(selector).append(opt).trigger('change');
-                }
+            };
+            if (typeof extraFn === 'function') Object.assign(params, extraFn());
+            $.get(url, params, function(resp) {
+                const item = (resp.results || []).find(x => String(x.id) === String(id)) || {
+                    id,
+                    text: id
+                };
+                const opt = new Option(item.text, item.id, true, true);
+                $(selector).append(opt).trigger('change');
             });
         }
     </script>

@@ -126,7 +126,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/create',     [AssetsController::class, 'create'])->name('create');
         Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
         Route::post('/save', [AssetsController::class, 'store'])->name('store');
-        Route::get('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
+        Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
     });
 
     // TRASH ROUTE

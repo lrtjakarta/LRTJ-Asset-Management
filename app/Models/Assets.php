@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use App\Services\AssetChildSequencer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Assets extends Model
@@ -14,7 +16,7 @@ class Assets extends Model
     protected $primaryKey = 'uuid';
     public $incrementing = false;
     protected $keyType = 'string';
-    
+
     protected static function booted(): void
     {
         static::creating(function ($model) {
@@ -22,8 +24,50 @@ class Assets extends Model
                 $model->uuid = (string) Str::uuid();
             }
         });
+
+
+        static::deleting(function (self $asset) {
+            $rels = [
+                'identifiers',   // AssetsIdentifier
+                'classification', // AssetsClassification
+                'assignment',    // AssetsAssignment
+                'value',         // AssetsValue
+                'documents',     // AssetsDocument
+                'qrs',           // AssetsQr
+                'rfids',         // AssetsRfid
+            ];
+
+            if ($asset->isForceDeleting()) {
+                // Permanently remove children + QR/RFID files
+                foreach ($rels as $rel) {
+                    $child = $asset->{$rel}()->withTrashed()->first();
+                    if ($child) {
+                        // delete files if any
+                        if (method_exists($child, 'getAttribute')) {
+                            $path = $child->getAttribute('image_path') ?? null;
+                            if ($path && Storage::disk('public')->exists($path)) {
+                                Storage::disk('public')->delete($path);
+                            }
+                        }
+                        $asset->{$rel}()->withTrashed()->forceDelete();
+                    }
+                }
+            } else {
+                // Soft delete children
+                foreach ($rels as $rel) {
+                    $asset->{$rel}()->delete();
+                }
+            }
+        });
+
+        // Restore the children too
+        static::restored(function (self $asset) {
+            foreach (['identifiers', 'classification', 'assignment', 'value', 'documents', 'qrs', 'rfids'] as $rel) {
+                $asset->{$rel}()->withTrashed()->restore();
+            }
+        });
     }
-    
+
     public function getRouteKeyName(): string
     {
         return 'uuid';

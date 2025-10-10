@@ -304,6 +304,7 @@
     @php
         $current = [
             'mode' => $defaultMode,
+            'parent_uuid' => $parentUuid,
             'trx' => optional($asset->classification)->kode_asset_transaction,
             'type' => optional($asset->classification)->kode_asset_type,
             'cat' => optional($asset->classification)->kode_category,
@@ -317,12 +318,6 @@
             'owner' => optional($asset->assignment)->asset_owner,
             'user' => optional($asset->assignment)->asset_user,
             'maintenance' => optional($asset->assignment)->asset_maintenance,
-            'parent_uuid' =>
-                $asset->asset_number_child !== '00'
-                    ? (function () {
-                        return null;
-                    })()
-                    : null,
         ];
     @endphp
     <script>
@@ -473,39 +468,46 @@
                 }, 250);
             }, 250);
 
-            if (CURRENT['parent_uuid']) {
-                preloadSelect('#sel-parent', CURRENT['parent_uuid'], R.parent);
-            }
-
             // Mode toggle display
             function applyModeUI(mode) {
                 if (mode === 'existing') {
                     $('#wrap-parent-picker').show();
                     $('#wrap-classification').hide();
+
+                    $('#sel-parent').prop('required', true);
+                    $('#sel-transaction,#sel-asset-type,#sel-category,#sel-category-2,#sel-sub-category')
+                        .prop('required', false);
                 } else {
                     $('#wrap-parent-picker').hide();
                     $('#wrap-classification').show();
+
+                    $('#sel-parent').prop('required', false);
+                    $('#sel-transaction,#sel-asset-type,#sel-category,#sel-category-2,#sel-sub-category')
+                        .prop('required', true);
                 }
             }
-            applyModeUI(CURRENT.mode || '{{ $defaultMode }}');
+            applyModeUI(CURRENT.mode || 'new');
+            if (CURRENT['parent_uuid']) {
+                $.getJSON(R.parentMeta(CURRENT['parent_uuid']), function(meta) {
+                    const opt = new Option(meta.label, meta.id, true, true);
+                    $('#sel-parent').append(opt).trigger('change');
+                });
+            }
             $('input[name="mode"]').on('change', function() {
                 const mode = this.value;
                 applyModeUI(mode);
-
                 if (mode === 'existing') {
-                    // optional: clear classification so backend won’t validate them
+                    // clear classification so validation won’t trip
                     $('#sel-transaction,#sel-asset-type,#sel-category,#sel-category-2,#sel-sub-category')
                         .val(null).trigger('change');
                 } else {
-                    // optional: clear selected parent
                     $('#sel-parent').val(null).trigger('change');
                 }
             });
-            // When a parent is selected, autofill classification (read-only or hidden)
+            // When a parent is selected, autofill classification
             $('#sel-parent').on('select2:select', function(e) {
-                const uuid = e.params.data.id;
-                if (!uuid) return;
-                $.getJSON(R.parentMeta(uuid), function(meta) {
+                const id = e.params.data.id;
+                $.getJSON(R.parentMeta(id), function(meta) {
                     const cl = meta.classification || {};
                     setSelectValue('#sel-transaction', cl.kode_asset_transaction);
                     setSelectValue('#sel-asset-type', cl.kode_asset_type);

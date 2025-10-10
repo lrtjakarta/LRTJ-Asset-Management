@@ -18,6 +18,7 @@ use App\Models\MasterUserCode;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
+use App\Services\AssetChildSequencer;
 
 
 
@@ -180,10 +181,19 @@ class TrashController extends Controller
 
         $model = $cfg['model'];
         $pk    = $cfg['pk'];
-
         $row = $model::onlyTrashed()->where($pk, $id)->firstOrFail();
-        $row->forceDelete();
 
-        return response()->json(['ok' => true, 'message' => 'Permanently deleted']);
+        if ($type === 'assets') {
+            $parent = $row->asset_number_parent;
+            $row->forceDelete();
+
+            app(AssetChildSequencer::class)->normalizeChildren($parent);
+
+            return response()->json(['ok' => true, 'message' => 'Asset permanently deleted.']);
+        }
+
+        // Non-asset: normal permanent delete
+        $row->forceDelete();
+        return response()->json(['ok' => true, 'message' => 'Permanently deleted.']);
     }
 }
