@@ -206,6 +206,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
+                        $('#formMasterCategory2')[0].reset(); 
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message

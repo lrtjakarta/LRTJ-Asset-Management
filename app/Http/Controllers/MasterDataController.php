@@ -736,17 +736,17 @@ class MasterDataController
         // Validation: unique name; ignore current uuid if updating
         $nameRule = Rule::unique('master_status', 'name')->whereNull('deleted_at');
         $kodeRule = Rule::unique('master_status', 'kode')->whereNull('deleted_at');
-        $typeRule = Rule::unique('master_status', 'type')->whereNull('deleted_at');
+        // $typeRule = Rule::unique('master_status', 'type')->whereNull('deleted_at');
         if ($uuid) {
             $nameRule = $nameRule->ignore($uuid, 'uuid');
             $kodeRule = $kodeRule->ignore($uuid, 'uuid');
-            $typeRule = $typeRule->ignore($uuid, 'uuid');
+            // $typeRule = $typeRule->ignore($uuid, 'uuid');
         }
 
         $data = $request->validate([
             'kode'   => ['required', 'string', 'max:50', $kodeRule],
             'name'   => ['required', 'string', 'max:191', $nameRule],
-            'type'   => ['required', 'string', 'max:191', $typeRule],
+            'type'   => ['required', 'string', 'max:191'],
             'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
         ]);
 

@@ -121,6 +121,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
+                        $('#formMasterStatus')[0].reset(); 
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message
@@ -300,9 +301,11 @@
                             <label class="form-label">Status</label>
                             <select name="type" data-control="select2" data-placeholder="Select Type"
                                 class="form-select">
-                                <option>Transaction</option>
+                                <option>Asset</option>
+                                <option>Transfer</option>
                                 <option>Disposal</option>
                                 <option>Return</option>
+                                <option>Acquisition</option>
                                 <option>Stock Opname</option>
                             </select>
                         </div>

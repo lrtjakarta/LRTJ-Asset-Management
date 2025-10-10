@@ -116,6 +116,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
+                        $('#formMasterSumber')[0].reset(); 
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message
