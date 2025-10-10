@@ -1314,7 +1314,8 @@ class MasterDataController
     public function select_master_status(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
-        $q = MasterStatus::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+        $type   = $request->get('type', 'Asset');
+        $q = MasterStatus::query()->select(['kode', 'name'])->where('status', true)->where('type', $type)->orderBy('kode');
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {

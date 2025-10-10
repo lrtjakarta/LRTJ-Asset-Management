@@ -386,7 +386,7 @@
             initSelect2('#sel-asset-type', R.type);
             initSelect2('#sel-location', R.location);
             initSelect2('#sel-uom', R.uom);
-            initSelect2('#sel-status', R.status);
+            initSelect2('#sel-status', R.status, { type: 'Asset' });
             initSelect2('#sel-asset-class', R.aclass);
             initSelect2('#sel-owner', R.usercode);
             initSelect2('#sel-user', R.usercode);
