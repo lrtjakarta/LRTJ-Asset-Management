@@ -15,6 +15,7 @@ use App\Models\MasterStatus;
 use App\Models\MasterSubCategory;
 use App\Models\MasterUOM;
 use App\Models\MasterUserCode;
+use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\Facades\DataTables;
@@ -108,6 +109,12 @@ class TrashController extends Controller
                 'model'      => Assets::class,
                 'pk'         => 'uuid',
                 'label_col'  => 'asset_code',
+            ],
+            'transfer' => [
+                'table'      => 'assets_transfers',
+                'model'      => Transfer::class,
+                'pk'         => 'uuid',
+                'label_col'  => 'transfer_code',
             ],
         ];
     }

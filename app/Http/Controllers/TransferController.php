@@ -104,54 +104,97 @@ class TransferController extends Controller
             'code' => $transfer->transfer_code,
         ]);
     }
-
-    public function decide(TransferDecisionRequest $req, string $uuid)
+    public function update(Request $request, string $uuid)
     {
-        $v = (object) $req->validated();
+        $data = $request->validate([
+            'asset_uuid'  => ['required', 'uuid', 'exists:assets,uuid'],
+            'type'        => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+            'after.value' => ['required', 'string'],
+            'note'        => ['nullable', 'string', 'max:1000'],
+        ]);
 
-        $t = Transfer::with('asset.assignment')->findOrFail($uuid);
+        $tf = Transfer::where('uuid', $uuid)->firstOrFail();
+        abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be edited.');
 
-        // REJECT
-        if ($v->decision === 'reject') {
-            $t->kode_status = 'REJ';
-            $t->note = trim(($t->note ? $t->note . "\n" : '') . 'Rejected: ' . ($v->note ?? ''));
-            $t->save();
+        $asset = Assets::with(['assignment'])->findOrFail($data['asset_uuid']);
 
-            return back()->with('success', 'Transfer rejected.');
-        }
+        // Re-compute BEFORE from current asset state (so UI stays truthful)
+        $before = $this->currentValueForType($asset, $data['type']);
+        $after  = ['value' => $data['after']['value']];
 
-        // APPROVE
-        DB::transaction(function () use ($t, $v) {
-            $asset = $t->asset()->lockForUpdate()->firstOrFail();
+        $tf->fill([
+            'type'        => $data['type'],
+            'before'      => $before,
+            'after'       => $after,
+            'note'        => $data['note'] ?? null,
+        ])->save();
 
-            $after = $t->after ?? [];
+        return response()->json(['ok' => true]);
+    }
 
-            switch ($t->type) {
+    /** Soft delete */
+    public function destroy(string $uuid)
+    {
+        $tf = Transfer::where('uuid', $uuid)->firstOrFail();
+        $tf->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+     public function approve(Request $request, string $uuid)
+    {
+        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        DB::transaction(function () use ($uuid, $uid) {
+            $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
+            abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
+
+            $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
+            $val   = data_get($tf->after, 'value');
+
+            switch ($tf->type) {
                 case 'owner':
+                    $asset->assignment()->updateOrCreate(['asset_uuid' => $asset->uuid], ['asset_owner' => $val]);
+                    break;
                 case 'user':
+                    $asset->assignment()->updateOrCreate(['asset_uuid' => $asset->uuid], ['asset_user' => $val]);
+                    break;
                 case 'maintenance':
-                    $col = 'asset_' . $t->type;
-                    $asset->assignment()->updateOrCreate(
-                        ['asset_uuid' => $asset->uuid],
-                        [$col => $after[$t->type] ?? null]
-                    );
+                    $asset->assignment()->updateOrCreate(['asset_uuid' => $asset->uuid], ['asset_maintenance' => $val]);
                     break;
-
                 case 'status':
-                    $asset->update(['kode_status' => $after['status'] ?? $asset->kode_status]);
+                    $asset->kode_status = $val;
+                    $asset->save();
                     break;
-
                 case 'location':
-                    $asset->update(['kode_location' => $after['location'] ?? $asset->kode_location]);
+                    $asset->kode_location = $val;
+                    $asset->save();
                     break;
             }
 
-            $t->kode_status = 'APR';
-            $t->note = trim(($t->note ? $t->note . "\n" : '') . 'Approved: ' . ($v->note ?? ''));
-            $t->save();
+            $tf->kode_status      = 'ACC';           // Approved
+            $tf->pic_approve_uid  = $uid;
+            $tf->save();
         });
 
-        return back()->with('success', 'Transfer approved & applied.');
+        return response()->json(['ok' => true]);
+    }
+
+    /** Reject (do NOT change the asset) */
+    public function reject(Request $request, string $uuid)
+    {
+        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        $tf = Transfer::where('uuid', $uuid)->firstOrFail();
+        abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be rejected.');
+
+        $tf->kode_status     = 'REJ';  // Rejected
+        $tf->pic_approve_uid = $uid;
+        $tf->save();
+
+        return response()->json(['ok' => true]);
     }
 
     public function indexByAsset(Request $req, string $assetUuid)
@@ -276,6 +319,18 @@ class TransferController extends Controller
 
             default:
                 return $code;
+        }
+    }
+    /** Helper used by update(): fetch current "before" snapshot */
+    private function currentValueForType(Assets $asset, string $type): array
+    {
+        switch ($type) {
+            case 'owner':        return ['value' => $asset->assignment?->asset_owner];
+            case 'user':         return ['value' => $asset->assignment?->asset_user];
+            case 'maintenance':  return ['value' => $asset->assignment?->asset_maintenance];
+            case 'status':       return ['value' => $asset->kode_status];
+            case 'location':     return ['value' => $asset->kode_location];
+            default:             return ['value' => null];
         }
     }
 }

@@ -132,10 +132,16 @@ Route::middleware('ldap.session')->group(function () {
 
     // TRANSFER ROUTE
     Route::prefix('transfer')->name('transfer.')->group(function () {
-        Route::get('/',              [TransferController::class, 'index'])->name('index');
-        Route::get('/datatable/{asset}',     [TransferController::class, 'datatable'])->name('data');
+        // FRONTEND
+        Route::get('/', [TransferController::class, 'index'])->name('index');
+        // DATATABLE
+        Route::get('/datatable/{asset}', [TransferController::class, 'datatable'])->name('data');
+        // FUNCTION
         Route::post('/create', [TransferController::class, 'store'])->name('store');
-        Route::post('/decide/{uuid}', [TransferController::class, 'decide'])->name('decide');
+        Route::put('/update/{uuid}', [TransferController::class, 'update'])->name('update');
+        Route::delete('/delete/{uuid}', [TransferController::class, 'destroy'])->name('destroy');
+        Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
+        Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
     });
 
     // TRASH ROUTE

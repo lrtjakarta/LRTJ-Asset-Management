@@ -451,6 +451,11 @@
 
 @push('scripts')
     <script>
+        $.ajaxSetup({
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            }
+        });
         (function() {
             // Delete confirmation
             $('#btnDeleteAsset').on('click', function() {
@@ -475,6 +480,12 @@
                 location: '{{ route('master.location.options') }}',
                 transfers: '{{ route('transfer.data', $asset->uuid) }}',
                 create: '{{ route('transfer.store') }}'
+            };
+            const ROUTE = {
+                update: id => '{{ route('transfer.update',  ':id') }}'.replace(':id', id),
+                destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
+                approve: id => '{{ route('transfer.approve', ':id') }}'.replace(':id', id),
+                reject: id => '{{ route('transfer.reject', ':id') }}'.replace(':id', id),
             };
 
             // Open modal
@@ -594,6 +605,18 @@
                 order: [
                     [8, 'desc']
                 ],
+                "dom": "<'row mb-2'" +
+                    "<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>" +
+                    ">" +
+
+                    "<'table-responsive'tr>" +
+
+                    "<'row'" +
+                    "<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>" +
+                    ">",
+                searching: true,
                 columns: [{
                         data: 'transfer_code',
                         name: 'transfer_code'
@@ -682,6 +705,140 @@
                         }
                     }
                 ]
+            });
+
+            $('#tbl-transfers').on('click', '.btn-tf-edit', function() {
+                const row = $('#tbl-transfers').DataTable().row($(this).closest('tr')).data();
+                $('#modal-transfer').modal('show');
+
+                // set form into EDIT mode
+                $('#formTransfer').data('edit-id', row.uuid);
+                $('#tf-type').val(row.type).trigger('change');
+
+                // Delay to allow select2 to mount then set target
+                setTimeout(() => {
+                    const code = row.after_code || '';
+                    // ensure the target select contains current code
+                    const opt = new Option(code, code, true, true);
+                    $('#tf-target').append(opt).trigger('change');
+                    $('#tf-target-hidden').val(code);
+                }, 300);
+
+                $('textarea[name="note"]').val(row.note || '');
+            });
+
+            // On submit: if edit-id present, PUT update; otherwise POST create (your current behavior)
+            $('#formTransfer').off('submit').on('submit', function(e) {
+                e.preventDefault();
+
+                const isEdit = !!$('#formTransfer').data('edit-id');
+                const id = $('#formTransfer').data('edit-id');
+
+                const payload = {
+                    asset_uuid: '{{ $asset->uuid }}',
+                    type: $('#tf-type').val(),
+                    note: $('textarea[name="note"]').val() || '',
+                    'after[value]': $('#tf-target-hidden').val()
+                };
+
+                const req = isEdit ?
+                    $.ajax({
+                        url: ROUTE.update(id),
+                        type: 'PUT',
+                        data: payload
+                    }) :
+                    $.post('{{ route('transfer.store', $asset->uuid) }}', payload);
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+                req.done(() => {
+                        $('#modal-transfer').modal('hide');
+                        Swal.fire('Success', isEdit ? 'Transfer updated.' : 'Transfer created.', 'success');
+                        $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                    })
+                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+            });
+
+            // Approve
+            $('#tbl-transfers').on('click', '.btn-tf-approve', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                        title: 'Approve this transfer?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        confirmButtonText: 'Approve',
+                        confirmButtonColor: '#28a745'
+                    })
+                    .then(res => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({
+                            title: 'Applying…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
+                        $.post(ROUTE.approve(id)).done(() => {
+                            Swal.fire('Approved', 'Transfer applied to asset.', 'success');
+                            // we changed asset data; safest is full refresh:
+                            location.reload();
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    });
+            });
+
+            // Reject
+            $('#tbl-transfers').on('click', '.btn-tf-reject', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                        title: 'Reject this transfer?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Reject',
+                        confirmButtonColor: '#f0ad4e'
+                    })
+                    .then(res => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({
+                            title: 'Updating…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
+                        $.post(ROUTE.reject(id)).done(() => {
+                            Swal.fire('Rejected', 'Transfer rejected.', 'success');
+                            $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    });
+            });
+
+            // Delete (soft)
+            $('#tbl-transfers').on('click', '.btn-tf-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                        title: 'Delete this request?',
+                        text: 'It will go to trash.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Delete',
+                        confirmButtonColor: '#dc3545'
+                    })
+                    .then(res => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({
+                            title: 'Deleting…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
+                        $.ajax({
+                                url: ROUTE.destroy(id),
+                                type: 'DELETE'
+                            })
+                            .done(() => {
+                                Swal.fire('Deleted', 'Request moved to trash.', 'success');
+                                $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                            })
+                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    });
             });
         })();
     </script>
