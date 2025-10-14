@@ -469,6 +469,8 @@
                 Swal.fire({
                         title: 'Approve?',
                         icon: 'question',
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6',
                         showCancelButton: true
                     })
                     .then(r => {
@@ -489,6 +491,8 @@
                 Swal.fire({
                         title: 'Reject?',
                         icon: 'warning',
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6',
                         showCancelButton: true
                     })
                     .then(r => {
@@ -510,6 +514,8 @@
                         title: 'Delete?',
                         text: 'Moved to trash',
                         icon: 'warning',
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6',
                         showCancelButton: true
                     })
                     .then(r => {

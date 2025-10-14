@@ -482,7 +482,7 @@
                 create: '{{ route('transfer.store') }}'
             };
             const ROUTE = {
-                update: id => '{{ route('transfer.update',  ':id') }}'.replace(':id', id),
+                update: id => '{{ route('transfer.update', ':id') }}'.replace(':id', id),
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
                 approve: id => '{{ route('transfer.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('transfer.reject', ':id') }}'.replace(':id', id),
@@ -770,7 +770,8 @@
                         icon: 'question',
                         showCancelButton: true,
                         confirmButtonText: 'Approve',
-                        confirmButtonColor: '#28a745'
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6'
                     })
                     .then(res => {
                         if (!res.isConfirmed) return;
@@ -795,7 +796,8 @@
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Reject',
-                        confirmButtonColor: '#f0ad4e'
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6'
                     })
                     .then(res => {
                         if (!res.isConfirmed) return;
@@ -820,7 +822,8 @@
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonText: 'Delete',
-                        confirmButtonColor: '#dc3545'
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6'
                     })
                     .then(res => {
                         if (!res.isConfirmed) return;

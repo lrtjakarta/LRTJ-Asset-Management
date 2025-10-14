@@ -29,6 +29,11 @@
             font-weight: bold !important;
         }
 
+        .swal2-confirm {
+            background-color: #EA242A !important;
+            /* Example: #FF0000 for red */
+        }
+
         /* Make select2 height match .form-select */
         .select2-container .select2-selection--single {
             height: calc(1.5em + .75rem + 2px);
