@@ -313,7 +313,7 @@
                     <!--end:Menu item-->
 
                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
+                    <div data-kt-menu-trigger="click" class="menu-item {{ request()->segment(1) == 'transaction' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
@@ -331,11 +331,12 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'transfer' ? 'active' : '' }}" 
+                                    href="{{ route('transaction.transfer.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
-                                    <span class="menu-title">Transfer</span>
+                                    <span class="menu-title">Transfers</span>
                                 </a>
                                 <!--end:Menu link-->
                             </div>

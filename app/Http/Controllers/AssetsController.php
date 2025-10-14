@@ -495,4 +495,33 @@ class AssetsController extends Controller
             ]
         ]);
     }
+
+    public function select_assets(Request $request)
+    {
+        $q = trim($request->string('q'));
+        $page = max(1, (int) $request->input('page', 1));
+        $per  = 10;
+
+        $rows = \App\Models\Assets::query()
+            ->when($q, function ($qq) use ($q) {
+                $qq->where(function ($w) use ($q) {
+                    $w->where('asset_code', 'ilike', "%{$q}%")
+                        ->orWhere('description', 'ilike', "%{$q}%");
+                });
+            })
+            ->orderBy('asset_code')
+            ->paginate($per, ['*'], 'page', $page);
+
+        $results = $rows->getCollection()->map(function ($a) {
+            return [
+                'id'   => $a->uuid,
+                'text' => $a->asset_code . ' - ' . ($a->description ?? ''),
+            ];
+        });
+
+        return response()->json([
+            'results'    => $results,
+            'pagination' => ['more' => $rows->hasMorePages()],
+        ]);
+    }
 }

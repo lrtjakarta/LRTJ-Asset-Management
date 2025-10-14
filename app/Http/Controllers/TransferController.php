@@ -18,6 +18,78 @@ use Illuminate\Validation\Rule;
 
 class TransferController extends Controller
 {
+    public function index()
+    {
+        $workflows = MasterStatus::query()
+            ->where('type', 'Transfer')
+            ->orderBy('kode')
+            ->get(['kode', 'name']);
+
+        return view('transfers.transfers', compact('workflows'));
+    }
+    public function datatable_all(Request $request)
+    {
+        $q = Transfer::query()
+            ->from('assets_transfers')
+            ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
+            ->with('status')
+            ->select([
+                'assets_transfers.*',
+                'a.asset_code',
+                'a.description as asset_desc',
+            ])
+            ->orderByDesc('assets_transfers.updated_at');
+
+        // Filter by workflow (APR/APP/REJ/…)
+        if ($request->filled('workflow')) {
+            $q->where('assets_transfers.kode_status', $request->string('workflow'));
+        }
+
+        return DataTables::of($q)
+            ->addColumn('asset_label', function ($r) {
+                $code = $r->asset_code ?? $r->asset_uuid;
+                $desc = $r->asset_desc ? (' - ' . $r->asset_desc) : '';
+                return $code . $desc;
+            })
+            ->addColumn('workflow_label', function ($r) {
+                return $r->status ? ($r->kode_status . ' - ' . $r->status->name) : ($r->kode_status ?? '');
+            })
+            ->addColumn('before_show', fn($r) => $this->resolveLabel($r->type, data_get($r->before, 'value')))
+            ->addColumn('after_show',  fn($r) => $this->resolveLabel($r->type, data_get($r->after,  'value')))
+
+            ->filterColumn('asset_label', function ($builder, $keyword) {
+                $kw = '%' . mb_strtolower($keyword) . '%';
+                $builder->where(function ($w) use ($kw) {
+                    $w->whereRaw('LOWER(a.asset_code) LIKE ?', [$kw])
+                        ->orWhereRaw('LOWER(a.description) LIKE ?', [$kw]);
+                });
+            })
+            ->filterColumn('before_show', function ($builder, $keyword) {
+                $kw = '%' . mb_strtolower($keyword) . '%';
+                $builder->whereRaw('LOWER(CAST(assets_transfers.before AS TEXT)) LIKE ?', [$kw]);
+            })
+            ->filterColumn('after_show', function ($builder, $keyword) {
+                $kw = '%' . mb_strtolower($keyword) . '%';
+                $builder->whereRaw('LOWER(CAST(assets_transfers.after AS TEXT)) LIKE ?', [$kw]);
+            })
+
+            // Actions
+            ->addColumn('actions', function ($r) {
+                $pending = $r->kode_status === 'APR';
+                $id = e($r->uuid);
+                $btns = '<div class="btn-group btn-group-sm">';
+                if ($pending) {
+                    $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
+                    $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
+                    $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
+                }
+                $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                $btns .= '</div>';
+                return $btns;
+            })
+            ->rawColumns(['actions'])
+            ->toJson();
+    }
     public function store(Request $request)
     {
         $data = $request->validate([
@@ -104,6 +176,26 @@ class TransferController extends Controller
             'code' => $transfer->transfer_code,
         ]);
     }
+
+    public function show(string $uuid)
+    {
+        $transfer = Transfer::where('uuid', $uuid)->firstOrFail();
+
+        $asset = Assets::select('uuid', 'asset_code', 'description')->find($transfer->asset_uuid);
+
+        return response()->json([
+            'uuid'        => $transfer->uuid,
+            'asset_uuid'  => $transfer->asset_uuid,
+            'asset_code'  => $asset->asset_code ?? null,
+            'asset_desc'  => $asset->description ?? null,
+            'asset_label' => $asset ? $asset->asset_code . ($asset->description ? (' - ' . $asset->description) : '') : null,
+            'type'        => $transfer->type,
+            'before'      => $transfer->before,
+            'after'       => $transfer->after,
+            'note'        => $transfer->note,
+            'kode_status' => $transfer->kode_status,
+        ]);
+    }
     public function update(Request $request, string $uuid)
     {
         $data = $request->validate([
@@ -141,7 +233,7 @@ class TransferController extends Controller
         return response()->json(['ok' => true]);
     }
 
-     public function approve(Request $request, string $uuid)
+    public function approve(Request $request, string $uuid)
     {
         $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
         abort_if($uid === '', 401, 'No session UID.');
@@ -275,62 +367,80 @@ class TransferController extends Controller
         }
         return [$before, $after];
     }
-    private function resolveLabel(string $type, ?string $code): string
+    private function resolveLabel(?string $type, ?string $code): string
     {
+        $type = is_string($type) ? trim($type) : '';
+        $code = is_string($code) ? trim($code) : '';
+
+        if ($code === '') {
+            return '(empty)';
+        }
+        if ($type === '') {
+            return $code;
+        }
+
         static $cache = [
             'usercode' => [], // owner/user/maintenance
             'status'   => [],
             'location' => [],
         ];
-
-        if (!$code) return '(empty)';
+        $k = $code;
+        $ck = mb_strtoupper($code);
 
         switch ($type) {
             case 'owner':
             case 'user':
             case 'maintenance':
-                if (!isset($cache['usercode'][$code])) {
+                if (!isset($cache['usercode'][$ck])) {
                     $row = MasterUserCode::select('kode', 'department')
-                        ->where('kode', $code)->first();
-                    $cache['usercode'][$code] = $row ? "{$code} - {$row->department}" : $code;
+                        ->where('kode', $code)
+                        ->first();
+                    $cache['usercode'][$ck] = $row ? "{$k} - {$row->department}" : $k;
                 }
-                return $cache['usercode'][$code];
+                return $cache['usercode'][$ck];
 
             case 'status':
-                if (!isset($cache['status'][$code])) {
-                    $row = MasterStatus::select('kode', 'name')
+                if (!isset($cache['status'][$ck])) {
+                    $row = MasterStatus::select('kode', 'name', 'type')
                         ->where('kode', $code)
                         ->where(function ($q) {
-                            // Only Asset statuses for asset transfers
                             $q->where('type', 'Asset')->orWhereNull('type');
                         })
                         ->first();
-                    $cache['status'][$code] = $row ? "{$code} - {$row->name}" : $code;
+                    $cache['status'][$ck] = $row ? "{$k} - {$row->name}" : $k;
                 }
-                return $cache['status'][$code];
+                return $cache['status'][$ck];
 
             case 'location':
-                if (!isset($cache['location'][$code])) {
+                if (!isset($cache['location'][$ck])) {
                     $row = MasterLocation::select('kode', 'name')
-                        ->where('kode', $code)->first();
-                    $cache['location'][$code] = $row ? "{$code} - {$row->name}" : $code;
+                        ->where('kode', $code)
+                        ->first();
+                    $cache['location'][$ck] = $row ? "{$k} - {$row->name}" : $k;
                 }
-                return $cache['location'][$code];
+                return $cache['location'][$ck];
 
             default:
-                return $code;
+                return $k;
         }
     }
+
     /** Helper used by update(): fetch current "before" snapshot */
     private function currentValueForType(Assets $asset, string $type): array
     {
         switch ($type) {
-            case 'owner':        return ['value' => $asset->assignment?->asset_owner];
-            case 'user':         return ['value' => $asset->assignment?->asset_user];
-            case 'maintenance':  return ['value' => $asset->assignment?->asset_maintenance];
-            case 'status':       return ['value' => $asset->kode_status];
-            case 'location':     return ['value' => $asset->kode_location];
-            default:             return ['value' => null];
+            case 'owner':
+                return ['value' => $asset->assignment?->asset_owner];
+            case 'user':
+                return ['value' => $asset->assignment?->asset_user];
+            case 'maintenance':
+                return ['value' => $asset->assignment?->asset_maintenance];
+            case 'status':
+                return ['value' => $asset->kode_status];
+            case 'location':
+                return ['value' => $asset->kode_location];
+            default:
+                return ['value' => null];
         }
     }
 }

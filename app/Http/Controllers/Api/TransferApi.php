@@ -19,7 +19,7 @@ class TransferApi extends Controller
     {
         $v = validator($request->all(), [
             'asset_uuid'  => ['nullable', 'uuid'],
-            'q'           => ['nullable', 'string', 'max:200'], // free text (transfer + asset)
+            'q'           => ['nullable', 'string', 'max:200'],
             'type'        => ['nullable', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
             'sort_by'     => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'type', 'asset_code', 'asset_description'])],
             'sort_dir'    => ['nullable', Rule::in(['asc', 'desc'])],

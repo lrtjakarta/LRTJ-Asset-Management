@@ -123,6 +123,7 @@ Route::middleware('ldap.session')->group(function () {
         // AJAX SELECTED OPTION
         Route::get('/select-asset-parent', [AssetsController::class, 'select_asset_parent'])->name('parent.options');
         Route::get('/asset-parent-meta/{uuid}/', [AssetsController::class, 'asset_parent_meta'])->name('parent.meta');
+        Route::get('/select-assets', [AssetsController::class, 'select_assets'])->name('options');
         //FUNCTION
         Route::get('/create',     [AssetsController::class, 'create'])->name('create');
         Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
@@ -133,15 +134,24 @@ Route::middleware('ldap.session')->group(function () {
     // TRANSFER ROUTE
     Route::prefix('transfer')->name('transfer.')->group(function () {
         // FRONTEND
-        Route::get('/', [TransferController::class, 'index'])->name('index');
+        // Route::get('/', [TransferController::class, 'index'])->name('index');
         // DATATABLE
         Route::get('/datatable/{asset}', [TransferController::class, 'datatable'])->name('data');
+        Route::get('/datatable', [TransferController::class, 'datatable_all'])->name('data.all');
         // FUNCTION
         Route::post('/create', [TransferController::class, 'store'])->name('store');
         Route::put('/update/{uuid}', [TransferController::class, 'update'])->name('update');
         Route::delete('/delete/{uuid}', [TransferController::class, 'destroy'])->name('destroy');
         Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
         Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
+        // JSON FOR EDIT
+        Route::get('/show/{uuid}', [TransferController::class, 'show'])
+            ->name('show');
+    });
+
+    // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
+    Route::prefix('transaction')->name('transaction.')->group(function () {
+        Route::get('transfer/', [TransferController::class, 'index'])->name('transfer.index');
     });
 
     // TRASH ROUTE

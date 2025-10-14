@@ -34,6 +34,10 @@ class Transfer extends Model
             if (! $m->uuid) $m->uuid = (string) Str::uuid();
         });
     }
+    public function getRouteKeyName()
+    {
+        return 'uuid';
+    }
 
     public function asset()
     {
