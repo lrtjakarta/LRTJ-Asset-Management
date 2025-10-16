@@ -11,7 +11,9 @@ use App\Models\MasterUserCode;
 use App\Models\Transfer;
 use App\Services\TransferCodeService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -72,7 +74,14 @@ class TransferController extends Controller
                 $kw = '%' . mb_strtolower($keyword) . '%';
                 $builder->whereRaw('LOWER(CAST(assets_transfers.after AS TEXT)) LIKE ?', [$kw]);
             })
+            ->addColumn('file', function ($r) {
+                if (!$r->file_path) return '';
 
+                $url  = url('storage/' . ltrim($r->file_path, '/'));
+                $name = $r->file_name ?: 'Attachment';
+
+                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+            })
             // Actions
             ->addColumn('actions', function ($r) {
                 $pending = $r->kode_status === 'APR';
@@ -87,7 +96,7 @@ class TransferController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
+            ->rawColumns(['file','actions'])
             ->toJson();
     }
     public function store(Request $request)
@@ -97,6 +106,7 @@ class TransferController extends Controller
             'type'         => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
             'after.value'  => ['required', 'string'],
             'note'         => ['nullable', 'string', 'max:1000'],
+            'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
         // logged-in UID (from your LDAP session)
@@ -144,10 +154,12 @@ class TransferController extends Controller
             $afterLabel,
             $initialWorkflow,
             $currentUid,
-            $totalRow
+            $totalRow,
+            $request
         ) {
-            // keep this short enough for your column length
             $code = sprintf('TRF-%s-%d', str_replace(['-', ' '], '', $asset->asset_code), $totalRow + 1);
+            [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $code, null);
+
 
             return Transfer::create([
                 'uuid'             => (string) Str::uuid(),
@@ -167,6 +179,10 @@ class TransferController extends Controller
                 'note'             => $data['note'] ?? null,
                 'pic_request_uid'  => $currentUid,
                 'pic_approve_uid'  => null,
+                'file_path'       => $path,
+                'file_name'       => $orig,
+                'file_mime'       => $mime,
+                'file_size'       => $size,
             ]);
         });
 
@@ -194,6 +210,8 @@ class TransferController extends Controller
             'after'       => $transfer->after,
             'note'        => $transfer->note,
             'kode_status' => $transfer->kode_status,
+            'file_url'    => $transfer->file_url,
+            'file_name'    => $transfer->file_name,
         ]);
     }
     public function update(Request $request, string $uuid)
@@ -203,6 +221,7 @@ class TransferController extends Controller
             'type'        => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
             'after.value' => ['required', 'string'],
             'note'        => ['nullable', 'string', 'max:1000'],
+            'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
@@ -213,12 +232,34 @@ class TransferController extends Controller
         // Re-compute BEFORE from current asset state (so UI stays truthful)
         $before = $this->currentValueForType($asset, $data['type']);
         $after  = ['value' => $data['after']['value']];
+        // remove existing file
+
+        if ($request->boolean('remove_file')) {
+            if ($tf->file_path) Storage::disk('public')->delete($tf->file_path);
+            $file_path = null;
+            $file_name = null;
+            $file_mime = null;
+            $file_size = null;
+        }
+
+        // replace with new file if provided
+        if ($request->hasFile('file')) {
+            [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $tf->transfer_code, $tf);
+            $file_path = $path;
+            $file_name = $orig;
+            $file_mime = $mime;
+            $file_size = $size;
+        }
 
         $tf->fill([
             'type'        => $data['type'],
             'before'      => $before,
             'after'       => $after,
             'note'        => $data['note'] ?? null,
+            'file_path'       => $file_path ?? $tf->file_path,
+            'file_name'       => $file_name ?? $tf->file_name,
+            'file_mime'       => $file_mime ?? $tf->file_mime,
+            'file_size'       => $file_size ?? $tf->file_size,
         ])->save();
 
         return response()->json(['ok' => true]);
@@ -320,6 +361,15 @@ class TransferController extends Controller
             ->addColumn('after_display', function (Transfer $t) {
                 return $this->resolveLabel($t->type, data_get($t->after, 'value'));
             })
+            ->addColumn('file', function (Transfer $t) {
+                if (!$t->file_path) return '';
+
+                $url  = url('storage/' . ltrim($t->file_path, '/'));
+                $name = $t->file_name ?: 'Attachment';
+
+                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+            })
+            ->rawColumns(['file'])
             ->toJson();
     }
 
@@ -442,5 +492,24 @@ class TransferController extends Controller
             default:
                 return ['value' => null];
         }
+    }
+    private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?Transfer $existing = null): array
+    {
+        if (!$file) return [null, null, null, null];
+
+        $disk = 'public';
+        $dir  = 'transfers/' . $asset->uuid;
+        $ext  = $file->getClientOriginalExtension();
+        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+
+        $path = $file->storeAs($dir, $name, $disk);
+        $options = ['disk' => $disk];
+        $options['visibility'] = 'public';
+
+        if ($existing && $existing->file_path) {
+            Storage::disk($disk)->delete($existing->file_path);
+        }
+
+        return [$path, $file->getClientOriginalName(), $file->getClientMimeType(), $file->getSize()];
     }
 }

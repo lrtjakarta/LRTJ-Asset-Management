@@ -372,6 +372,7 @@
                                         <th class="min-w-100px">Approver</th>
                                         <th class="min-w-250px">Note</th>
                                         <th class="min-w-100px">Status Transfer</th>
+                                        <th class="min-w-200px">File</th>
                                         <th class="min-w-200px">Created</th>
                                         <th class="min-w-200px">Action</th>
                                     </tr>
@@ -402,7 +403,7 @@
     <div class="modal fade" id="modal-transfer" tabindex="-1" aria-labelledby="modalTransferLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
-                <form id="formTransfer" method="POST">
+                <form id="formTransfer" method="POST" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
 
@@ -435,6 +436,20 @@
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
                                 <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (optional)</label>
+                                <input type="file" name="file" id="tf-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">PDF / image / office docs (max 20MB).</div>
+
+                                {{-- visible only when editing and a file exists --}}
+                                <div id="tf-current-file" class="mt-2 d-none">
+                                    <a id="tf-current-file-link" href="#" target="_blank"></a>
+                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
+                                        id="btn-remove-file">Remove</button>
+                                    <input type="hidden" name="remove_file" id="tf-remove-file" value="0">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -547,52 +562,6 @@
                 initTargetSelect(this.value);
             });
 
-            // Submit Transfer
-            $('#formTransfer').on('submit', function(e) {
-                e.preventDefault();
-
-                const afterVal = $('#tf-target-hidden').val() || $('#tf-target').val();
-                if (!afterVal) return Swal.fire('Target required', 'Please select a transfer target.',
-                    'warning');
-
-                Swal.fire({
-                    title: 'Submit transfer request?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Yes, submit',
-                    confirmButtonColor: '#EA242A',
-                    cancelButtonColor: '#B5B5B6',
-                }).then(res => {
-                    if (!res.isConfirmed) return;
-
-                    Swal.fire({
-                        title: 'Saving…',
-                        allowOutsideClick: false,
-                        didOpen: () => Swal.showLoading()
-                    });
-
-                    $.post(R.create, {
-                            _token: $('input[name="_token"]').first().val(),
-                            asset_uuid: '{{ $asset->uuid }}',
-                            type: $('#tf-type').val(),
-                            note: $('textarea[name="note"]').val() || '',
-                            'after[value]': afterVal
-                        })
-                        .done(() => {
-                            $('#modal-transfer').modal('hide');
-                            Swal.fire('Success', 'Transfer request created.', 'success');
-                            $('#tbl-transfers').DataTable().ajax.reload(null, false);
-                        })
-                        .fail(xhr => {
-                            let msg = 'Failed to submit.';
-                            if (xhr.responseJSON?.message) msg = xhr.responseJSON.message;
-                            if (xhr.status === 422 && xhr.responseJSON?.errors) {
-                                msg = Object.values(xhr.responseJSON.errors).flat().join('\n');
-                            }
-                            Swal.fire('Error', msg, 'error');
-                        });
-                });
-            });
 
             // Transfer history DataTable
             $('#tbl-transfers').DataTable({
@@ -662,6 +631,11 @@
                         }
                     },
                     {
+                        data: 'file',
+                        name: 'file',
+                        defaultContent: ''
+                    },
+                    {
                         data: 'updated_at',
                         name: 'updated_at',
                         render: function(iso, type) {
@@ -715,6 +689,19 @@
                 $('#formTransfer').data('edit-id', row.uuid);
                 $('#tf-type').val(row.type).trigger('change');
 
+                if (row.file_url) {
+                    $('#tf-current-file').removeClass('d-none');
+                    $('#tf-current-file-link').attr('href', row.file_url).text(row.file_name || 'Current file');
+                    $('#tf-remove-file').val('0');
+                } else {
+                    $('#tf-current-file').addClass('d-none');
+                    $('#tf-remove-file').val('0');
+                }
+
+                $('#btn-remove-file').off('click').on('click', function() {
+                    $('#tf-remove-file').val('1');
+                    $('#tf-current-file').addClass('d-none');
+                });
                 // Delay to allow select2 to mount then set target
                 setTimeout(() => {
                     const code = row.after_code || '';
@@ -727,39 +714,78 @@
                 $('textarea[name="note"]').val(row.note || '');
             });
 
-            // On submit: if edit-id present, PUT update; otherwise POST create (your current behavior)
             $('#formTransfer').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
                 const isEdit = !!$('#formTransfer').data('edit-id');
                 const id = $('#formTransfer').data('edit-id');
 
-                const payload = {
+                // Common fields
+                const baseFields = {
                     asset_uuid: '{{ $asset->uuid }}',
                     type: $('#tf-type').val(),
                     note: $('textarea[name="note"]').val() || '',
-                    'after[value]': $('#tf-target-hidden').val()
+                    'after[value]': $('#tf-target-hidden').val() || '',
+                    remove_file: $('#tf-remove-file').length ? ($('#tf-remove-file').val() || 0) : 0
                 };
 
-                const req = isEdit ?
-                    $.ajax({
-                        url: ROUTE.update(id),
-                        type: 'PUT',
-                        data: payload
-                    }) :
-                    $.post('{{ route('transfer.store', $asset->uuid) }}', payload);
+                const fileInput = document.getElementById('tf-file');
+                const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+                let req;
+
+                if (hasFile) {
+                    // ---- multipart when a file is present ----
+                    const fd = new FormData();
+                    Object.entries(baseFields).forEach(([k, v]) => fd.append(k, v));
+                    fd.append('file', fileInput.files[0]);
+
+                    const url = isEdit ? ROUTE.update(id) : '{{ route('transfer.store', $asset->uuid) }}';
+                    const type = isEdit ? 'POST' : 'POST'; // use POST + _method override for PUT
+                    if (isEdit) fd.append('_method', 'PUT');
+
+                    req = $.ajax({
+                        url,
+                        type,
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    });
+
+                } else {
+                    // ---- your original url-encoded flow when no file ----
+                    const payload = baseFields;
+
+                    req = isEdit ?
+                        $.ajax({
+                            url: ROUTE.update(id),
+                            type: 'PUT',
+                            data: payload
+                        }) :
+                        $.post('{{ route('transfer.store', $asset->uuid) }}', payload);
+                }
 
                 Swal.fire({
                     title: 'Saving…',
                     didOpen: () => Swal.showLoading(),
                     allowOutsideClick: false
                 });
+
                 req.done(() => {
                         $('#modal-transfer').modal('hide');
                         Swal.fire('Success', isEdit ? 'Transfer updated.' : 'Transfer created.', 'success');
                         $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                        // reset file UI after success
+                        if (fileInput) fileInput.value = '';
+                        if ($('#tf-remove-file').length) $('#tf-remove-file').val('0');
                     })
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+            });
+
+            // Optional: when clicking "Remove" on current file in edit modal
+            $('#btn-remove-file').off('click').on('click', function() {
+                $('#tf-remove-file').val('1');
+                $('#tf-current-file').addClass('d-none');
             });
 
             // Approve

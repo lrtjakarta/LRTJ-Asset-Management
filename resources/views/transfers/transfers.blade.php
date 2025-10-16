@@ -49,6 +49,7 @@
                                 <th class="min-w-200px">Requester</th>
                                 <th class="min-w-200px">Approver</th>
                                 <th class="min-w-200px">Status</th>
+                                <th class="min-w-200px">File</th>
                                 <th class="min-w-200px">Updated</th>
                                 <th class="min-w-200px">Actions</th>
                             </tr>
@@ -64,7 +65,7 @@
     <div class="modal fade" id="modal-transfer" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
-                <form id="formTransfer">
+                <form id="formTransfer" enctype="multipart/form-data">
                     @csrf
                     <input type="hidden" name="asset_uuid" id="tf-asset-uuid">
                     <input type="hidden" id="tf-edit-id" value="">
@@ -98,6 +99,20 @@
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
                                 <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (optional)</label>
+                                <input type="file" name="file" id="tf-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">PDF / image / office docs (max 20MB).</div>
+
+                                {{-- visible only when editing and a file exists --}}
+                                <div id="tf-current-file" class="mt-2 d-none">
+                                    <a id="tf-current-file-link" href="#" target="_blank"></a>
+                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
+                                        id="btn-remove-file">Remove</button>
+                                    <input type="hidden" name="remove_file" id="tf-remove-file" value="0">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -140,6 +155,38 @@
                 if (!id) return;
                 const opt = new Option(text ?? String(id), id, true, true);
                 $select.append(opt).trigger('change');
+            }
+
+            function resetTransferFormToCreate() {
+                const $form = $('#formTransfer');
+
+                // 1) Clear edit flag
+                $form.removeData('edit-id'); // ← important
+                $('#tf-asset').val(null).empty(); 
+
+                // 2) Reset native fields
+                $form[0].reset(); // resets textarea, hidden inputs in DOM, etc.
+                $('textarea[name="note"]').val('');
+
+                // 3) File UI reset
+                const fileInput = document.getElementById('tf-file');
+                if (fileInput) fileInput.value = '';
+                $('#tf-current-file').addClass('d-none');
+                $('#tf-current-file-link').attr('href', '').text('');
+                $('#tf-remove-file').val('0');
+
+                // 4) Default type + target select reset
+                $('#tf-type').val('owner');
+
+                // If select2 already initialized, destroy it first to avoid residue
+                if ($('#tf-target').data('select2')) {
+                    $('#tf-target').off('select2:select').select2('destroy');
+                }
+                $('#tf-target').val(null).empty(); // clear options
+                $('#tf-target-hidden').val('');
+
+                // Re-init target for default type
+                initTargetSelect('owner');
             }
 
             function endpointForType(type) {
@@ -285,6 +332,11 @@
                         }
                     },
                     {
+                        data: 'file',
+                        name: 'file',
+                        defaultContent: ''
+                    },
+                    {
                         data: 'updated_at',
                         name: 'assets_transfers.updated_at',
                         render: function(iso, type) {
@@ -321,7 +373,7 @@
             // Open create modal
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
-                $('#formTransfer')[0].reset();
+                resetTransferFormToCreate();
                 $('#tf-asset-uuid').val('');
                 $('#tf-target-hidden').val('');
                 $('#tf-type').val('owner');
@@ -348,18 +400,24 @@
                 e.preventDefault();
 
                 const isEdit = !!$('#tf-edit-id').val();
-                const payload = {
+                const id = $('#tf-edit-id').val();
+                const fileEl = document.getElementById('tf-file');
+                const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+
+                const base = {
                     type: $('#tf-type').val(),
                     'after[value]': $('#tf-target-hidden').val(),
                     note: $('textarea[name="note"]').val() || '',
-                    asset_uuid: $('#tf-asset-uuid').val() || null // 🔴 include for both create & edit
+                    asset_uuid: $('#tf-asset-uuid').val() || null,
+                    remove_file: $('#tf-remove-file').val() || 0
                 };
 
-                if (!payload['after[value]']) {
+                // guards
+                if (!base['after[value]']) {
                     Swal.fire('Target required', 'Please select a transfer target.', 'warning');
                     return;
                 }
-                if (!payload.asset_uuid) {
+                if (!base.asset_uuid) {
                     Swal.fire('Asset required', 'Please choose an asset.', 'warning');
                     return;
                 }
@@ -370,41 +428,60 @@
                     allowOutsideClick: false
                 });
 
-                if (isEdit) {
-                    const id = $('#tf-edit-id').val();
-                    $.ajax({
+                let req;
+
+                if (hasFile) {
+                    const fd = new FormData();
+                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                    fd.append('file', fileEl.files[0]);
+
+                    if (isEdit) fd.append('_method', 'PUT');
+
+                    req = $.ajax({
+                        url: isEdit ? R.update.replace(':id', id) : R.create,
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    });
+
+                } else {
+                    const payload = base;
+
+                    req = isEdit ?
+                        $.ajax({
                             url: R.update.replace(':id', id),
                             type: 'PUT',
                             data: payload
-                        })
-                        .done(() => {
-                            $('#modal-transfer').modal('hide');
-                            Swal.fire('Updated', 'Transfer updated.', 'success');
-                            $('#tf-asset').prop('disabled', false);
-                            $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
-                        })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                } else {
-                    $.post(R.create, payload)
-                        .done(() => {
-                            $('#modal-transfer').modal('hide');
-                            Swal.fire('Success', 'Transfer created.', 'success');
-                            $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
-                        })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                        }) :
+                        $.post(R.create, payload);
                 }
+
+                req
+                    .done(() => {
+                        $('#modal-transfer').modal('hide');
+                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Transfer updated.' :
+                            'Transfer created.', 'success');
+                        $('#tf-asset').prop('disabled', false);
+                        $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
+
+                        // reset file UI
+                        if (fileEl) fileEl.value = '';
+                        $('#tf-remove-file').val('0');
+                    })
+                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
             // Row actions
             $('#tbl-transfers-all').on('click', '.btn-tf-edit', function() {
                 const id = $(this).data('id');
-
                 $('#modal-transfer').modal('show');
                 $('.modal-title', '#modal-transfer').text('Edit Transfer');
 
                 initSelect2('#tf-asset', R.assets);
                 $('#tf-target').off().empty().trigger('change');
                 $('#tf-target-hidden').val('');
+
 
                 $.getJSON(R.show.replace(':id', id), function(d) {
                     $('#tf-edit-id').val(d.uuid || id);
@@ -426,6 +503,16 @@
                     const type = d?.type || 'owner';
                     $('#tf-type').val(type).trigger('change');
                     initTargetSelect(type);
+
+                    if (d?.file_url) {
+                        $('#tf-current-file').removeClass('d-none');
+                        $('#tf-current-file-link').attr('href', d?.file_url).text(d?.file_name ||
+                            'Current file');
+                        $('#tf-remove-file').val('0');
+                    } else {
+                        $('#tf-current-file').addClass('d-none');
+                        $('#tf-remove-file').val('0');
+                    }
 
                     const afterVal = d?.after?.value ?? '';
                     if (afterVal) {
