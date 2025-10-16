@@ -251,12 +251,15 @@
                     {
                         data: 'workflow_label',
                         name: 'workflow_label',
-                        render: function(d, t, row) {
-                            if (row.kode_status === 'APR')
-                            return `<span class="badge badge-light-primary">${d||''}</span>`;
-                            if (row.kode_status === 'APP')
-                            return `<span class="badge badge-light-success">${d||''}</span>`;
-                            return `<span class="badge badge-light-danger">${d||''}</span>`;
+                        defaultContent: '',
+                        render: function(data, type, row) {
+                            if (row.kode_status == 'APR') {
+                                return `<span class="badge badge-light-primary">${data||''}</span>`;
+                            } else if (row.kode_status == 'ACC') {
+                                return `<span class="badge badge-light-success">${data||''}</span>`;
+                            } else {
+                                return `<span class="badge badge-light-danger">${data||''}</span>`;
+                            }
                         }
                     },
                     {
