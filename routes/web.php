@@ -4,6 +4,7 @@ use App\Http\Controllers\AssetsController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\TrashController;
@@ -133,8 +134,6 @@ Route::middleware('ldap.session')->group(function () {
 
     // TRANSFER ROUTE
     Route::prefix('transfer')->name('transfer.')->group(function () {
-        // FRONTEND
-        // Route::get('/', [TransferController::class, 'index'])->name('index');
         // DATATABLE
         Route::get('/datatable/{asset}', [TransferController::class, 'datatable'])->name('data');
         Route::get('/datatable', [TransferController::class, 'datatable_all'])->name('data.all');
@@ -148,10 +147,27 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/show/{uuid}', [TransferController::class, 'show'])
             ->name('show');
     });
+    
+    // DISPOSAL ROUTE
+    Route::prefix('disposal')->name('disposal.')->group(function () {
+        // DATATABLE
+        Route::get('/datatable/{asset}', [DisposalController::class, 'datatable'])->name('data');
+        Route::get('/datatable', [DisposalController::class, 'datatable_all'])->name('data.all');
+        // FUNCTION
+        Route::post('/create', [DisposalController::class, 'store'])->name('store');
+        Route::put('/update/{uuid}', [DisposalController::class, 'update'])->name('update');
+        Route::delete('/delete/{uuid}', [DisposalController::class, 'destroy'])->name('destroy');
+        Route::post('/approve/{uuid}', [DisposalController::class, 'approve'])->name('approve');
+        Route::post('/reject/{uuid}', [DisposalController::class, 'reject'])->name('reject');
+        // JSON FOR EDIT
+        Route::get('/show/{uuid}', [DisposalController::class, 'show'])
+            ->name('show');
+    });
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
         Route::get('transfer/', [TransferController::class, 'index'])->name('transfer.index');
+        Route::get('disposal/', [DisposalController::class, 'index'])->name('disposal.index');
     });
 
     // TRASH ROUTE

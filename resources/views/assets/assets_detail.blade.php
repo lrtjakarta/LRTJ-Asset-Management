@@ -21,7 +21,7 @@
 
             <div class="d-flex align-items-center gap-2 gap-lg-3">
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
-                <a href="#" class="btn btn-sm fw-bold btn-secondary">Disposal</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenDisposal">Disposal</a>
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
                 <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
                     class="d-inline">
@@ -373,7 +373,7 @@
                                         <th class="min-w-250px">Note</th>
                                         <th class="min-w-100px">Status Transfer</th>
                                         <th class="min-w-200px">File</th>
-                                        <th class="min-w-200px">Created</th>
+                                        <th class="min-w-200px">Updated</th>
                                         <th class="min-w-200px">Action</th>
                                     </tr>
                                 </thead>
@@ -384,7 +384,23 @@
                         </div>
                         <div class="tab-pane fade" id="tab_disposal" role="tabpanel"
                             aria-labelledby="tab-disposal-link">
-                            Disposal
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-disposal">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-200px">Code</th>
+                                        <th class="min-w-100px">Type</th>
+                                        <th class="min-w-100px">Requester</th>
+                                        <th class="min-w-100px">Approver</th>
+                                        <th class="min-w-250px">Note</th>
+                                        <th class="min-w-100px">Status Transfer</th>
+                                        <th class="min-w-200px">File</th>
+                                        <th class="min-w-200px">Updated</th>
+                                        <th class="min-w-200px">Action</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                         <div class="tab-pane fade" id="tab_acquisition" role="tabpanel" aria-labelledby="tab-acq-link">
                             Acquisition
@@ -449,6 +465,53 @@
                                     <button type="button" class="btn btn-sm btn-light-danger ms-2"
                                         id="btn-remove-file">Remove</button>
                                     <input type="hidden" name="remove_file" id="tf-remove-file" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- ===== Disposal Modal ===== --}}
+    <div class="modal fade" id="modal-disposal" tabindex="-1" aria-labelledby="modalDisposalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formDisposal" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" id="ds-edit-id">
+                    <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
+                    <input type="hidden" name="remove_file" id="ds-remove-file" value="0">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalDisposalLabel">Request Disposal — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" id="ds-note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (optional)</label>
+                                <input type="file" name="file" id="ds-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">PDF / image / office docs (max 20MB).</div>
+
+                                {{-- visible only when editing and a file exists --}}
+                                <div id="ds-current-file" class="mt-2 d-none">
+                                    <a id="ds-current-file-link" href="#" target="_blank"></a>
+                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
+                                        id="ds-btn-remove-file">Remove</button>
                                 </div>
                             </div>
                         </div>
@@ -869,6 +932,288 @@
                             .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
+        })();
+    </script>
+
+    <script>
+        (function() {
+            // --- Routes for Disposal ---
+            const DS = {
+                data: '{{ route('disposal.data', $asset->uuid) }}',
+                create: '{{ route('disposal.store') }}',
+                show: '{{ route('disposal.show', ':id') }}',
+                update: '{{ route('disposal.update', ':id') }}',
+                destroy: '{{ route('disposal.destroy', ':id') }}',
+                approve: '{{ route('disposal.approve', ':id') }}',
+                reject: '{{ route('disposal.reject', ':id') }}',
+            };
+
+            // Open modal (new)
+            $('#btnOpenDisposal').on('click', function(e) {
+                e.preventDefault();
+                resetDisposalForm();
+                $('#modal-disposal').modal('show');
+            });
+
+            function resetDisposalForm() {
+                $('#ds-edit-id').val('');
+                $('#ds-note').val('');
+                $('#ds-file').val('');
+                $('#ds-remove-file').val('0');
+                $('#ds-current-file').addClass('d-none');
+                $('#ds-current-file-link').attr('href', '#').text('');
+            }
+
+            // Remove existing file toggle in edit
+            $('#ds-btn-remove-file').off('click').on('click', function() {
+                $('#ds-remove-file').val('1');
+                $('#ds-current-file').addClass('d-none');
+            });
+
+            // Submit create/update (multipart if file chosen)
+            $('#formDisposal').off('submit').on('submit', function(e) {
+                e.preventDefault();
+
+                const isEdit = !!$('#ds-edit-id').val();
+                const id = $('#ds-edit-id').val();
+                const fileEl = document.getElementById('ds-file');
+                const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+
+                const base = {
+                    asset_uuid: '{{ $asset->uuid }}',
+                    note: $('#ds-note').val() || '',
+                    remove_file: $('#ds-remove-file').val() || 0,
+                };
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                let req;
+                if (hasFile) {
+                    const fd = new FormData();
+                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                    fd.append('file', fileEl.files[0]);
+                    if (isEdit) fd.append('_method', 'PUT');
+
+                    req = $.ajax({
+                        url: isEdit ? DS.update.replace(':id', id) : DS.create,
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    });
+                } else {
+                    req = isEdit ?
+                        $.ajax({
+                            url: DS.update.replace(':id', id),
+                            type: 'PUT',
+                            data: base
+                        }) :
+                        $.post(DS.create, base);
+                }
+
+                req.done(() => {
+                        $('#modal-disposal').modal('hide');
+                        Swal.fire('Success', isEdit ? 'Disposal updated.' : 'Disposal created.', 'success');
+                        $('#tbl-disposal').DataTable().ajax.reload(null, false);
+                    })
+                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+            });
+
+            // DataTable (Disposal)
+            const dsTable = $('#tbl-disposal').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: DS.data,
+                    type: 'GET'
+                },
+                order: [
+                    [7, 'desc']
+                ], // Updated column
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'disposal_code',
+                        name: 'disposal_code'
+                    }, // Code
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false, // Type (static)
+                        render: () => 'DISPOSAL'
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'pic_request_uid'
+                    }, // Requester
+                    {
+                        data: 'pic_approve_uid',
+                        name: 'pic_approve_uid',
+                        defaultContent: ''
+                    }, // Approver
+                    {
+                        data: 'note',
+                        name: 'note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    }, // Note
+                    {
+                        data: 'workflow_label',
+                        name: 'workflow_label', // Status Transfer (workflow)
+                        render: (d, t, row) => {
+                            if (row.kode_status === 'APR')
+                            return `<span class="badge badge-light-primary">${d||''}</span>`;
+                            if (row.kode_status === 'APP')
+                            return `<span class="badge badge-light-success">${d||''}</span>`;
+                            return `<span class="badge badge-light-danger">${d||''}</span>`;
+                        }
+                    },
+                    {
+                        data: 'file',
+                        name: 'file',
+                        orderable: false,
+                        searchable: false,
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'updated_at',
+                        name: 'updated_at', // Updated
+                        render: (iso, type) => {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false, // Action
+                        render: (row) => {
+                            const pending = row.kode_status === 'APR';
+                            let html = `<div class="btn-group btn-group-sm">`;
+                            if (pending) {
+                                html +=
+                                    `<button class="btn btn-light-primary btn-ds-edit" data-id="${row.uuid}">Edit</button>`;
+                                html +=
+                                    `<button class="btn btn-light-success btn-ds-approve" data-id="${row.uuid}">Accept</button>`;
+                                html +=
+                                    `<button class="btn btn-light-warning btn-ds-reject" data-id="${row.uuid}">Reject</button>`;
+                            }
+                            html +=
+                                `<button class="btn btn-light-danger btn-ds-delete" data-id="${row.uuid}">Delete</button>`;
+                            html += `</div>`;
+                            return html;
+                        }
+                    },
+                ]
+            });
+
+            // Edit (preload)
+            $(document).on('click', '.btn-ds-edit', function() {
+                const id = $(this).data('id');
+                $.getJSON(DS.show.replace(':id', id), function(d) {
+                    resetDisposalForm();
+                    $('#ds-edit-id').val(d.uuid);
+                    $('#ds-note').val(d.note || '');
+                    if (d.file_path) {
+                        $('#ds-current-file-link').attr('href', d.file_url).text(d.file_name || 'Current file');
+                        $('#ds-current-file').removeClass('d-none');
+                        $('#ds-remove-file').val('0');
+                    }
+                    $('#modal-disposal').modal('show');
+                });
+            });
+
+            // Approve
+            $(document).on('click', '.btn-ds-approve', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Approve?',
+                    icon: 'question',
+                    showCancelButton: true
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Applying…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    $.post(DS.approve.replace(':id', id), {})
+                        .done(() => {
+                            Swal.fire('Approved', 'Disposal approved.', 'success');
+                            location.reload();
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+            // Reject
+            $(document).on('click', '.btn-ds-reject', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Reject?',
+                    icon: 'warning',
+                    showCancelButton: true
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Updating…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    $.post(DS.reject.replace(':id', id), {})
+                        .done(() => {
+                            Swal.fire('Rejected', 'Disposal rejected.', 'success');
+                            dsTable.ajax.reload(null, false);
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+            // Delete (soft)
+            $(document).on('click', '.btn-ds-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Delete?',
+                    text: 'Move to trash.',
+                    icon: 'warning',
+                    showCancelButton: true
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    $.ajax({
+                            url: DS.destroy.replace(':id', id),
+                            type: 'DELETE'
+                        })
+                        .done(() => {
+                            Swal.fire('Deleted', 'Disposal deleted.', 'success');
+                            dsTable.ajax.reload(null, false);
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
         })();
     </script>
 @endpush

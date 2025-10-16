@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Assets;
+use App\Models\Disposal;
 use App\Models\MasterAssetClass;
 use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
@@ -115,6 +116,12 @@ class TrashController extends Controller
                 'model'      => Transfer::class,
                 'pk'         => 'uuid',
                 'label_col'  => 'transfer_code',
+            ],
+            'disposal' => [
+                'table'      => 'assets_disposals',
+                'model'      => Disposal::class,
+                'pk'         => 'uuid',
+                'label_col'  => 'disposal_code',
             ],
         ];
     }

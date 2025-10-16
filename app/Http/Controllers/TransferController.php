@@ -42,7 +42,6 @@ class TransferController extends Controller
             ])
             ->orderByDesc('assets_transfers.updated_at');
 
-        // Filter by workflow (APR/APP/REJ/…)
         if ($request->filled('workflow')) {
             $q->where('assets_transfers.kode_status', $request->string('workflow'));
         }

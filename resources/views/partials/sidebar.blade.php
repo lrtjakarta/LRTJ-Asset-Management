@@ -356,7 +356,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'disposal' ? 'active' : '' }}" 
+                                    href="{{ route('transaction.disposal.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
