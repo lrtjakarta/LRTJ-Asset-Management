@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
@@ -46,5 +47,11 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(60)->by($request->user()?->id ?? $request->ip()),
             ];
         });
+
+
+        Relation::enforceMorphMap([
+            'transfer' => \App\Models\Transfer::class,
+            'disposal' => \App\Models\Disposal::class,
+        ]);
     }
 }

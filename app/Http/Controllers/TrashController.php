@@ -16,6 +16,7 @@ use App\Models\MasterStatus;
 use App\Models\MasterSubCategory;
 use App\Models\MasterUOM;
 use App\Models\MasterUserCode;
+use App\Models\ReturnHistory;
 use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -122,6 +123,12 @@ class TrashController extends Controller
                 'model'      => Disposal::class,
                 'pk'         => 'uuid',
                 'label_col'  => 'disposal_code',
+            ],
+            'return' => [
+                'table'      => 'return_history',
+                'model'      => ReturnHistory::class,
+                'pk'         => 'uuid',
+                'label_col'  => 'source_code',
             ],
         ];
     }

@@ -38,5 +38,5 @@ class AssetsValue extends Model
     ];
 
     public function asset()   { return $this->belongsTo(Assets::class, 'asset_uuid'); }
-    public function uom()     { return $this->belongsTo(MasterUom::class, 'kode_uom', 'kode'); }
+    public function uom()     { return $this->belongsTo(MasterUOM::class, 'kode_uom', 'kode'); }
 }

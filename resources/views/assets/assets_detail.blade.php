@@ -22,6 +22,7 @@
             <div class="d-flex align-items-center gap-2 gap-lg-3">
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenDisposal">Disposal</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenReturn">Return</a>
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
                 <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
                     class="d-inline">
@@ -380,7 +381,21 @@
                             </table>
                         </div>
                         <div class="tab-pane fade" id="tab_return" role="tabpanel" aria-labelledby="tab-return-link">
-                            Return
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-returns">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-180px">Code</th>
+                                        <th class="min-w-220px">Type</th>
+                                        <th class="min-w-300px">Details</th>
+                                        <th class="min-w-220px">Note</th>
+                                        <th class="min-w-140px">Requester</th>
+                                        <th class="min-w-180px">Created</th>
+                                        <th class="min-w-140px">Actions</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                         <div class="tab-pane fade" id="tab_disposal" role="tabpanel"
                             aria-labelledby="tab-disposal-link">
@@ -479,6 +494,7 @@
         </div>
     </div>
 
+
     {{-- ===== Disposal Modal ===== --}}
     <div class="modal fade" id="modal-disposal" tabindex="-1" aria-labelledby="modalDisposalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -525,6 +541,57 @@
             </div>
         </div>
     </div>
+
+
+    {{-- ===== Return Modal ===== --}}
+    <div class="modal fade" id="modal-return" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formReturn">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create Return</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-12">
+                                <label class="form-label required">Select Transfer/Disposal</label>
+                                <select id="ret-source" class="form-select" required></select>
+                                <div class="form-text">Shows only latest accepted per asset (transfer-by-type, disposal)
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="p-3 border rounded bg-light" id="ret-preview" style="display:none">
+                                    <div><strong>Asset:</strong> <span id="ret-asset"></span></div>
+                                    <div><strong>Type:</strong> <span id="ret-type"></span></div>
+                                    <div id="ret-ba-wrap" style="display:none;">
+                                        <strong>Before → After:</strong>
+                                        <span id="ret-before"></span>
+                                        <span class="mx-1">→</span>
+                                        <span id="ret-after" class="fw-bold"></span>
+                                    </div>
+                                    <div class="mt-1"><strong>Code:</strong> <span id="ret-code"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Create Return</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -535,7 +602,6 @@
             }
         });
         (function() {
-            // Delete confirmation
             $('#btnDeleteAsset').on('click', function() {
                 Swal.fire({
                     title: 'Delete?',
@@ -551,7 +617,6 @@
                 });
             });
 
-            // Endpoints
             const R = {
                 usercode: '{{ route('master.user_code.options') }}',
                 status: '{{ route('master.status.options') }}',
@@ -566,7 +631,6 @@
                 reject: id => '{{ route('transfer.reject', ':id') }}'.replace(':id', id),
             };
 
-            // Open modal
             $('#btnOpenTransfer').on('click', function(e) {
                 e.preventDefault();
                 $('#formTransfer')[0].reset();
@@ -575,7 +639,6 @@
                 $('#modal-transfer').modal('show');
             });
 
-            // Select2 helper
             function initSelect2(el, url, extra = {}) {
                 $(el).empty().select2({
                     dropdownParent: $('#modal-transfer'),
@@ -620,7 +683,6 @@
                 }
             }
 
-            // Type change
             $('#tf-type').on('change', function() {
                 initTargetSelect(this.value);
             });
@@ -1040,35 +1102,35 @@
                 columns: [{
                         data: 'disposal_code',
                         name: 'disposal_code'
-                    }, // Code
+                    },
                     {
                         data: null,
                         orderable: false,
-                        searchable: false, // Type (static)
+                        searchable: false,
                         render: () => 'DISPOSAL'
                     },
                     {
                         data: 'pic_request_uid',
                         name: 'pic_request_uid'
-                    }, // Requester
+                    },
                     {
                         data: 'pic_approve_uid',
                         name: 'pic_approve_uid',
                         defaultContent: ''
-                    }, // Approver
+                    },
                     {
                         data: 'note',
                         name: 'note',
                         render: d => d ? $('<div>').text(d).html() : ''
-                    }, // Note
+                    },
                     {
                         data: 'workflow_label',
-                        name: 'workflow_label', // Status Transfer (workflow)
+                        name: 'workflow_label',
                         render: (d, t, row) => {
                             if (row.kode_status === 'APR')
-                            return `<span class="badge badge-light-primary">${d||''}</span>`;
+                                return `<span class="badge badge-light-primary">${d||''}</span>`;
                             if (row.kode_status === 'APP')
-                            return `<span class="badge badge-light-success">${d||''}</span>`;
+                                return `<span class="badge badge-light-success">${d||''}</span>`;
                             return `<span class="badge badge-light-danger">${d||''}</span>`;
                         }
                     },
@@ -1081,7 +1143,7 @@
                     },
                     {
                         data: 'updated_at',
-                        name: 'updated_at', // Updated
+                        name: 'updated_at',
                         render: (iso, type) => {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -1104,7 +1166,7 @@
                     {
                         data: null,
                         orderable: false,
-                        searchable: false, // Action
+                        searchable: false,
                         render: (row) => {
                             const pending = row.kode_status === 'APR';
                             let html = `<div class="btn-group btn-group-sm">`;
@@ -1133,7 +1195,8 @@
                     $('#ds-edit-id').val(d.uuid);
                     $('#ds-note').val(d.note || '');
                     if (d.file_path) {
-                        $('#ds-current-file-link').attr('href', d.file_url).text(d.file_name || 'Current file');
+                        $('#ds-current-file-link').attr('href', d.file_url).text(d.file_name ||
+                            'Current file');
                         $('#ds-current-file').removeClass('d-none');
                         $('#ds-remove-file').val('0');
                     }
@@ -1209,6 +1272,200 @@
                         .done(() => {
                             Swal.fire('Deleted', 'Disposal deleted.', 'success');
                             dsTable.ajax.reload(null, false);
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const R_RET = {
+                options: '{{ route('return.options') }}',
+                store: '{{ route('return.store') }}',
+                data: '{{ route('return.data.asset', $asset->uuid) }}',
+                destroy: id => '{{ route('return.destroy', ':id') }}'.replace(':id', id),
+            };
+            const dtRet = $('#tbl-returns').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: R_RET.data,
+                    type: 'GET'
+                },
+                order: [
+                    [5, 'desc']
+                ], // created_at desc
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'source_code',
+                        name: 'return_history.source_code'
+                    },
+                    {
+                        data: 'source_type_label',
+                        name: 'return_history.source_type'
+                    },
+                    {
+                        data: 'source_detail',
+                        name: 'source_detail',
+                        orderable: false,
+                        searchable: true
+                    },
+                    {
+                        data: 'note',
+                        name: 'return_history.note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'return_history.pic_request_uid'
+                    },
+                    {
+                        data: 'created_at',
+                        name: 'return_history.created_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false,
+                        defaultContent: ''
+                    }
+                ]
+            });
+
+            function initReturnSelect() {
+                $('#ret-source').select2({
+                    dropdownParent: $('#modal-return'),
+                    placeholder: 'Search code / asset…',
+                    width: '100%',
+                    allowClear: true,
+                    ajax: {
+                        url: R_RET.options,
+                        dataType: 'json',
+                        delay: 150,
+                        data: params => ({
+                            q: params.term || '',
+                            asset_uuid: '{{ $asset->uuid }}'
+                        }),
+                        processResults: d => d
+                    }
+                }).on('select2:select', function(e) {
+                    const m = e.params.data || {};
+                    $('#ret-preview').show();
+                    $('#ret-asset').text(m.asset_label || '');
+                    $('#ret-type').text((m.source_type === 'transfer' ? (m.type || '').toUpperCase() :
+                        'DISPOSAL'));
+                    $('#ret-code').text(m.code || '');
+
+                    if (m.source_type === 'transfer') {
+                        $('#ret-ba-wrap').show();
+                        $('#ret-before').text(m.before_label || '');
+                        $('#ret-after').text(m.after_label || '');
+                    } else {
+                        $('#ret-ba-wrap').hide();
+                        $('#ret-before').text('');
+                        $('#ret-after').text('');
+                    }
+                }).on('select2:clear', function() {
+                    $('#ret-preview').hide();
+                    $('#ret-asset,#ret-type,#ret-code,#ret-before,#ret-after').text('');
+                });
+            }
+
+            $('#btnOpenReturn').on('click', function(e) {
+                e.preventDefault();
+
+                $('#formReturn')[0].reset();
+                if ($('#ret-source').data('select2')) {
+                    $('#ret-source').val(null).trigger('change');
+                } else {
+                    initReturnSelect();
+                }
+                $('#ret-preview').hide();
+                $('#modal-return').modal('show');
+            });
+            // window.openReturnModal = function() {
+            // };
+
+            // Submit
+            $('#formReturn').on('submit', function(e) {
+                e.preventDefault();
+                const id = $('#ret-source').val();
+                if (!id) {
+                    Swal.fire('Required', 'Please select an item.', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.post(R_RET.store, {
+                    source: id,
+                    note: $('textarea[name="note"]').val() || ''
+                }).done(() => {
+                    $('#modal-return').modal('hide');
+                    Swal.fire('Success', 'Return recorded.', 'success');
+                    if ($.fn.DataTable.isDataTable('#tbl-returns')) {
+                        $('#tbl-returns').DataTable().ajax.reload(null, false);
+                    }
+                    if ($.fn.DataTable.isDataTable('#tbl-transfers')) {
+                        $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                    }
+                }).fail(x => {
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error');
+                });
+            });
+            $('#tbl-returns').on('click', '.btn-ret-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Delete this return?',
+                    text: 'It will go to trash.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6'
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    $.ajax({
+                            url: R_RET.destroy(id),
+                            type: 'DELETE'
+                        })
+                        .done(() => {
+                            Swal.fire('Deleted', '', 'success');
+                            dtRet.ajax.reload(null, false);
                         })
                         .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                 });

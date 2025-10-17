@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\MasterDataController;
+use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\TrashController;
 
@@ -144,10 +145,9 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
         Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
         // JSON FOR EDIT
-        Route::get('/show/{uuid}', [TransferController::class, 'show'])
-            ->name('show');
+        Route::get('/show/{uuid}', [TransferController::class, 'show'])->name('show');
     });
-    
+
     // DISPOSAL ROUTE
     Route::prefix('disposal')->name('disposal.')->group(function () {
         // DATATABLE
@@ -160,14 +160,25 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/approve/{uuid}', [DisposalController::class, 'approve'])->name('approve');
         Route::post('/reject/{uuid}', [DisposalController::class, 'reject'])->name('reject');
         // JSON FOR EDIT
-        Route::get('/show/{uuid}', [DisposalController::class, 'show'])
-            ->name('show');
+        Route::get('/show/{uuid}', [DisposalController::class, 'show'])->name('show');
     });
+
+    // RETURN ROUTE
+    Route::prefix('return')->name('return.')->group(function () {
+        Route::get('/options', [ReturnController::class, 'options'])->name('options');
+        Route::post('/', [ReturnController::class, 'store'])->name('store');
+        
+        Route::get('/{asset}/data', [ReturnController::class, 'datatable_by_asset'])->name('data.asset');
+        Route::get('/data', [ReturnController::class, 'datatable_all'])->name('data');
+        Route::delete('/{uuid}', [ReturnController::class, 'destroy'])->name('destroy');
+    });
+
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
-        Route::get('transfer/', [TransferController::class, 'index'])->name('transfer.index');
-        Route::get('disposal/', [DisposalController::class, 'index'])->name('disposal.index');
+        Route::get('/transfer', [TransferController::class, 'index'])->name('transfer.index');
+        Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
+        Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
     });
 
     // TRASH ROUTE
