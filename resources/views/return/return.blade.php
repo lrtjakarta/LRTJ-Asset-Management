@@ -22,7 +22,7 @@
                     </h3>
                     <div class="card-toolbar">
                         <a href="#" id="btnOpenCreate" class="btn btn-sm btn-danger">
-                            <i class="ki-duotone ki-plus fs-2"></i>Create Return
+                            <i class="ki-duotone ki-plus fs-2"></i>Add New
                         </a>
                     </div>
                 </div>
