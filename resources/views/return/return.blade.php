@@ -4,9 +4,9 @@
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
         <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
             <div class="page-title d-flex flex-column">
-                <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Returns</h1>
+                <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Return</h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                    <li class="breadcrumb-item text-muted">Returns</li>
+                    <li class="breadcrumb-item text-muted">Return</li>
                 </ul>
             </div>
         </div>
