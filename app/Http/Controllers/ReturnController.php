@@ -18,60 +18,6 @@ class ReturnController extends Controller
     {
         return view('return.return');
     }
-    public function datatable_all(Request $request)
-    {
-        $q = ReturnHistory::query()
-            ->leftJoin('assets_transfers as t', function ($j) {
-                $j->on('t.uuid', '=', 'return_history.source_id')
-                    ->where('return_history.source_type', '=', 'transfer');
-            })
-            ->leftJoin('assets_disposals as d', function ($j) {
-                $j->on('d.uuid', '=', 'return_history.source_id')
-                    ->where('return_history.source_type', '=', 'disposal');
-            })
-            ->join('assets as a', 'a.uuid', '=', 'return_history.asset_uuid')
-            ->selectRaw("
-                return_history.uuid,
-                return_history.source_code,
-                return_history.source_type,
-                return_history.asset_uuid,
-                a.asset_code,
-                a.description,
-                return_history.note,
-                return_history.pic_request_uid,
-                return_history.created_at,
-
-                -- For display
-                t.type as tf_type,
-                COALESCE(t.before->>'value','') as tf_before,
-                COALESCE(t.after->>'value','')  as tf_after
-            ")
-            ->orderByDesc('return_history.created_at');
-
-        return datatables()->of($q)
-            ->addColumn('asset_label', function ($r) {
-                return trim(($r->asset_code ?? '') . ' - ' . ($r->description ?? ''));
-            })
-            ->addColumn('source_type_label', function ($r) {
-                return $r->source_type === 'transfer'
-                    ? 'TRANSFER'
-                    : 'DISPOSAL';
-            })
-            ->addColumn('source_detail', function ($r) {
-                if ($r->source_type === 'transfer') {
-                    $type = strtoupper((string) $r->tf_type);
-                    return "{$type} • {$r->tf_before} → {$r->tf_after}";
-                }
-                return 'DISPOSAL';
-            })
-            ->addColumn('actions', function ($r) {
-                return '<div class="btn-group btn-group-sm">
-                    <button class="btn btn-light-danger btn-ret-delete" data-id="' . e($r->uuid) . '">Delete</button>
-                </div>';
-            })
-            ->rawColumns(['actions'])
-            ->toJson();
-    }
     public function options(Request $request)
     {
         $q         = trim((string) $request->get('q', ''));
@@ -231,10 +177,9 @@ class ReturnController extends Controller
     {
         $q = ReturnHistory::query()
             ->where('asset_uuid', $assetUuid)
-            ->with(['source']) // morph to Transfer/Disposal if you mapped it
+            ->with(['source'])
             ->orderByDesc('created_at');
 
-        // helper to format label from code like in transfer table
         $resolve = function (?string $type, ?string $code): string {
             if (!$code) return '(empty)';
             switch ($type) {
@@ -260,7 +205,6 @@ class ReturnController extends Controller
         return DataTables::of($q)
             ->addColumn('source_type_label', fn(ReturnHistory $r) => strtoupper($r->source_type))
             ->addColumn('source_detail', function (ReturnHistory $r) use ($resolve) {
-                // For transfer returns: show TYPE and BEFORE → AFTER
                 if ($r->source_type === 'transfer' && $r->source) {
                     $t = $r->source;
                     $type = strtoupper($t->type);
@@ -282,7 +226,67 @@ class ReturnController extends Controller
             ->rawColumns(['source_detail', 'actions'])
             ->toJson();
     }
-    
+
+    public function datatable_all(Request $request)
+    {
+        $q = ReturnHistory::query()
+            ->from('return_history')
+            ->with(['source'])
+            ->leftJoin('assets as a', 'a.uuid', '=', 'return_history.asset_uuid')
+            ->orderByDesc('created_at')
+            ->select([
+                'return_history.*',
+                'a.asset_code',
+                'a.description as asset_desc',
+            ]);
+
+        $resolve = function (?string $type, ?string $code): string {
+            if (!$code) return '(empty)';
+            switch ($type) {
+                case 'owner':
+                case 'user':
+                case 'maintenance': {
+                        $row = MasterUserCode::select('kode', 'department')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->department) : $code;
+                    }
+                case 'status': {
+                        $row = MasterStatus::select('kode', 'name')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->name) : $code;
+                    }
+                case 'location': {
+                        $row = MasterLocation::select('kode', 'name')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->name) : $code;
+                    }
+                default:
+                    return $code;
+            }
+        };
+
+        return DataTables::of($q)
+            ->addColumn('source_type_label', fn(ReturnHistory $r) => strtoupper($r->source_type))
+            ->addColumn('source_detail', function (ReturnHistory $r) use ($resolve) {
+                if ($r->source_type === 'transfer' && $r->source) {
+                    $t = $r->source;
+                    $type = strtoupper($t->type);
+                    $before = $resolve($t->type, data_get($t->before, 'value'));
+                    $after  = $resolve($t->type, data_get($t->after,  'value'));
+                    return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";
+                }
+                // For disposal returns: simple label
+                if ($r->source_type === 'disposal') {
+                    return 'DISPOSAL';
+                }
+                return '';
+            })
+            ->addColumn('actions', function (ReturnHistory $r) {
+                return '<div class="btn-group btn-group-sm">
+                        <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
+                    </div>';
+            })
+            ->rawColumns(['source_detail', 'actions'])
+            ->toJson();
+    }
+
     /** Soft delete */
     public function destroy(string $uuid)
     {
@@ -291,5 +295,4 @@ class ReturnController extends Controller
 
         return response()->json(['ok' => true]);
     }
-
 }

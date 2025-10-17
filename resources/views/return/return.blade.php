@@ -31,14 +31,14 @@
                         id="tbl-returns-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-180px">Code</th>
+                                <th class="min-w-200px">Code</th>
                                 <th class="min-w-200px">Asset</th>
-                                <th class="min-w-140px">Type</th>
-                                <th class="min-w-280px">Details</th>
-                                <th class="min-w-200px">Note</th>
-                                <th class="min-w-140px">Requester</th>
-                                <th class="min-w-160px">Created</th>
-                                <th class="min-w-140px">Actions</th>
+                                <th class="min-w-200px">Type</th>
+                                <th class="min-w-300px">Details</th>
+                                <th class="min-w-300px">Note</th>
+                                <th class="min-w-200px">Requester</th>
+                                <th class="min-w-200px">Created</th>
+                                <th class="min-w-150px">Actions</th>
                             </tr>
                         </thead>
                     </table>
