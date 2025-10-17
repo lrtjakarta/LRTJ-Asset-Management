@@ -142,6 +142,7 @@ class ReturnController extends Controller
 
             $sourceCode = $src->transfer_code ?? null;
             $assetUuid  = $src->asset_uuid;
+            DB::table('assets_transfers')->where('uuid', $sourceId)->update(['kode_status'=> 'RET']);
         } else {
             // disposal
             $src = DB::table('assets_disposals')->where('uuid', $sourceId)
@@ -156,6 +157,7 @@ class ReturnController extends Controller
 
             $sourceCode = $src->disposal_code ?? null;
             $assetUuid  = $src->asset_uuid;
+            DB::table('assets_disposals')->where('uuid', $sourceId)->update(['kode_status'=> 'RET']);
         }
 
         $id = (string) Str::uuid();
