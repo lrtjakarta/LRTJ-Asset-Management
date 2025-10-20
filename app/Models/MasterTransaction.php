@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\AssetReferenceGuard;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 
@@ -22,6 +23,12 @@ class MasterTransaction extends Model
         'status' => 'boolean',
     ];
 
+    
+    public function assetClass(): HasMany
+    {
+        return $this->hasMany(MasterAssetClass::class, 'kode_transaction', 'kode');
+    }
+
     protected static function booted(): void
     {
         static::deleting(function (self $model) {
@@ -29,6 +36,12 @@ class MasterTransaction extends Model
             if (AssetReferenceGuard::isUsed('master_transaction', $model->kode)) {
                 throw ValidationException::withMessages([
                     'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",
+                ]);
+            }
+            if ($model->assetClass()->exists()) {
+                $action = $model->isForceDeleting() ? 'delete' : 'archive';
+                throw ValidationException::withMessages([
+                    'delete' => "Cannot {$action} category '{$model->name}' because Category entries still exist.",
                 ]);
             }
 

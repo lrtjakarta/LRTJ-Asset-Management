@@ -37,6 +37,10 @@
                         name: 'name'
                     },
                     {
+                        data: 'transaction_label',
+                        name: 'transaction_label'
+                    },
+                    {
                         data: 'status_badge',
                         name: 'status',
                         orderable: false,
@@ -73,10 +77,43 @@
                     },
                 ]
             });
+            if ($.fn.select2) {
+                $('#kodeTransaction').select2({
+                    dropdownParent: $('#kt_modal_add'),
+                    placeholder: 'Choose Company',
+                    allowClear: true,
+                    ajax: {
+                        url: "{{ route('master.transaction.options') }}",
+                        data: params => ({
+                            q: params.term || ''
+                        }),
+                        processResults: data => data,
+                        delay: 150
+                    }
+                });
+            } else {
+                // fallback: load once
+                fetch("{{ route('master.transaction.options') }}")
+                    .then(r => r.json())
+                    .then(data => {
+                        const sel = document.getElementById('kodeTransaction');
+                        data.results.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.id;
+                            opt.textContent = o.text;
+                            sel.appendChild(opt);
+                        });
+                    });
+            }
+            $(document).on('click', '#btn-add', function() {
+                const $f = $('#formMasterAssetClass');
+                $('#formMasterAssetClass')[0].reset();
+                $f.find('[name="uuid"]').val(null);
+                $('#kodeTransaction').val(null).trigger('change');
+            });
 
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
-                $('#formMasterAssetClass')[0].reset();
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.asset_class.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -91,6 +128,12 @@
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
                         $f.find('[name="status"]').val(d.status).change?.();
+                        if ($.fn.select2) {
+                            const opt = new Option(d.kode_transaction, d.kode_transaction, true, true);
+                            $('#kodeTransaction').append(opt).trigger('change');
+                        } else {
+                            $('#kodeTransaction').val(d.kode_transaction);
+                        }
                         $('#kt_modal_add').modal('show');
                     })
                     .fail(function(xhr) {
@@ -237,7 +280,7 @@
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
-                                        class="btn btn-sm btn-danger">
+                                        class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
                                 </div>
                             </div>
@@ -252,6 +295,7 @@
                                             <th>UUID</th>
                                             <th>Kode</th>
                                             <th>Name</th>
+                                            <th>Company</th>
                                             <th>Status</th>
                                             <th>Updated</th>
                                             <th class="text-end">Actions</th>
@@ -298,6 +342,10 @@
                         <div class="mb-5">
                             <label class="form-label required">Name</label>
                             <input type="text" name="name" class="form-control" required maxlength="191">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label required">Company</label>
+                            <select name="kode_transaction" id="kodeTransaction" class="form-select" required></select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label">Status</label>

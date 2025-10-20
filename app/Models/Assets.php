@@ -28,13 +28,16 @@ class Assets extends Model
 
         static::deleting(function (self $asset) {
             $rels = [
-                'identifiers',   // AssetsIdentifier
-                'classification', // AssetsClassification
-                'assignment',    // AssetsAssignment
-                'value',         // AssetsValue
-                'documents',     // AssetsDocument
-                'qrs',           // AssetsQr
-                'rfids',         // AssetsRfid
+                'identifiers',
+                'classification',
+                'assignment',
+                'value',
+                'documents',
+                'qrs',
+                'rfids',
+                'transfer',
+                'disposal',
+                'return_history'
             ];
 
             if ($asset->isForceDeleting()) {
@@ -62,7 +65,18 @@ class Assets extends Model
 
         // Restore the children too
         static::restored(function (self $asset) {
-            foreach (['identifiers', 'classification', 'assignment', 'value', 'documents', 'qrs', 'rfids'] as $rel) {
+            foreach ([
+                'identifiers',
+                'classification',
+                'assignment',
+                'value',
+                'documents',
+                'qrs',
+                'rfids',
+                'transfer',
+                'disposal',
+                'return_history'
+            ] as $rel) {
                 $asset->{$rel}()->withTrashed()->restore();
             }
         });
@@ -122,6 +136,18 @@ class Assets extends Model
     public function rfids()
     {
         return $this->hasOne(AssetsRfid::class, 'asset_uuid');
+    }
+    public function transfer()
+    {
+        return $this->hasMany(Transfer::class, 'asset_uuid');
+    }
+    public function disposal()
+    {
+        return $this->hasMany(Disposal::class, 'asset_uuid');
+    }
+    public function return_history()
+    {
+        return $this->hasMany(ReturnHistory::class, 'asset_uuid');
     }
 
     /* --------- Masters (by kode on assets table) --------- */

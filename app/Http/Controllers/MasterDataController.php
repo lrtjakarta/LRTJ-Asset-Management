@@ -292,9 +292,16 @@ class MasterDataController
     }
     public function master_asset_class_data(Request $request)
     {
-        $q = MasterAssetClass::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
+        $q = MasterAssetClass::query()->select(['uuid', 'kode', 'kode_transaction', 'name', 'status', 'updated_at']);
 
         return DataTables::of($q)
+            ->addColumn('transaction_label', function ($r) {
+                static $cache = [];
+                return $cache[$r->kode_transaction]
+                    ??= optional(MasterTransaction::where('kode', $r->kode_transaction)->first())
+                    ?->kode . ' - ' . optional(MasterTransaction::where('kode', $r->kode_transaction)->first())->name
+                    ?? $r->kode_transaction;
+            })
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
@@ -793,6 +800,7 @@ class MasterDataController
         $data = $request->validate([
             'kode'   => ['required', 'string', 'max:50', $kodeRule],
             'name'   => ['required', 'string', 'max:191', $nameRule],
+            'kode_transaction' => ['required', 'string', 'max:50', 'exists:master_transaction,kode'],
             'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
         ]);
 
@@ -800,6 +808,7 @@ class MasterDataController
             'kode'   => $data['kode'],
             'name'   => $data['name'],
             'status' => (bool) $data['status'],
+            'kode_transaction' => $data['kode_transaction'],
         ];
 
         if ($uuid) {
@@ -1016,6 +1025,7 @@ class MasterDataController
                 'uuid'   => $it->uuid,
                 'kode'   => $it->kode,
                 'name'   => $it->name,
+                'kode_transaction' => $it->kode_transaction,
                 'status' => $it->status ? 1 : 0,
             ],
         ]);

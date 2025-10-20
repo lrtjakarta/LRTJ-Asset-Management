@@ -17,13 +17,14 @@ class MasterAssetClass extends Model
     public $incrementing = false;
     protected $keyType = 'string';
 
-    protected $fillable = ['kode', 'name', 'status'];
+    protected $fillable = ['kode', 'name', 'status', 'kode_transaction'];
 
     protected $casts = [
         'status' => 'boolean',
     ];
 
 
+    
     protected static function booted(): void
     {
         static::deleting(function (self $model) {
@@ -39,5 +40,10 @@ class MasterAssetClass extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+    
+    public function transaction()
+    {
+        return $this->belongsTo(MasterTransaction::class, 'kode_transaction', 'kode');
     }
 }

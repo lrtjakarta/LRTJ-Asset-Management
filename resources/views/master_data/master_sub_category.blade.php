@@ -234,7 +234,7 @@
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
-                                        class="btn btn-sm btn-danger">
+                                        class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
                                 </div>
                             </div>

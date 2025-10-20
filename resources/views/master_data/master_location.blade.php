@@ -74,6 +74,11 @@
                 ]
             });
 
+            $(document).on('click', '#btn-add', function() {
+                const $f = $('#formMasterLocation');
+                $('#formMasterLocation')[0].reset();
+                $f.find('[name="uuid"]').val(null);
+            });
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                         $('#formMasterLocation')[0].reset(); 
@@ -230,7 +235,7 @@
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
-                                        class="btn btn-sm btn-danger">
+                                        class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
                                 </div>
                             </div>

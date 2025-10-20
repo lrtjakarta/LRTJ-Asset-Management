@@ -61,14 +61,14 @@ class AssetNumberingService
                 ->first();
 
             // first child is "00" iff no active asset uses this parent
-            $exists = DB::table('assets')
-                ->where('asset_number_parent', $parentCode)
-                ->whereNull('deleted_at')
-                ->exists();
+            // $exists = DB::table('assets')
+            //     ->where('asset_number_parent', $parentCode)
+            //     ->whereNull('deleted_at')
+            //     ->exists();
 
-            if (! $exists) {
-                return '00';
-            }
+            // if (! $exists) {
+            //     return '00';
+            // }
 
             // otherwise bump
             $seq = (int) ($row->last_child_seq ?? 0) + 1;
