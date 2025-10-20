@@ -128,52 +128,115 @@ class ReturnController extends Controller
         $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
         if ($uid === '') abort(401, 'No session UID.');
 
-        if ($sourceType === 'transfer') {
-            $src = DB::table('assets_transfers')->where('uuid', $sourceId)
-                ->whereNull('deleted_at')->where('kode_status', 'ACC')->first();
-            abort_if(!$src, 404, 'Source not found or not accepted.');
-            $chk = DB::table('assets_transfers')
-                ->whereNull('deleted_at')->where('kode_status', 'ACC')
-                ->where('asset_uuid', $src->asset_uuid)
-                ->where('type', $src->type)
-                ->orderByDesc('created_at')->orderByDesc('uuid')
-                ->first();
-            abort_if(!$chk || $chk->uuid !== $sourceId, 422, 'Source is no longer the latest accepted transfer.');
+        DB::transaction(function () use ($sourceType, $sourceId, $data, $uid) {
+            if ($sourceType === 'transfer') {
+                $src = DB::table('assets_transfers as t')
+                    ->selectRaw("t.*, t.before->>'value' as before_value")
+                    ->where('t.uuid', $sourceId)
+                    ->whereNull('t.deleted_at')
+                    ->where('t.kode_status', 'ACC')
+                    ->first();
 
-            $sourceCode = $src->transfer_code ?? null;
-            $assetUuid  = $src->asset_uuid;
-            DB::table('assets_transfers')->where('uuid', $sourceId)->update(['kode_status'=> 'RET']);
-        } else {
-            // disposal
-            $src = DB::table('assets_disposals')->where('uuid', $sourceId)
-                ->whereNull('deleted_at')->where('kode_status', 'ACC')->first();
-            abort_if(!$src, 404, 'Source not found or not accepted.');
-            $chk = DB::table('assets_disposals')
-                ->whereNull('deleted_at')->where('kode_status', 'ACC')
-                ->where('asset_uuid', $src->asset_uuid)
-                ->orderByDesc('created_at')->orderByDesc('uuid')
-                ->first();
-            abort_if(!$chk || $chk->uuid !== $sourceId, 422, 'Source is no longer the latest accepted disposal.');
+                abort_if(!$src, 404, 'Source not found or not accepted.');
 
-            $sourceCode = $src->disposal_code ?? null;
-            $assetUuid  = $src->asset_uuid;
-            DB::table('assets_disposals')->where('uuid', $sourceId)->update(['kode_status'=> 'RET']);
-        }
+                $chk = DB::table('assets_transfers')
+                    ->whereNull('deleted_at')->where('kode_status', 'ACC')
+                    ->where('asset_uuid', $src->asset_uuid)
+                    ->where('type', $src->type)
+                    ->orderByDesc('created_at')->orderByDesc('uuid')
+                    ->first();
+                abort_if(!$chk || $chk->uuid !== $src->uuid, 422, 'Source is no longer the latest accepted transfer.');
 
-        $id = (string) Str::uuid();
-        DB::table('return_history')->insert([
-            'uuid'            => $id,
-            'asset_uuid'      => $assetUuid,
-            'source_type'     => $sourceType,
-            'source_id'       => $sourceId,
-            'source_code'     => $sourceCode,
-            'note'            => $data['note'] ?? null,
-            'pic_request_uid' => $uid,
-            'created_at'      => now(),
-            'updated_at'      => now(),
-        ]);
+                $assetUuid  = $src->asset_uuid;
+                $sourceCode = $src->transfer_code ?? null;
+                $before     = $src->before_value;
 
-        return response()->json(['ok' => true, 'uuid' => $id, 'code' => $sourceCode]);
+                $asset = Assets::with('assignment')->findOrFail($assetUuid);
+
+                switch ($src->type) {
+                    case 'owner':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_owner' => $before]
+                        );
+                        break;
+                    case 'user':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_user' => $before]
+                        );
+                        break;
+                    case 'maintenance':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_maintenance' => $before]
+                        );
+                        break;
+                    case 'status':
+                        DB::table('assets')->where('uuid', $assetUuid)->update([
+                            'kode_status' => $before,
+                            'updated_at'  => now(),
+                        ]);
+                        break;
+                    case 'location':
+                        DB::table('assets')->where('uuid', $assetUuid)->update([
+                            'kode_location' => $before,
+                            'updated_at'    => now(),
+                        ]);
+                        break;
+                    default:
+                        abort(422, 'Unsupported transfer type.');
+                }
+
+                DB::table('assets_transfers')->where('uuid', $sourceId)->update([
+                    'kode_status' => 'RET',
+                    'updated_at'  => now(),
+                ]);
+            } else {
+                // ---- disposal ----
+                $src = DB::table('assets_disposals')
+                    ->where('uuid', $sourceId)
+                    ->whereNull('deleted_at')
+                    ->where('kode_status', 'ACC')
+                    ->first();
+
+                abort_if(!$src, 404, 'Source not found or not accepted.');
+
+                $chk = DB::table('assets_disposals')
+                    ->whereNull('deleted_at')->where('kode_status', 'ACC')
+                    ->where('asset_uuid', $src->asset_uuid)
+                    ->orderByDesc('created_at')->orderByDesc('uuid')
+                    ->first();
+                abort_if(!$chk || $chk->uuid !== $src->uuid, 422, 'Source is no longer the latest accepted disposal.');
+
+                $assetUuid  = $src->asset_uuid;
+                $sourceCode = $src->disposal_code ?? null;
+
+                DB::table('assets')->where('uuid', $assetUuid)->update([
+                    'kode_status' => $src->before_status,
+                    'updated_at'  => now(),
+                ]);
+
+                DB::table('assets_disposals')->where('uuid', $sourceId)->update([
+                    'kode_status' => 'RET',
+                    'updated_at'  => now(),
+                ]);
+            }
+
+            DB::table('return_history')->insert([
+                'uuid'            => (string) Str::uuid(),
+                'asset_uuid'      => $assetUuid,
+                'source_type'     => $sourceType,
+                'source_id'       => $sourceId,
+                'source_code'     => $sourceCode,
+                'note'            => $data['note'] ?? null,
+                'pic_request_uid' => $uid,
+                'created_at'      => now(),
+                'updated_at'      => now(),
+            ]);
+        });
+
+        return response()->json(['ok' => true]);
     }
     public function datatable_by_asset(Request $request, string $assetUuid)
     {

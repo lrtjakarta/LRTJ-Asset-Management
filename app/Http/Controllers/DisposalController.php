@@ -51,7 +51,7 @@ class DisposalController extends Controller
 
         $uuid = (string) Str::uuid();
         $path = null;
-        
+
         [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $code, null);
 
         $row = Disposal::create([
@@ -66,8 +66,13 @@ class DisposalController extends Controller
             'file_name'       => $orig,
             'file_mime'       => $mime,
             'file_size'       => $size,
+            'before_status'   => $asset->kode_status,
         ]);
-
+        
+        DB::table('assets')->where('uuid', $asset->uuid)->update([
+            'kode_status' => 'DIS',
+            'updated_at'  => now(),
+        ]);
         return response()->json(['ok' => true, 'id' => $row->uuid, 'code' => $row->disposal_code]);
     }
 
