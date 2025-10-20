@@ -1342,7 +1342,12 @@ class MasterDataController
     public function select_master_asset_class(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
+        $transaction = trim((string) $request->get('kode_transaction'));
         $q = MasterAssetClass::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+
+        if($transaction != ''){
+            $q->where('kode_transaction', $transaction);
+        }
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {

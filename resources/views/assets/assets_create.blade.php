@@ -102,28 +102,30 @@
                                                             class="form-select" required></select>
                                                     </div>
 
-                                                    <div class="col-md-3" >
+                                                    <div class="col-md-3">
                                                         <label class="form-label required">Asset Class</label>
                                                         <select name="kode_asset_class" id="sel-asset-class"
+                                                            data-placeholder="Select Company First"
                                                             class="form-select" required></select>
                                                     </div>
 
                                                     <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Asset Type</label>
                                                         <select name="kode_asset_type" id="sel-asset-type"
-                                                            class="form-select" ></select>
+                                                            class="form-select"></select>
                                                     </div>
 
                                                     <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Category</label>
                                                         <select name="kode_category" id="sel-category" class="form-select"
-                                                            data-placeholder="Select Asset Type First" ></select>
+                                                            data-placeholder="Select Asset Type First"></select>
                                                     </div>
 
                                                     <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Category 2</label>
                                                         <select name="kode_category_2" id="sel-category-2"
-                                                            class="form-select" data-placeholder="Select Category First"></select>
+                                                            class="form-select"
+                                                            data-placeholder="Select Category First"></select>
                                                     </div>
 
                                                     <div class="col-md-3" style="display:none;">
@@ -149,8 +151,8 @@
 
                                         <div class="col-md-6">
                                             <label class="form-label required">Description</label>
-                                            <input name="description" value="{{ old('description') }}" class="form-control"
-                                                required>
+                                            <input name="description" value="{{ old('description') }}"
+                                                class="form-control" required>
                                         </div>
 
                                         <div class="col-md-3">
@@ -388,12 +390,22 @@
             initSelect2('#sel-status', R.status, {
                 type: 'Asset'
             });
-            initSelect2('#sel-asset-class', R.aclass);
             initSelect2('#sel-owner', R.usercode);
             initSelect2('#sel-user', R.usercode);
             initSelect2('#sel-maintenance', R.usercode);
             initSelect2('#sel-sub-category', R.subcat);
             initSelect2('#sel-asset-type', R.type);
+            
+
+            initSelect2('#sel-asset-class', R.aclass, () => {
+                const p = {
+                    kode_transaction: $('#sel-transaction').val() || '',
+                    q: ''
+                };
+                console.log('cat->extra', p);
+                return p;
+            });
+
             initSelect2('#sel-category', R.cat, () => {
                 const p = {
                     kode_asset_type: $('#sel-asset-type').val() || '',
@@ -418,6 +430,11 @@
             });
             $('#sel-category-2').on('select2:opening', function(e) {
                 if (!$('#sel-category').val()) {
+                    e.preventDefault();
+                }
+            });
+            $('#sel-asset-class').on('select2:opening', function(e) {
+                if (!$('#sel-transaction').val()) {
                     e.preventDefault();
                 }
             });
