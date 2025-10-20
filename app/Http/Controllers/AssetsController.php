@@ -496,6 +496,7 @@ class AssetsController extends Controller
                 'kode_category'          => $c?->kode_category,
                 'kode_category_2'        => $c?->kode_category_2,
                 'kode_sub_category'      => $c?->kode_sub_category,
+                'kode_asset_class'       => $asset->kode_asset_class,
             ]
         ]);
     }

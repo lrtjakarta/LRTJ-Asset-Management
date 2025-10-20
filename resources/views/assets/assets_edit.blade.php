@@ -72,13 +72,13 @@
                                             <div class="d-flex gap-6">
                                                 <label class="form-check form-check-custom form-check-solid">
                                                     <input class="form-check-input" type="radio" name="mode"
-                                                        value="new" {{ $defaultMode === 'new' ? 'checked' : '' }}>
+                                                        value="new" {{ $defaultMode === 'new' ? 'checked' : 'disabled' }}>
                                                     <span class="form-check-label">Create NEW parent</span>
                                                 </label>
                                                 <label class="form-check form-check-custom form-check-solid">
-                                                    <input class="form-check-input" type="radio" name="mode"
+                                                    <input class="form-check-input" type="radio" name="mode" 
                                                         value="existing"
-                                                        {{ $defaultMode === 'existing' ? 'checked' : '' }}>
+                                                        {{ $defaultMode === 'existing' ? 'checked' : 'disabled' }}>
                                                     <span class="form-check-label">Use EXISTING parent</span>
                                                 </label>
                                             </div>
@@ -502,7 +502,6 @@
                 const mode = this.value;
                 applyModeUI(mode);
                 if (mode === 'existing') {
-                    // clear classification so validation won’t trip
                     $('#sel-transaction,#sel-asset-type,#sel-category,#sel-category-2,#sel-sub-category,#sel-asset-class')
                         .val(null).trigger('change');
                 } else {
@@ -519,6 +518,7 @@
                     setSelectValue('#sel-category', cl.kode_category);
                     setSelectValue('#sel-category-2', cl.kode_category_2);
                     setSelectValue('#sel-sub-category', cl.kode_sub_category);
+                    setSelectValue('#sel-asset-class', cl.kode_asset_class);
                 });
             });
             preloadValue('#sel-sub-category', CURRENT['subcat'], R.subcat);

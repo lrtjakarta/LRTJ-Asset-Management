@@ -454,6 +454,8 @@
                     // Optional: clear classification inputs so backend won’t validate them
                     $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category, #sel-asset-class')
                         .val(null).trigger('change');
+                    // $('#sel-transaction, #sel-asset-class')
+                    //     .prop('required', false).trigger('change');
                 } else {
                     $('#wrap-parent-picker').hide();
                     $('#wrap-classification').show();
@@ -471,6 +473,7 @@
                     setSelectValue('#sel-category', cl.kode_category);
                     setSelectValue('#sel-category-2', cl.kode_category_2);
                     setSelectValue('#sel-sub-category', cl.kode_sub_category);
+                    setSelectValue('#sel-asset-class', cl.kode_asset_class);
                 });
             });
 

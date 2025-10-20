@@ -16,7 +16,7 @@ class AssetUpdateRequest extends FormRequest
             'mode' => ['required', 'in:new,existing'],
 
             // existing-mode: require a valid parent
-            'parent_uuid' => ['required_if:mode,existing', 'uuid', 'exists:assets,uuid,deleted_at,NULL'],
+            // 'parent_uuid' => ['required_if:mode,existing', 'uuid', 'exists:assets,uuid,deleted_at,NULL'],
 
             // identity
             'description'             => ['required', 'string', 'max:500'],
