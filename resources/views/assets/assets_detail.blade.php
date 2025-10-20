@@ -304,7 +304,7 @@
                         </div>
                     </div>
 
-                    
+
 
                     {{-- QR --}}
                     <div class="card">
@@ -933,9 +933,16 @@
                             allowOutsideClick: false
                         });
                         $.post(ROUTE.approve(id)).done(() => {
-                            Swal.fire('Approved', 'Transfer applied to asset.', 'success');
-                            // we changed asset data; safest is full refresh:
-                            location.reload();
+                            Swal.fire({
+                                title: 'Approved',
+                                text: 'Transfer applied to asset.',
+                                icon: 'success',
+                                showConfirmButton: false,
+                                timer: 500,
+                                timerProgressBar: true,
+                            }).then(() => {
+                                location.reload();
+                            });
                         }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
@@ -1221,8 +1228,16 @@
                     });
                     $.post(DS.approve.replace(':id', id), {})
                         .done(() => {
-                            Swal.fire('Approved', 'Disposal approved.', 'success');
-                            location.reload();
+                            Swal.fire({
+                                title: 'Approved',
+                                text: 'Disposal approved.',
+                                icon: 'success',
+                                showConfirmButton: false,
+                                timer: 500,
+                                timerProgressBar: true,
+                            }).then(() => {
+                                location.reload();
+                            });
                         })
                         .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                 });
@@ -1440,7 +1455,7 @@
                     if ($.fn.DataTable.isDataTable('#tbl-transfers')) {
                         $('#tbl-transfers').DataTable().ajax.reload(null, false);
                     }
-                    $("#lbl-asset-status").html();
+                    location.reload();
                 }).fail(x => {
                     Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error');
                 });
