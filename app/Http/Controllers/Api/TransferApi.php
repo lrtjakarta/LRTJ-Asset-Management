@@ -74,7 +74,11 @@ class TransferApi extends Controller
                         ->orWhere('a.kode_location',      'ILIKE', $like)
                         ->orWhere('a.kode_asset_class',   'ILIKE', $like)
                         ->orWhere('a.kode_status',        'ILIKE', $like)
-                        ->orWhere('a.kode_sumber',        'ILIKE', $like);
+                        ->orWhere('a.kode_sumber',        'ILIKE', $like)
+                        ->orWhere('mac.name',        'ILIKE', $like)
+                        ->orWhere('ms.name',        'ILIKE', $like)
+                        ->orWhere('msrc.name',        'ILIKE', $like)
+                        ->orWhere('ml.name',        'ILIKE', $like);
                 });
             });
 

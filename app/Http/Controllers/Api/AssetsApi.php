@@ -68,12 +68,23 @@ class AssetsApi extends Controller
                 $qb->where(function ($w) use ($like) {
                     $w->where('a.asset_code', 'ILIKE', $like)
                         ->orWhere('a.description', 'ILIKE', $like)
+                        ->orWhere('mac.name', 'ILIKE', $like)
+                        ->orWhere('ms.name','ILIKE', $like)
+                        ->orWhere('msrc.name','ILIKE', $like)
+                        ->orWhere('ml.name', 'ILIKE', $like)
+                        ->orWhere('mu.name', 'ILIKE', $like)
+                        ->orWhere('ou.name', 'ILIKE', $like)
+                        ->orWhere('uu.name', 'ILIKE', $like)
+                        ->orWhere('muw.name', 'ILIKE', $like)
                         ->orWhere('i.asset_number_internal', 'ILIKE', $like)
                         ->orWhere('i.asset_number_maximo', 'ILIKE', $like)
                         ->orWhere('i.asset_number_dynamic_365', 'ILIKE', $like)
                         ->orWhere('a.kode_location', 'ILIKE', $like)
                         ->orWhere('a.kode_asset_class', 'ILIKE', $like)
                         ->orWhere('a.kode_status', 'ILIKE', $like)
+                        ->orWhere('d.no_po_perjanjian_spk', 'ILIKE', $like)
+                        ->orWhere('d.nota_referensi', 'ILIKE', $like)
+                        ->orWhere('d.no_document', 'ILIKE', $like)
                         ->orWhere('g.asset_owner', 'ILIKE', $like)
                         ->orWhere('g.asset_user', 'ILIKE', $like)
                         ->orWhere('g.asset_maintenance', 'ILIKE', $like);
@@ -114,6 +125,7 @@ class AssetsApi extends Controller
                 'i.asset_number_maximo',
                 'i.asset_number_dynamic_365',
                 'i.asset_number_internal',
+                'i.alias',
 
                 'g.asset_owner',
                 'g.asset_user',
