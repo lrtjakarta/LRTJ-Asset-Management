@@ -162,14 +162,14 @@
                         return `<a href="${url}" class="text-primary fw-semibold">${data ?? ''}</a>`;
                     }
                 },
-                {
-                    data: 'kode_asset_class_label',
-                    name: 'a.kode_asset_class'
-                },
                 // {
                 //     data: 'kode_group_category',
                 //     name: 'a.kode_group_category'
                 // },
+                {
+                    data: 'kode_asset_class_label',
+                    name: 'a.kode_asset_class'
+                },
                 {
                     data: 'asset_number_parent',
                     name: 'a.asset_number_parent'
@@ -193,6 +193,10 @@
                 {
                     data: 'asset_number_internal',
                     name: 'i.asset_number_internal'
+                },
+                {
+                    data: 'alias',
+                    name: 'i.alias'
                 },
                 {
                     data: 'asset_owner_label',
@@ -394,6 +398,7 @@
                                             <th class="min-w-150px">Asset Number Maximo</th>
                                             <th class="min-w-150px">Asset Number D365</th>
                                             <th class="min-w-150px">Asset Number Internal</th>
+                                            <th class="min-w-200px">Alias</th>
                                             <th class="min-w-150px">Asset Owner</th>
                                             <th class="min-w-150px">Asset User</th>
                                             <th class="min-w-150px">Asset Maintenance</th>
@@ -416,6 +421,7 @@
                                     </thead>
                                     <tbody>
                                         <tr>
+                                            <td></td>
                                             {{-- <td></td> --}}
                                             <td></td>
                                             <td></td>

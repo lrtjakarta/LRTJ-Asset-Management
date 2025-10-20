@@ -94,13 +94,13 @@
                                         </div>
                                         <div class="col-md-12" id="wrap-classification">
                                             <div class="row g-5">
-                                                <div class="col-md-3">
-                                                    <label class="form-label required">Asset Transaction</label>
+                                                <div class="col-md-6">
+                                                    <label class="form-label required">Asset Company</label>
                                                     <select name="kode_asset_transaction" id="sel-transaction"
                                                         class="form-select" disabled></select>
                                                 </div>
 
-                                                <div class="col-md-3">
+                                                <div class="col-md-6">
                                                     <label class="form-label required">Asset Class</label>
                                                     <select name="kode_asset_class" id="sel-asset-class" class="form-select"
                                                         disabled></select>
@@ -147,20 +147,26 @@
                                                 value="{{ old('description', $asset->description) }}"
                                                 class="form-control" required>
                                         </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label">Alias</label>
+                                            <input name="alias"
+                                                value="{{ old('alias', $asset->alias) }}"
+                                                class="form-control">
+                                        </div>
 
-                                        <div class="col-md-3">
+                                        <div class="col-md-4">
                                             <label class="form-label required">Location</label>
                                             <select name="kode_location" id="sel-location" class="form-select"
                                                 required></select>
                                         </div>
 
-                                        <div class="col-md-3">
+                                        <div class="col-md-4">
                                             <label class="form-label required">Sumber</label>
                                             <select name="kode_sumber" id="sel-sumber" class="form-select"
                                                 required></select>
                                         </div>
 
-                                        <div class="col-md-3">
+                                        <div class="col-md-4">
                                             <label class="form-label required">Status</label>
                                             <select name="kode_status" id="sel-status" class="form-select"
                                                 disabled></select>

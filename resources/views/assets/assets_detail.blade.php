@@ -76,14 +76,6 @@
                                 {{-- <dt class="col-sm-5">Group Category</dt>
                                 <dd class="col-sm-7"> : {{ $asset->kode_group_category }}</dd> --}}
 
-                                <dt class="col-sm-5">Asset Class</dt>
-                                <dd class="col-sm-7"> :
-                                    {{ $asset->kode_asset_class }}
-                                    @if ($asset->assetClass?->name)
-                                        - {{ $asset->assetClass->name }}
-                                    @endif
-                                </dd>
-
                                 <dt class="col-sm-5">Asset Number Parent</dt>
                                 <dd class="col-sm-7"> : {{ $asset->asset_number_parent }}</dd>
 
@@ -98,6 +90,9 @@
 
                                 <dt class="col-sm-5">Asset Number Internal</dt>
                                 <dd class="col-sm-7"> : {{ $asset->identifiers?->asset_number_internal }}</dd>
+
+                                <dt class="col-sm-5">Alias</dt>
+                                <dd class="col-sm-7"> : {{ $asset->identifiers?->alias }}</dd>
 
                                 <dt class="col-sm-5">Asset Status</dt>
                                 <dd class="col-sm-7" id="lbl-asset-status"> :
@@ -127,6 +122,13 @@
                                     @endphp
                                     {{ $tx }} @if ($txName)
                                         - {{ $txName }}
+                                    @endif
+                                </dd>
+                                <dt class="col-sm-5">Asset Class</dt>
+                                <dd class="col-sm-7"> :
+                                    {{ $asset->kode_asset_class }}
+                                    @if ($asset->assetClass?->name)
+                                        - {{ $asset->assetClass->name }}
                                     @endif
                                 </dd>
 

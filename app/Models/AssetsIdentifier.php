@@ -18,6 +18,7 @@ class AssetsIdentifier extends Model
         'asset_number_maximo',
         'asset_number_dynamic_365',
         'asset_number_internal',
+        'alias'
     ];
 
     protected $casts = ['created_at' => 'datetime', 'updated_at' => 'datetime'];

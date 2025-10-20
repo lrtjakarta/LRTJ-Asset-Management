@@ -31,6 +31,7 @@ class AssetUpdateRequest extends FormRequest
             'asset_number_maximo'       => ['nullable', 'string', 'max:120'],
             'asset_number_dynamic_365'  => ['nullable', 'string', 'max:120'],
             'asset_number_internal'     => ['nullable', 'string', 'max:120'],
+            'alias'             => ['nullable', 'string', 'max:500'],
 
             // classification
             'kode_asset_transaction'  => ['nullable', 'string', 'max:50'],

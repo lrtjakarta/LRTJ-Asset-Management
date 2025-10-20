@@ -111,6 +111,7 @@ class AssetsController extends Controller
                 'i.asset_number_maximo',
                 'i.asset_number_dynamic_365',
                 'i.asset_number_internal',
+                'i.alias',
                 'g.asset_owner',
                 'g.asset_user',
                 'g.asset_maintenance',
@@ -197,7 +198,7 @@ class AssetsController extends Controller
             abort_if($parent_get->asset_number_child !== '00', 422, 'Selected asset is not a parent.');
 
             // Generate numbers
-            $group  = $parent_get->kode_asset_class;
+            $group  = $parent_get->kode_group_category;
             $parent = $parent_get->asset_number_parent;
             $child  = $num->nextChild($parent);
             $code   = $parent . '-' . $child;
@@ -255,6 +256,7 @@ class AssetsController extends Controller
                 'asset_number_maximo'       => $v->asset_number_maximo,
                 'asset_number_dynamic_365'  => $v->asset_number_dynamic_365,
                 'asset_number_internal'     => $v->asset_number_internal,
+                'alias'                     => $v->alias,
             ]);
 
             AssetsAssignment::create([
@@ -395,6 +397,7 @@ class AssetsController extends Controller
                     'asset_number_maximo'      => $v->asset_number_maximo,
                     'asset_number_dynamic_365' => $v->asset_number_dynamic_365,
                     'asset_number_internal'    => $v->asset_number_internal,
+                    'alias'                    => $v->alias,
                 ]
             );
 
