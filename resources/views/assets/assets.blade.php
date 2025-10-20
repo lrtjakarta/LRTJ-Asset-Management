@@ -163,9 +163,13 @@
                     }
                 },
                 {
-                    data: 'kode_group_category',
-                    name: 'a.kode_group_category'
+                    data: 'kode_asset_class_label',
+                    name: 'a.kode_asset_class'
                 },
+                // {
+                //     data: 'kode_group_category',
+                //     name: 'a.kode_group_category'
+                // },
                 {
                     data: 'asset_number_parent',
                     name: 'a.asset_number_parent'
@@ -205,10 +209,6 @@
                 {
                     data: 'kode_location_label',
                     name: 'a.kode_location'
-                },
-                {
-                    data: 'kode_asset_class_label',
-                    name: 'a.kode_asset_class'
                 },
                 {
                     data: 'kode_status_label',
@@ -386,7 +386,8 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th class="min-w-200px">Code (Parent + Child)</th>
-                                            <th class="min-w-100px">Group Category</th>
+                                            {{-- <th class="min-w-100px">Group Category</th> --}}
+                                            <th class="min-w-150px">Asset Class</th>
                                             <th class="min-w-150px">Parent</th>
                                             <th>Child</th>
                                             <th class="min-w-250px">Description</th>
@@ -397,7 +398,6 @@
                                             <th class="min-w-150px">Asset User</th>
                                             <th class="min-w-150px">Asset Maintenance</th>
                                             <th class="min-w-150px">Location</th>
-                                            <th class="min-w-150px">Asset Class</th>
                                             <th class="min-w-150px">Status</th>
                                             <th class="min-w-100px">Price</th>
                                             <th>Quantity</th>
@@ -416,7 +416,7 @@
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td></td>
+                                            {{-- <td></td> --}}
                                             <td></td>
                                             <td></td>
                                             <td></td>

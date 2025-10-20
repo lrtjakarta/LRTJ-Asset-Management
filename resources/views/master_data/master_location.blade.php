@@ -76,6 +76,7 @@
 
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
+                        $('#formMasterLocation')[0].reset(); 
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.location.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -117,6 +118,7 @@
                             text: res.message || 'Saved.'
                         });
                         $('#formMasterLocation')[0].reset(); 
+                        $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message

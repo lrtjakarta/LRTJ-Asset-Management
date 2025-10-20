@@ -22,7 +22,7 @@ Route::middleware('ldap.session')->group(function () {
     Route::prefix('master-data')->name('master.')->group(function () {
         // FRONT END MASTER DATA
         Route::get('/master-sumber', [MasterDataController::class, 'master_sumber'])->name('sumber');
-        Route::get('/master-transaction', [MasterDataController::class, 'master_transaction'])->name('transaction');
+        Route::get('/master-company', [MasterDataController::class, 'master_transaction'])->name('company');
         Route::get('/master-asset-type', [MasterDataController::class, 'master_asset_type'])->name('asset_type');
         Route::get('/master-category', [MasterDataController::class, 'master_category'])->name('category');
         Route::get('/master-category-2', [MasterDataController::class, 'master_category_2'])->name('category_2');

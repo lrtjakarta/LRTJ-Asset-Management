@@ -97,34 +97,39 @@
                                             <div class="col-md-12" id="wrap-classification">
                                                 <div class="row g-5">
                                                     <div class="col-md-3">
-                                                        <label class="form-label required">Asset Transaction</label>
+                                                        <label class="form-label required">Asset Company</label>
                                                         <select name="kode_asset_transaction" id="sel-transaction"
                                                             class="form-select" required></select>
                                                     </div>
 
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-3" >
+                                                        <label class="form-label required">Asset Class</label>
+                                                        <select name="kode_asset_class" id="sel-asset-class"
+                                                            class="form-select" required></select>
+                                                    </div>
+
+                                                    <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Asset Type</label>
                                                         <select name="kode_asset_type" id="sel-asset-type"
-                                                            class="form-select" required></select>
+                                                            class="form-select" ></select>
                                                     </div>
 
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Category</label>
                                                         <select name="kode_category" id="sel-category" class="form-select"
-                                                            data-placeholder="Select Asset Type First" required></select>
+                                                            data-placeholder="Select Asset Type First" ></select>
                                                     </div>
 
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Category 2</label>
                                                         <select name="kode_category_2" id="sel-category-2"
-                                                            class="form-select" data-placeholder="Select Category First"
-                                                            required></select>
+                                                            class="form-select" data-placeholder="Select Category First"></select>
                                                     </div>
 
-                                                    <div class="col-md-3">
+                                                    <div class="col-md-3" style="display:none;">
                                                         <label class="form-label required">Sub Category</label>
                                                         <select name="kode_sub_category" id="sel-sub-category"
-                                                            class="form-select" required></select>
+                                                            class="form-select"></select>
                                                     </div>
                                                 </div>
 
@@ -146,12 +151,6 @@
                                             <label class="form-label required">Description</label>
                                             <input name="description" value="{{ old('description') }}" class="form-control"
                                                 required>
-                                        </div>
-
-                                        <div class="col-md-3">
-                                            <label class="form-label required">Asset Class</label>
-                                            <select name="kode_asset_class" id="sel-asset-class" class="form-select"
-                                                required></select>
                                         </div>
 
                                         <div class="col-md-3">
@@ -386,7 +385,9 @@
             initSelect2('#sel-asset-type', R.type);
             initSelect2('#sel-location', R.location);
             initSelect2('#sel-uom', R.uom);
-            initSelect2('#sel-status', R.status, { type: 'Asset' });
+            initSelect2('#sel-status', R.status, {
+                type: 'Asset'
+            });
             initSelect2('#sel-asset-class', R.aclass);
             initSelect2('#sel-owner', R.usercode);
             initSelect2('#sel-user', R.usercode);
@@ -451,7 +452,7 @@
                     $('#wrap-classification').hide();
 
                     // Optional: clear classification inputs so backend won’t validate them
-                    $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category')
+                    $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category, #sel-asset-class')
                         .val(null).trigger('change');
                 } else {
                     $('#wrap-parent-picker').hide();

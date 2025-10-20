@@ -73,8 +73,16 @@
                         </div>
                         <div class="card-body">
                             <dl class="row mb-0">
-                                <dt class="col-sm-5">Group Category</dt>
-                                <dd class="col-sm-7"> : {{ $asset->kode_group_category }}</dd>
+                                {{-- <dt class="col-sm-5">Group Category</dt>
+                                <dd class="col-sm-7"> : {{ $asset->kode_group_category }}</dd> --}}
+
+                                <dt class="col-sm-5">Asset Class</dt>
+                                <dd class="col-sm-7"> :
+                                    {{ $asset->kode_asset_class }}
+                                    @if ($asset->assetClass?->name)
+                                        - {{ $asset->assetClass->name }}
+                                    @endif
+                                </dd>
 
                                 <dt class="col-sm-5">Asset Number Parent</dt>
                                 <dd class="col-sm-7"> : {{ $asset->asset_number_parent }}</dd>
@@ -92,10 +100,10 @@
                                 <dd class="col-sm-7"> : {{ $asset->identifiers?->asset_number_internal }}</dd>
 
                                 <dt class="col-sm-5">Asset Status</dt>
-                                <dd class="col-sm-7"> :
+                                <dd class="col-sm-7" id="lbl-asset-status"> :
                                     @if ($asset->status?->name)
                                         <span
-                                            class="badge badge-light-{{ $asset->status->name === 'Active' ? 'success' : 'danger' }}">
+                                            class="badge badge-light-{{ $asset->status->name === 'Operation' ? 'success' : 'danger' }}">
                                             {{ $asset->kode_status }} - {{ $asset->status->name }}
                                         </span>
                                     @endif
@@ -111,7 +119,7 @@
                         </div>
                         <div class="card-body">
                             <dl class="row mb-0">
-                                <dt class="col-sm-5">Asset Transaction</dt>
+                                <dt class="col-sm-5">Asset Company</dt>
                                 <dd class="col-sm-7"> :
                                     @php
                                         $tx = $asset->classification?->kode_asset_transaction;
@@ -122,7 +130,7 @@
                                     @endif
                                 </dd>
 
-                                <dt class="col-sm-5">Asset Type</dt>
+                                {{-- <dt class="col-sm-5">Asset Type</dt>
                                 <dd class="col-sm-7"> :
                                     @php
                                         $t = $asset->classification?->kode_asset_type;
@@ -131,9 +139,9 @@
                                     {{ $t }} @if ($tName)
                                         - {{ $tName }}
                                     @endif
-                                </dd>
+                                </dd> --}}
 
-                                <dt class="col-sm-5">Asset Category</dt>
+                                {{-- <dt class="col-sm-5">Asset Category</dt>
                                 <dd class="col-sm-7"> :
                                     @php
                                         $c = $asset->classification?->kode_category;
@@ -142,9 +150,9 @@
                                     {{ $c }} @if ($cName)
                                         - {{ $cName }}
                                     @endif
-                                </dd>
+                                </dd> --}}
 
-                                <dt class="col-sm-5">Asset Category 2</dt>
+                                {{-- <dt class="col-sm-5">Asset Category 2</dt>
                                 <dd class="col-sm-7"> :
                                     @php
                                         $c2 = $asset->classification?->kode_category_2;
@@ -153,9 +161,9 @@
                                     {{ $c2 }} @if ($c2Name)
                                         - {{ $c2Name }}
                                     @endif
-                                </dd>
+                                </dd> --}}
 
-                                <dt class="col-sm-5">Asset Sub Category</dt>
+                                {{-- <dt class="col-sm-5">Asset Sub Category</dt>
                                 <dd class="col-sm-7"> :
                                     @php
                                         $sc = $asset->classification?->kode_sub_category;
@@ -164,7 +172,7 @@
                                     {{ $sc }} @if ($scName)
                                         - {{ $scName }}
                                     @endif
-                                </dd>
+                                </dd> --}}
 
                                 <dt class="col-sm-5">Sumber Input</dt>
                                 <dd class="col-sm-7"> :
@@ -224,14 +232,24 @@
                                         - {{ $asset->location->name }}
                                     @endif
                                 </dd>
+                            </dl>
+                        </div>
+                    </div>
+                    {{-- Document --}}
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3 class="card-title fw-bold">Document</h3>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-5">No PO/Perjanjian/SPK</dt>
+                                <dd class="col-sm-7"> : {{ $asset->documents?->no_po_perjanjian_spk }}</dd>
 
-                                <dt class="col-sm-5">Asset Class</dt>
-                                <dd class="col-sm-7"> :
-                                    {{ $asset->kode_asset_class }}
-                                    @if ($asset->assetClass?->name)
-                                        - {{ $asset->assetClass->name }}
-                                    @endif
-                                </dd>
+                                <dt class="col-sm-5">Nota Referensi</dt>
+                                <dd class="col-sm-7"> : {{ $asset->documents?->nota_referensi }}</dd>
+
+                                <dt class="col-sm-5">No Document</dt>
+                                <dd class="col-sm-7"> : {{ $asset->documents?->no_document }}</dd>
                             </dl>
                         </div>
                     </div>
@@ -286,24 +304,7 @@
                         </div>
                     </div>
 
-                    {{-- Document --}}
-                    <div class="card mb-6">
-                        <div class="card-header">
-                            <h3 class="card-title fw-bold">Document</h3>
-                        </div>
-                        <div class="card-body">
-                            <dl class="row mb-0">
-                                <dt class="col-sm-5">No PO/Perjanjian/SPK</dt>
-                                <dd class="col-sm-7"> : {{ $asset->documents?->no_po_perjanjian_spk }}</dd>
-
-                                <dt class="col-sm-5">Nota Referensi</dt>
-                                <dd class="col-sm-7"> : {{ $asset->documents?->nota_referensi }}</dd>
-
-                                <dt class="col-sm-5">No Document</dt>
-                                <dd class="col-sm-7"> : {{ $asset->documents?->no_document }}</dd>
-                            </dl>
-                        </div>
-                    </div>
+                    
 
                     {{-- QR --}}
                     <div class="card">
@@ -1439,6 +1440,7 @@
                     if ($.fn.DataTable.isDataTable('#tbl-transfers')) {
                         $('#tbl-transfers').DataTable().ajax.reload(null, false);
                     }
+                    $("#lbl-asset-status").html();
                 }).fail(x => {
                     Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error');
                 });

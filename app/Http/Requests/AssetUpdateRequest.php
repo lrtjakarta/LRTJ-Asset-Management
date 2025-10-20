@@ -24,8 +24,8 @@ class AssetUpdateRequest extends FormRequest
             // masters on assets
             'kode_sumber'             => ['required', 'string', 'max:50'],
             'kode_location'           => ['required', 'string', 'max:50'],
-            'kode_asset_class'        => ['required', 'string', 'max:50'],
-            'kode_status'             => ['required', 'string', 'max:50'],
+            'kode_asset_class'        => ['nullable', 'string', 'max:50'],
+            'kode_status'             => ['nullable', 'string', 'max:50'],
 
             // identifiers (optional)
             'asset_number_maximo'       => ['nullable', 'string', 'max:120'],
@@ -33,11 +33,11 @@ class AssetUpdateRequest extends FormRequest
             'asset_number_internal'     => ['nullable', 'string', 'max:120'],
 
             // classification
-            'kode_asset_transaction'  => ['required', 'string', 'max:50'],
-            'kode_asset_type'         => ['required', 'string', 'max:50'],
-            'kode_category'           => ['required', 'string', 'max:50'],
-            'kode_category_2'         => ['required', 'string', 'max:50'],
-            'kode_sub_category'            => ['required', 'string', 'max:10'],
+            'kode_asset_transaction'  => ['nullable', 'string', 'max:50'],
+            'kode_asset_type'         => ['nullable', 'string', 'max:50'],
+            'kode_category'           => ['nullable', 'string', 'max:50'],
+            'kode_category_2'         => ['nullable', 'string', 'max:50'],
+            'kode_sub_category'       => ['nullable', 'string', 'max:10'],
 
             // assignment
             'asset_owner'          => ['required', 'string', 'max:50'],

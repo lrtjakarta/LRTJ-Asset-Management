@@ -76,6 +76,7 @@
 
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
+                $('#formMasterAssetClass')[0].reset();
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.asset_class.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -116,8 +117,9 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        
-                        $('#formMasterAssetClass')[0].reset(); 
+
+                        $('#formMasterAssetClass')[0].reset();
+                        $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message

@@ -62,18 +62,18 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-transaction' ? 'active' : '' }}" 
-                                    href="{{ route('master.transaction') }}">
+                                <a class="menu-link {{ request()->segment(2) == 'master-company' ? 'active' : '' }}" 
+                                    href="{{ route('master.company') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
-                                    <span class="menu-title">Master Transaction</span>
+                                    <span class="menu-title">Master Company</span>
                                 </a>
                                 <!--end:Menu link-->
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-asset-type' ? 'active' : '' }}" 
                                     href="{{ route('master.asset_type') }}">
@@ -83,10 +83,10 @@
                                     <span class="menu-title">Master Asset Type</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-category' ? 'active' : '' }}" 
                                     href="{{ route('master.category') }}">
@@ -96,10 +96,10 @@
                                     <span class="menu-title">Master Category</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-category-2' ? 'active' : '' }}"
                                     href="{{ route('master.category_2') }}">
@@ -109,10 +109,10 @@
                                     <span class="menu-title">Master Category 2</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-sub-category' ? 'active' : '' }}"
                                     href="{{ route('master.sub_category') }}">
@@ -122,7 +122,7 @@
                                     <span class="menu-title">Master Sub Category</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
                             {{-- <div class="menu-item">

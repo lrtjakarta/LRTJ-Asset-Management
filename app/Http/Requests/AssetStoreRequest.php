@@ -35,10 +35,10 @@ class AssetStoreRequest extends FormRequest
 
             // classification
             'kode_asset_transaction'  => ['required', 'string', 'max:50'],
-            'kode_asset_type'         => ['required', 'string', 'max:50'],
-            'kode_category'           => ['required', 'string', 'max:50'],
-            'kode_category_2'         => ['required', 'string', 'max:50'],
-            'kode_sub_category'            => ['required', 'string', 'max:10'],
+            'kode_asset_type'         => ['nullable', 'string', 'max:50'],
+            'kode_category'           => ['nullable', 'string', 'max:50'],
+            'kode_category_2'         => ['nullable', 'string', 'max:50'],
+            'kode_sub_category'       => ['nullable', 'string', 'max:10'],
 
             // assignment
             'asset_owner'          => ['required', 'string', 'max:50'],

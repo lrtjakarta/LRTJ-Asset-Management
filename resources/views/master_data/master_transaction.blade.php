@@ -76,6 +76,7 @@
 
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
+                        $('#formMasterTransaction')[0].reset(); 
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.transaction.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -117,6 +118,7 @@
                             text: res.message || 'Saved.'
                         });
                         $('#formMasterTransaction')[0].reset(); 
+                        $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message
@@ -185,7 +187,7 @@
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
                 <!--begin::Title-->
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                    Master Transaction
+                    Master Company
                 </h1>
                 <!--end::Title-->
                 <!--begin::Breadcrumb-->
@@ -202,7 +204,7 @@
                     <!--end::Item-->
                     <!--begin::Item-->
                     <li class="breadcrumb-item text-muted">
-                        Master Transaction
+                        Master Company
                     </li>
                     <!--end::Item-->
                 </ul>
@@ -226,7 +228,7 @@
                             <!--begin::Header-->
                             <div class="card-header border-0 pt-5">
                                 <h3 class="card-title align-items-start flex-column">
-                                    <span class="card-label fw-bold fs-3 mb-1">Master Transaction Data</span>
+                                    <span class="card-label fw-bold fs-3 mb-1">Master Company Data</span>
                                 </h3>
                                 <div class="card-toolbar">
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"

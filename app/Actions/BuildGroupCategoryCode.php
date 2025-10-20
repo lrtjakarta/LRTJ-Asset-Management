@@ -19,4 +19,13 @@ class BuildGroupCategoryCode
 
         return $trans . $type . $cat . $cat2 . $sub;
     }
+    public function handle2(
+        string $trans,
+        string $class
+    ): string {
+        $trans = strtoupper(trim($trans));
+        $class  = strtoupper(trim($class));
+
+        return $trans . $class;
+    }
 }

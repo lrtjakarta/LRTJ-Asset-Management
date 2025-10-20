@@ -197,17 +197,21 @@ class AssetsController extends Controller
             abort_if($parent_get->asset_number_child !== '00', 422, 'Selected asset is not a parent.');
 
             // Generate numbers
-            $group  = $parent_get->kode_group_category;
+            $group  = $parent_get->kode_asset_class;
             $parent = $parent_get->asset_number_parent;
             $child  = $num->nextChild($parent);
             $code   = $parent . '-' . $child;
         } else {
-            $group  = $groupBuilder->handle(
+            // $group  = $groupBuilder->handle(
+            //     $v->kode_asset_transaction,
+            //     $v->kode_asset_type,
+            //     $v->kode_category,
+            //     $v->kode_category_2,
+            //     $v->kode_sub_category
+            // );
+            $group  = $groupBuilder->handle2(
                 $v->kode_asset_transaction,
-                $v->kode_asset_type,
-                $v->kode_category,
-                $v->kode_category_2,
-                $v->kode_sub_category
+                $v->kode_asset_class
             );
 
             // Generate numbers
@@ -233,10 +237,10 @@ class AssetsController extends Controller
             AssetsClassification::create([
                 'asset_uuid'             => $asset->uuid,
                 'kode_asset_transaction' => $v->kode_asset_transaction,
-                'kode_asset_type'        => $v->kode_asset_type,
-                'kode_category'          => $v->kode_category,
-                'kode_category_2'        => $v->kode_category_2,
-                'kode_sub_category'      => $v->kode_sub_category,
+                'kode_asset_type'        => $v->kode_asset_type ?? null,
+                'kode_category'          => $v->kode_category ?? null,
+                'kode_category_2'        => $v->kode_category_2 ?? null,
+                'kode_sub_category'      => $v->kode_sub_category ?? null,
             ]);
 
             AssetsDocument::create([
@@ -309,72 +313,72 @@ class AssetsController extends Controller
         $asset = Assets::with(['classification'])->findOrFail($uuid);
 
         $vatRate = (float) env('NILAI_PAJAK', 10);
-        $oldParent = $asset->asset_number_parent;
-        $oldGroup  = $asset->kode_group_category;
+        // $oldParent = $asset->asset_number_parent;
+        // $oldGroup  = $asset->kode_group_category;
 
-        if ($v->mode === 'existing') {
-            $parent = Assets::where('uuid', $v->parent_uuid)->firstOrFail();
-            abort_if($parent->asset_number_child !== '00', 422, 'Selected asset is not a parent.');
-            $newGroup  = $parent->kode_group_category;
-            $newParent = $parent->asset_number_parent;
-        } else {
-            $newGroup  = $groupBuilder->handle(
-                $v->kode_asset_transaction,
-                $v->kode_asset_type,
-                $v->kode_category,
-                $v->kode_category_2,
-                $v->kode_sub_category
-            );
-            $newParent = null;
-        }
+        // if ($v->mode === 'existing') {
+        //     $parent = Assets::where('uuid', $v->parent_uuid)->firstOrFail();
+        //     abort_if($parent->asset_number_child !== '00', 422, 'Selected asset is not a parent.');
+        //     $newGroup  = $parent->kode_group_category;
+        //     $newParent = $parent->asset_number_parent;
+        // } else {
+        //     $newGroup  = $groupBuilder->handle(
+        //         $v->kode_asset_transaction,
+        //         $v->kode_asset_type,
+        //         $v->kode_category,
+        //         $v->kode_category_2,
+        //         $v->kode_sub_category
+        //     );
+        //     $newParent = null;
+        // }
 
-        $recode = ($newGroup !== $oldGroup) || ($v->mode === 'existing' && $newParent !== $oldParent);
-        DB::transaction(function () use ($v, $asset, $recode, $newGroup, $newParent, $oldParent, $num, $sequencer, $vatRate) {
+        // $recode = ($newGroup !== $oldGroup) || ($v->mode === 'existing' && $newParent !== $oldParent);
+        DB::transaction(function () use ($v, $asset, $num, $sequencer, $vatRate) {
 
-            if ($recode) {
-                if ($oldParent) {
-                    $num->rollbackChildIfLatest($oldParent, $asset->asset_number_child, $asset->uuid);
-                }
-                if ($v->mode === 'existing') {
-                    $targetParent = $newParent;
-                    $nextChild    = $num->nextChild($targetParent);
-                } else {
-                    $targetParent = $num->nextParent($newGroup);
-                    $nextChild    = $num->nextChild($targetParent);
-                }
+            // if ($recode) {
+            //     if ($oldParent) {
+            //         $num->rollbackChildIfLatest($oldParent, $asset->asset_number_child, $asset->uuid);
+            //     }
+                // if ($v->mode === 'existing') {
+                //     $targetParent = $newParent;
+                //     $nextChild    = $num->nextChild($targetParent);
+                // } else {
+                //     $targetParent = $num->nextParent($newGroup);
+                //     $nextChild    = $num->nextChild($targetParent);
+                // }
 
-                $asset->fill([
-                    'description'         => $v->description,
-                    'kode_group_category' => $newGroup,
-                    'asset_number_parent' => $targetParent,
-                    'asset_number_child'  => $nextChild,
-                    'asset_code'          => $targetParent . '-' . $nextChild,
-                ])->save();
+                // $asset->fill([
+                    // 'description'         => $v->description,
+                    // 'kode_group_category' => $newGroup,
+                    // 'asset_number_parent' => $targetParent,
+                    // 'asset_number_child'  => $nextChild,
+                    // 'asset_code'          => $targetParent . '-' . $nextChild,
+                // ])->save();
 
-                $sequencer->normalizeChildren($targetParent);
-                if ($oldParent && $oldParent !== $targetParent) {
-                    $sequencer->normalizeChildren($oldParent);
-                }
-            }
+            //     $sequencer->normalizeChildren($targetParent);
+            //     if ($oldParent && $oldParent !== $targetParent) {
+            //         $sequencer->normalizeChildren($oldParent);
+            //     }
+            // }
 
             $asset->fill([
                 'description'      => $v->description,
-                'kode_asset_class' => $v->kode_asset_class,
-                'kode_status'      => $v->kode_status,
+                // 'kode_asset_class' => $v->kode_asset_class,
+                // 'kode_status'      => $v->kode_status,
                 'kode_location'    => $v->kode_location,
                 'kode_sumber'      => $v->kode_sumber,
             ])->save();
 
-            $asset->classification()->updateOrCreate(
-                ['asset_uuid' => $asset->uuid],
-                [
-                    'kode_asset_transaction' => $v->kode_asset_transaction,
-                    'kode_asset_type'        => $v->kode_asset_type,
-                    'kode_category'          => $v->kode_category,
-                    'kode_category_2'        => $v->kode_category_2,
-                    'kode_sub_category'      => $v->kode_sub_category,
-                ]
-            );
+            // $asset->classification()->updateOrCreate(
+            //     ['asset_uuid' => $asset->uuid],
+            //     [
+            //         'kode_asset_transaction' => $v->kode_asset_transaction,
+            //         'kode_asset_type'        => $v->kode_asset_type,
+            //         'kode_category'          => $v->kode_category,
+            //         'kode_category_2'        => $v->kode_category_2,
+            //         'kode_sub_category'      => $v->kode_sub_category,
+            //     ]
+            // );
 
             $asset->documents()->updateOrCreate(
                 ['asset_uuid' => $asset->uuid],
@@ -502,7 +506,7 @@ class AssetsController extends Controller
         $page = max(1, (int) $request->input('page', 1));
         $per  = 10;
 
-        $rows = \App\Models\Assets::query()
+        $rows = Assets::query()
             ->when($q, function ($qq) use ($q) {
                 $qq->where(function ($w) use ($q) {
                     $w->where('asset_code', 'ilike', "%{$q}%")

@@ -80,6 +80,7 @@
 
             // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
+                $('#formMasterUserCode')[0].reset(); 
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.user_code.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -122,6 +123,7 @@
                             text: res.message || 'Saved.'
                         });
                         $('#formMasterUserCode')[0].reset(); 
+                        $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
                         // Show first validation error or fallback message
