@@ -227,7 +227,7 @@ class DisposalController extends Controller
         }
 
         return DataTables::of($q)
-            ->addColumn('asset_label', fn($t) => $t->asset ? ($t->asset->asset_code . ' - ' . ($t->asset->description ?? '')) : $t->asset_uuid)
+            ->addColumn('asset_label', fn($t) => $t->asset ? $t->asset->asset_code : $t->asset_uuid)
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
             ->addColumn('target_label',   fn($t) => $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status)
 
