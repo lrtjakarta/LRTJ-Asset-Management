@@ -44,6 +44,9 @@ class AssetsApi extends Controller
         $withTrashed = $request->boolean('with_trashed');
         $sortBy  = $v['sort_by']  ?? 'a.updated_at';
         $sortDir = $v['sort_dir'] ?? 'desc';
+        $uuids = collect(is_array($request->uuids) ? $request->uuids
+          : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
+          ->map(fn($x)=>trim($x))->filter()->unique()->values();
 
         // ---- Base query with joins ----
         $q = DB::table('assets as a')
@@ -98,6 +101,7 @@ class AssetsApi extends Controller
             ->when(!empty($v['user']),        fn($qb) => $qb->where('g.asset_user', $v['user']))
             ->when(!empty($v['maintenance']), fn($qb) => $qb->where('g.asset_maintenance', $v['maintenance']))
             ->when(!empty($v['sumber']),      fn($qb) => $qb->where('a.kode_sumber', $v['sumber']))
+            ->when($uuids->isNotEmpty(),      fn($qb)  => $qb->whereIn('a.uuid', $uuids))
             // numeric ranges
             ->when(isset($v['price_min']) || isset($v['price_max']), function ($qb) use ($v) {
                 $min = $v['price_min'] ?? null;

@@ -32,6 +32,8 @@ class TransferApi extends Controller
             'from'         => ['nullable', 'date'],
             'to'           => ['nullable', 'date'],
             'with_trashed' => ['nullable', Rule::in(['0', '1'])],
+            'uuids'   => ['nullable'],
+            'uuids.*' => ['uuid'],
         ])->validate();
 
         // normalize asset_uuid list
@@ -40,6 +42,9 @@ class TransferApi extends Controller
                 ? $request->asset_uuid
                 : (is_string($request->asset_uuid) ? explode(',', $request->asset_uuid) : [])
         )->map(fn($x) => trim($x))->filter()->unique()->values();
+        $uuids = collect(is_array($request->uuids) ? $request->uuids
+          : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
+          ->map(fn($x)=>trim($x))->filter()->unique()->values();
 
         foreach ($assetUuids as $u) {
             if (!Str::isUuid($u)) abort(422, "asset_uuid contains invalid UUID: {$u}");
@@ -76,6 +81,7 @@ class TransferApi extends Controller
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             // filters
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
+            ->when($uuids->isNotEmpty(),     fn($x) => $x->whereIn('assets_transfers.uuid', $uuids))
             ->when(!empty($v['type']), fn($x) => $x->where('assets_transfers.type', $v['type']))
             ->when(!empty($v['from']), fn($x) => $x->where('assets_transfers.created_at', '>=', $v['from']))
             ->when(!empty($v['to']),   fn($x) => $x->where('assets_transfers.created_at', '<=', $v['to']))

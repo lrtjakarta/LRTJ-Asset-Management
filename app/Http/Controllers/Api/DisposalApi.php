@@ -22,7 +22,8 @@ class DisposalApi extends Controller
             'q'            => ['nullable', 'string', 'max:200'],
             'workflow'     => ['nullable', 'string', 'max:50'],
             'target'       => ['nullable', 'string', 'max:50'],
-            'asset_uuid'   => ['nullable', 'uuid'],
+            'asset_uuid'   => ['nullable'],
+            'asset_uuid.*' => ['nullable', 'uuid'],
             'sort_by'      => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'target_status', 'asset_code'])],
             'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -30,50 +31,64 @@ class DisposalApi extends Controller
             'with_trashed' => ['nullable', Rule::in(['0', '1'])],
             'from'         => ['nullable', 'date'],
             'to'           => ['nullable', 'date'],
+            'uuids'        => ['nullable'],
+            'uuids.*'      => ['uuid'],
         ])->validate();
 
         $sortBy  = $v['sort_by'] ?? 'created_at';
         $sortDir = $v['sort_dir'] ?? 'desc';
         $tz      = config('app.timezone', 'UTC');
 
+        $assetUuids = collect(
+            is_array($request->asset_uuid)
+                ? $request->asset_uuid
+                : (is_string($request->asset_uuid) ? explode(',', $request->asset_uuid) : [])
+        )->map(fn($x) => trim($x))->filter()->unique()->values();
+
+        $uuids = collect(is_array($request->uuids) ? $request->uuids
+          : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
+          ->map(fn($x)=>trim($x))->filter()->unique()->values();
+
         $q = Disposal::query()
             ->select([
-                'disposals.*',
+                'assets_disposals.*',
                 DB::raw('a.asset_code as asset_code'),
                 DB::raw('a.description as asset_description'),
             ])
-            ->leftJoin('assets as a', 'a.uuid', '=', 'disposals.asset_uuid')
+            ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
             ->with([
                 'status:id,kode,name',
                 'target:id,kode,name',
                 'asset:uuid,asset_code,description',
             ])
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
-            ->when(!empty($v['asset_uuid']), fn($x) => $x->where('disposals.asset_uuid', $v['asset_uuid']))
-            ->when(!empty($v['workflow']),   fn($x) => $x->where('disposals.kode_status', $v['workflow']))
-            ->when(!empty($v['target']),     fn($x) => $x->where('disposals.target_status', $v['target']))
-            ->when(!empty($v['from']),       fn($x) => $x->where('disposals.created_at', '>=', $v['from']))
-            ->when(!empty($v['to']),         fn($x) => $x->where('disposals.created_at', '<=', $v['to']))
+            // ->when(!empty($v['asset_uuid']), fn($x) => $x->where('assets_disposals.asset_uuid', $v['asset_uuid']))
+            ->when(!empty($v['workflow']),   fn($x) => $x->where('assets_disposals.kode_status', $v['workflow']))
+            ->when(!empty($v['target']),     fn($x) => $x->where('assets_disposals.target_status', $v['target']))
+            ->when(!empty($v['from']),       fn($x) => $x->where('assets_disposals.created_at', '>=', $v['from']))
+            ->when(!empty($v['to']),         fn($x) => $x->where('assets_disposals.created_at', '<=', $v['to']))
+            ->when($uuids->isNotEmpty(),     fn($x) => $x->whereIn('assets_disposals.uuid', $uuids))
+            ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
             ->when(!empty($v['q']), function ($x) use ($v) {
                 $like = '%' . trim($v['q']) . '%';
                 $x->where(function ($w) use ($like) {
-                    $w->where('disposals.uuid',           'ILIKE', $like)
-                        ->orWhere('disposals.kode_status',  'ILIKE', $like)
-                        ->orWhere('disposals.target_status', 'ILIKE', $like)
-                        ->orWhere('disposals.note',         'ILIKE', $like)
+                    $w->where('assets_disposals.uuid',           'ILIKE', $like)
+                        ->orWhere('assets_disposals.kode_status',  'ILIKE', $like)
+                        ->orWhere('assets_disposals.target_status', 'ILIKE', $like)
+                        ->orWhere('assets_disposals.note',         'ILIKE', $like)
                         ->orWhere('a.asset_code',           'ILIKE', $like)
                         ->orWhere('a.description',          'ILIKE', $like);
                 });
             });
 
         $sortColumns = [
-            'created_at'    => 'disposals.created_at',
-            'updated_at'    => 'disposals.updated_at',
-            'kode_status'   => 'disposals.kode_status',
-            'target_status' => 'disposals.target_status',
+            'created_at'    => 'assets_disposals.created_at',
+            'updated_at'    => 'assets_disposals.updated_at',
+            'kode_status'   => 'assets_disposals.kode_status',
+            'target_status' => 'assets_disposals.target_status',
             'asset_code'    => 'a.asset_code',
         ];
-        $q->orderBy($sortColumns[$sortBy] ?? 'disposals.created_at', $sortDir);
+        $q->orderBy($sortColumns[$sortBy] ?? 'assets_disposals.created_at', $sortDir);
 
         $paginationRequested = $request->has('per_page') || $request->has('page');
 
