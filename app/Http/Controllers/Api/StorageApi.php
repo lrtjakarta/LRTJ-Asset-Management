@@ -6,6 +6,7 @@ use App\Models\Disposal;
 use App\Models\Transfer;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -96,62 +97,53 @@ class StorageApi extends Controller
 
     public function manifest(Request $request)
     {
-        validator($request->all(), [
-            'kind'  => ['nullable', Rule::in(['disposal', 'transfer', 'all'])],
-            'since' => ['nullable', 'date'],
-        ])->validate();
-
-        $kind  = $request->input('kind', 'all');
         $since = $request->date('since');
+        $kind  = strtolower($request->query('kind', 'all'));
+        if (!in_array($kind, ['disposal', 'transfer', 'all'], true)) {
+            return response()->json(['message' => 'Invalid kind. Use disposal|transfer|all'], 422);
+        }
 
-        $rows = collect();
+        $data = collect();
+
+        // Helper to build a query safely (columns may not exist)
+        $build = function (string $table, $model) use ($since) {
+            $cols = ['uuid', 'file_path', 'file_name', 'file_mime', 'file_size', 'updated_at'];
+
+            // add optional columns if present
+            if (Schema::hasColumn($table, 'file_sha256')) $cols[] = 'file_sha256';
+            if (Schema::hasColumn($table, 'file_etag'))   $cols[] = 'file_etag';
+            if (Schema::hasColumn($table, 'deleted_at'))  $cols[] = 'deleted_at';
+
+            $q = $model::query()
+                ->whereNotNull('file_path')
+                ->select($cols);
+
+            // default: exclude soft-deleted if the table has deleted_at
+            if (in_array('deleted_at', $cols, true)) {
+                $q->whereNull('deleted_at');
+            }
+
+            if ($since) {
+                $q->where('updated_at', '>=', $since);
+            }
+
+            return $q->get();
+        };
 
         if ($kind === 'disposal' || $kind === 'all') {
-            $q = Disposal::query()
-                ->whereNotNull('file_path')
-                ->select(['uuid', 'file_path', 'file_name', 'file_mime', 'file_size', 'file_sha256', 'file_etag', 'updated_at']);
-            if ($since) $q->where('updated_at', '>=', $since);
-            $rows = $rows->concat($q->get()->map(function ($r) {
-                return [
-                    'kind'          => 'disposal',
-                    'id'            => (string) $r->uuid,
-                    'name'          => $r->file_name ?: basename($r->file_path),
-                    'mime'          => $r->file_mime,
-                    'size'          => $r->file_size,
-                    'sha256'        => $r->file_sha256,
-                    'etag'          => $r->file_etag ?: null,
-                    'last_modified' => optional($r->updated_at)->toIso8601String(),
-                    'download_url'  => route('files.download.kind', ['kind' => 'disposal', 'uuid' => $r->uuid]),
-                ];
-            }));
+            $rows = $build('assets_disposals', Disposal::class);
+            $data = $data->merge($this->mapRowsForManifest($rows, 'disposal'));
         }
 
         if ($kind === 'transfer' || $kind === 'all') {
-            $q = Transfer::query()
-                ->whereNotNull('file_path')
-                ->select(['uuid', 'file_path', 'file_name', 'file_mime', 'file_size', 'file_sha256', 'file_etag', 'updated_at']);
-            if ($since) $q->where('updated_at', '>=', $since);
-            $rows = $rows->concat($q->get()->map(function ($r) {
-                return [
-                    'kind'          => 'transfer',
-                    'id'            => (string) $r->uuid,
-                    'name'          => $r->file_name ?: basename($r->file_path),
-                    'mime'          => $r->file_mime,
-                    'size'          => $r->file_size,
-                    'sha256'        => $r->file_sha256,
-                    'etag'          => $r->file_etag ?: null,
-                    'last_modified' => optional($r->updated_at)->toIso8601String(),
-                    'download_url'  => route('files.download.kind', ['kind' => 'transfer', 'uuid' => $r->uuid]),
-                ];
-            }));
+            $rows = $build('assets_transfers', Transfer::class);
+            $data = $data->merge($this->mapRowsForManifest($rows, 'transfer'));
         }
 
-        $rows = $rows->sortByDesc('last_modified')->values();
-
         return response()->json([
-            'data' => $rows,
+            'data' => $data->values(),
             'meta' => [
-                'count' => $rows->count(),
+                'count' => $data->count(),
                 'since' => $since?->toIso8601String(),
                 'kind'  => $kind,
             ],
@@ -161,6 +153,40 @@ class StorageApi extends Controller
     // ----------------------
     // Helpers
     // ----------------------
+    private function mapRowsForManifest($rows, string $kind)
+    {
+        $disk = 'public';
+        $fs   = Storage::disk($disk);
+
+        return collect($rows)->map(function ($r) use ($fs, $disk, $kind) {
+            $filePath = $r->file_path;
+            $exists   = $filePath ? $fs->exists($filePath) : false;
+
+            $size  = $r->file_size ?? ($exists ? $fs->size($filePath) : null);
+            $mtime = $exists ? $fs->lastModified($filePath) : null;
+
+            // Prefer DB-provided SHA/ETag if present, else weak etag from mtime+size
+            $etag   = $r->file_etag   ?? null;
+            $sha256 = $r->file_sha256 ?? null;
+            if (!$etag && ($mtime !== null || $size !== null)) {
+                $etag = ($mtime ?? 0) . ':' . ($size ?? 0);
+            }
+
+            return [
+                'id'            => (string) $r->uuid,
+                'kind'          => $kind,
+                'name'          => $r->file_name ?: ($filePath ? basename($filePath) : null),
+                'mime'          => $r->file_mime,
+                'size'          => $size,
+                'sha256'        => $sha256,
+                'etag'          => $etag,
+                'last_modified' => optional($r->updated_at)->toIso8601String(),
+                'download_url'  => route('files.download.kind', ['kind' => $kind, 'uuid' => $r->uuid]),
+                // Optional: direct storage URL (if publicly accessible)
+                'file_url'      => $exists ? url('storage/' . ltrim($filePath, '/')) : null,
+            ];
+        });
+    }
 
     private function resolveRow(string $kind, string $uuid)
     {

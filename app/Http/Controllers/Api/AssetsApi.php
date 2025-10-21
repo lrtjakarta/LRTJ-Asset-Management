@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class AssetsApi extends Controller
 {
@@ -22,6 +23,9 @@ class AssetsApi extends Controller
             'user'         => ['nullable', 'string', 'max:50'],
             'maintenance'  => ['nullable', 'string', 'max:50'],
             'sumber'       => ['nullable', 'string', 'max:50'],
+            'uuid'         => ['nullable', 'uuid'],
+            'uuids'        => ['nullable'],
+            'uuids.*'      => ['uuid'],
 
             // numeric ranges
             'price_min'    => ['nullable', 'numeric'],
@@ -44,9 +48,14 @@ class AssetsApi extends Controller
         $withTrashed = $request->boolean('with_trashed');
         $sortBy  = $v['sort_by']  ?? 'a.updated_at';
         $sortDir = $v['sort_dir'] ?? 'desc';
-        $uuids = collect(is_array($request->uuids) ? $request->uuids
-          : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
-          ->map(fn($x)=>trim($x))->filter()->unique()->values();
+        $uuids = collect()
+            ->merge(Arr::wrap($request->query('uuids')))
+            ->when($request->filled('uuid'), fn($c) => $c->push($request->query('uuid')))
+            ->flatMap(fn($v) => is_array($v) ? $v : (is_string($v) ? explode(',', $v) : []))
+            ->map(fn($x) => trim($x))
+            ->filter(fn($x) => $x !== '' && Str::isUuid($x))
+            ->unique()
+            ->values();
 
         // ---- Base query with joins ----
         $q = DB::table('assets as a')
@@ -72,8 +81,8 @@ class AssetsApi extends Controller
                     $w->where('a.asset_code', 'ILIKE', $like)
                         ->orWhere('a.description', 'ILIKE', $like)
                         ->orWhere('mac.name', 'ILIKE', $like)
-                        ->orWhere('ms.name','ILIKE', $like)
-                        ->orWhere('msrc.name','ILIKE', $like)
+                        ->orWhere('ms.name', 'ILIKE', $like)
+                        ->orWhere('msrc.name', 'ILIKE', $like)
                         ->orWhere('ml.name', 'ILIKE', $like)
                         ->orWhere('mu.name', 'ILIKE', $like)
                         ->orWhere('ou.name', 'ILIKE', $like)
@@ -101,7 +110,7 @@ class AssetsApi extends Controller
             ->when(!empty($v['user']),        fn($qb) => $qb->where('g.asset_user', $v['user']))
             ->when(!empty($v['maintenance']), fn($qb) => $qb->where('g.asset_maintenance', $v['maintenance']))
             ->when(!empty($v['sumber']),      fn($qb) => $qb->where('a.kode_sumber', $v['sumber']))
-            ->when($uuids->isNotEmpty(),      fn($qb)  => $qb->whereIn('a.uuid', $uuids))
+            ->when($uuids->isNotEmpty(), fn($qb) => $qb->whereIn('a.uuid', $uuids->all()))
             // numeric ranges
             ->when(isset($v['price_min']) || isset($v['price_max']), function ($qb) use ($v) {
                 $min = $v['price_min'] ?? null;
@@ -200,6 +209,8 @@ class AssetsApi extends Controller
                         'total_max'    => $request->query('total_max'),
                         'updated_from' => $request->query('updated_from'),
                         'updated_to'   => $request->query('updated_to'),
+                        'uuid'  => $request->query('uuid'),
+                        'uuids' => $uuids->all(),
                     ],
                 ],
                 'links' => [
@@ -245,6 +256,8 @@ class AssetsApi extends Controller
                     'total_max'    => $request->query('total_max'),
                     'updated_from' => $request->query('updated_from'),
                     'updated_to'   => $request->query('updated_to'),
+                    'uuid'  => $request->query('uuid'),
+                    'uuids' => $uuids->all(),
                 ],
             ],
             'links' => [

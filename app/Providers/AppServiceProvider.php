@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Disposal;
+use App\Models\Transfer;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
@@ -50,8 +53,9 @@ class AppServiceProvider extends ServiceProvider
 
 
         Relation::enforceMorphMap([
-            'transfer' => \App\Models\Transfer::class,
-            'disposal' => \App\Models\Disposal::class,
+            'user'     => User::class,
+            'transfer' => Transfer::class,
+            'disposal' => Disposal::class,
         ]);
     }
 }
