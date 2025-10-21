@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Assets;
 use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterUserCode;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\UploadedFile;
 
 class TransferApi extends Controller
 {
@@ -19,7 +21,7 @@ class TransferApi extends Controller
     {
         $v = validator($request->all(), [
             'asset_uuid'   => ['nullable'],
-            'asset_uuid.*' => ['nullable','uuid'],
+            'asset_uuid.*' => ['nullable', 'uuid'],
 
             'q'            => ['nullable', 'string', 'max:200'],
             'type'         => ['nullable', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
@@ -29,7 +31,7 @@ class TransferApi extends Controller
             'page'         => ['nullable', 'integer', 'min:1'],
             'from'         => ['nullable', 'date'],
             'to'           => ['nullable', 'date'],
-            'with_trashed' => ['nullable', Rule::in(['0','1'])],
+            'with_trashed' => ['nullable', Rule::in(['0', '1'])],
         ])->validate();
 
         // normalize asset_uuid list
@@ -82,18 +84,18 @@ class TransferApi extends Controller
                 $like = '%' . trim($v['q']) . '%';
                 $x->where(function ($w) use ($like) {
                     $w->where('assets_transfers.transfer_code', 'ILIKE', $like)
-                      ->orWhere('assets_transfers.kode_status',  'ILIKE', $like)
-                      ->orWhere('assets_transfers.type',         'ILIKE', $like)
-                      ->orWhere('a.asset_code',                  'ILIKE', $like)
-                      ->orWhere('a.description',                 'ILIKE', $like)
-                      ->orWhere('a.kode_location',               'ILIKE', $like)
-                      ->orWhere('a.kode_asset_class',            'ILIKE', $like)
-                      ->orWhere('a.kode_status',                 'ILIKE', $like)
-                      ->orWhere('a.kode_sumber',                 'ILIKE', $like)
-                      ->orWhere('ml.name',                       'ILIKE', $like)
-                      ->orWhere('mac.name',                      'ILIKE', $like)
-                      ->orWhere('ms.name',                       'ILIKE', $like)
-                      ->orWhere('msrc.name',                     'ILIKE', $like);
+                        ->orWhere('assets_transfers.kode_status',  'ILIKE', $like)
+                        ->orWhere('assets_transfers.type',         'ILIKE', $like)
+                        ->orWhere('a.asset_code',                  'ILIKE', $like)
+                        ->orWhere('a.description',                 'ILIKE', $like)
+                        ->orWhere('a.kode_location',               'ILIKE', $like)
+                        ->orWhere('a.kode_asset_class',            'ILIKE', $like)
+                        ->orWhere('a.kode_status',                 'ILIKE', $like)
+                        ->orWhere('a.kode_sumber',                 'ILIKE', $like)
+                        ->orWhere('ml.name',                       'ILIKE', $like)
+                        ->orWhere('mac.name',                      'ILIKE', $like)
+                        ->orWhere('ms.name',                       'ILIKE', $like)
+                        ->orWhere('msrc.name',                     'ILIKE', $like);
                 });
             });
 
@@ -240,8 +242,8 @@ class TransferApi extends Controller
 
         $mapStatus = $setStatus->isNotEmpty()
             ? MasterStatus::whereIn('kode', $setStatus)
-                ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
-                ->pluck('name', 'kode')->all()
+            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+            ->pluck('name', 'kode')->all()
             : [];
 
         $mapLoc = $setLoc->isNotEmpty()
@@ -329,5 +331,225 @@ class TransferApi extends Controller
             'location'                     => isset($mapLoc[$code])    ? "{$code} - {$mapLoc[$code]}"    : $code,
             default                        => $code,
         };
+    }
+
+    public function store(Request $request)
+    {
+        if (is_array($request->input('items'))) {
+            $items = $request->input('items');
+            if (empty($items)) {
+                return response()->json(['message' => 'items must be a non-empty array'], 422);
+            }
+
+            $results = [];
+            foreach ($items as $idx => $item) {
+                try {
+                    $results[] = $this->createTransferFromPayload($request, $item, true);
+                } catch (\Throwable $e) {
+                    $results[] = [
+                        'ok'    => false,
+                        'index' => $idx,
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            return response()->json([
+                'ok'      => true,
+                'batch'   => true,
+                'results' => $results,
+            ]);
+        }
+
+        try {
+            $res = $this->createTransferFromPayload($request, $request->all(), false);
+            return response()->json($res, ($res['duplicate'] ?? false) ? 200 : 201);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+    private function createTransferFromPayload(Request $rootReq, array $payload, bool $isBatch): array
+    {
+        $rules = [
+            'uuid'              => ['nullable', 'uuid'],
+            'client_request_id' => ['nullable', 'string', 'max:100'],
+            'asset_uuid'        => ['required', 'uuid', 'exists:assets,uuid'],
+            'type'              => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+            'after.value'       => ['required', 'string'],
+            'note'              => ['nullable', 'string', 'max:1000'],
+            'created_at'        => ['nullable', 'date'],
+        ];
+
+        if ($isBatch) {
+            $rules['file_b64'] = ['nullable', 'array'];
+            $rules['file_b64.name'] = ['required_with:file_b64', 'string', 'max:255'];
+            $rules['file_b64.mime'] = ['required_with:file_b64', 'string', 'max:100'];
+            $rules['file_b64.data'] = ['required_with:file_b64', 'string']; // base64 string
+        } else {
+            $rules['file'] = ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'];
+        }
+
+        $data = validator($payload, $rules)->validate();
+
+        $idemKey = $rootReq->header('Idempotency-Key') ?: ($data['client_request_id'] ?? null);
+
+        $currentUid = (string) data_get($rootReq->session()->get('ldap_user'), 'uid', '');
+        if ($currentUid === '') abort(401, 'No session UID.');
+
+        if (!empty($data['uuid'])) {
+            $existing = Transfer::where('uuid', $data['uuid'])->first();
+            if ($existing) {
+                return [
+                    'ok'        => true,
+                    'duplicate' => true,
+                    'via'       => 'uuid',
+                    'id'        => $existing->uuid,
+                    'code'      => $existing->transfer_code,
+                ];
+            }
+        } elseif ($idemKey) {
+            $existing = Transfer::where('idempotency_key', $idemKey)->first();
+            if ($existing) {
+                return [
+                    'ok'        => true,
+                    'duplicate' => true,
+                    'via'       => 'idempotency_key',
+                    'id'        => $existing->uuid,
+                    'code'      => $existing->transfer_code,
+                ];
+            }
+        }
+
+        $asset = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
+
+        $beforeCode = match ($data['type']) {
+            'owner'       => $asset->assignment?->asset_owner,
+            'user'        => $asset->assignment?->asset_user,
+            'maintenance' => $asset->assignment?->asset_maintenance,
+            'status'      => $asset->kode_status,
+            'location'    => $asset->kode_location,
+            default       => null,
+        };
+
+        $afterCode   = (string) $data['after']['value'];
+        $beforeLabel = $this->resolveLabel($data['type'], $beforeCode);
+        $afterLabel  = $this->resolveLabel($data['type'], $afterCode);
+        $initialWorkflow = 'APR';
+
+        $transfer = DB::transaction(function () use ($asset, $data, $initialWorkflow, $beforeCode, $afterCode, $beforeLabel, $afterLabel, $currentUid, $rootReq, $idemKey, $isBatch) {
+            $code = $this->generateTransferCode($asset->asset_code);
+
+            $path = $orig = $mime = $size = null;
+
+            if ($isBatch && !empty($data['file_b64'])) {
+                [$path, $orig, $mime, $size] = $this->saveBase64File(
+                    $data['file_b64']['data'],
+                    $data['file_b64']['name'],
+                    $data['file_b64']['mime'],
+                    $asset,
+                    $code
+                );
+            } elseif (!$isBatch) {
+                [$path, $orig, $mime, $size] = $this->saveUpload($rootReq->file('file'), $asset, $code, null);
+            }
+
+            $payload = [
+                'uuid'             => $data['uuid'] ?? (string) Str::uuid(),
+                'asset_uuid'       => $asset->uuid,
+                'transfer_code'    => $code,
+                'type'             => $data['type'],
+                'before'           => ['value' => $beforeCode],
+                'after'            => ['value' => $afterCode],
+                'before_label'     => $beforeLabel,
+                'after_label'      => $afterLabel,
+                'kode_status'      => $initialWorkflow,
+                'note'             => $data['note'] ?? null,
+                'pic_request_uid'  => $currentUid,
+                'pic_approve_uid'  => null,
+                'file_path'        => $path,
+                'file_name'        => $orig,
+                'file_mime'        => $mime,
+                'file_size'        => $size,
+                'idempotency_key'  => $idemKey,
+            ];
+
+            if (!empty($data['created_at'])) {
+                $payload['created_at'] = $data['created_at'];
+            }
+
+            return Transfer::create($payload);
+        });
+
+        return [
+            'ok'   => true,
+            'id'   => $transfer->uuid,
+            'code' => $transfer->transfer_code,
+        ];
+    }
+    private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?string $subdir): array
+    {
+        if (!$file) return [null, null, null, null];
+
+        $disk   = 'public';
+        $folder = 'transfers/' . ($subdir ?: date('Y/m'));
+        $name   = $code . '__' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+        $ext    = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
+
+        $storedPath = $file->storeAs($folder, $name . '.' . $ext, $disk);
+
+        return [
+            $storedPath,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            $file->getSize(),
+        ];
+    }
+    private function saveBase64File(string $b64, string $originalName, string $mime, Assets $asset, string $code): array
+    {
+        $disk   = 'public';
+        $folder = 'transfers/' . date('Y/m');
+        $name   = $code . '__' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+        if (!$ext) {
+            $map = [
+                'application/pdf' => 'pdf',
+                'image/png'       => 'png',
+                'image/jpeg'      => 'jpg',
+                'image/webp'      => 'webp',
+                'image/gif'       => 'gif',
+                'text/plain'      => 'txt',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'application/vnd.ms-excel' => 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+                'text/csv' => 'csv',
+            ];
+            $ext = $map[strtolower($mime)] ?? 'bin';
+        }
+
+        if (str_starts_with($b64, 'data:')) {
+            $b64 = substr($b64, strpos($b64, ',') + 1);
+        }
+
+        $binary = base64_decode($b64, true);
+        if ($binary === false) {
+            throw new \RuntimeException('Invalid base64 file data.');
+        }
+
+        $storedPath = $folder . '/' . $name . '.' . strtolower($ext);
+        Storage::disk($disk)->put($storedPath, $binary);
+
+        return [
+            $storedPath,
+            $originalName,
+            $mime,
+            strlen($binary),
+        ];
+    }
+    private function generateTransferCode(string $assetCode): string
+    {
+        $prefix = 'TRF-' . preg_replace('/[^A-Za-z0-9]/', '', $assetCode);
+        return sprintf('%s-%s-%s', $prefix, now()->format('Ymd'), strtoupper(Str::random(6)));
     }
 }

@@ -27,8 +27,11 @@ Route::prefix('v1')->group(function () {
         // TRANSFERS
         Route::get('/transfers', [TransferApi::class, 'index']);
         Route::get('/transfers/{uuid}', [TransferApi::class, 'show']);
+        Route::post('/transfers', [TransferApi::class, 'store']);   
         // DISPOSAL
         Route::get('/disposals', [DisposalApi::class, 'index']);
+        Route::get('/disposals/{uuid}', [DisposalApi::class, 'show']);
+        Route::post('/disposals', [DisposalApi::class, 'store']);   
         // FILES/STORAGE
         Route::get('/files/{kind}/{uuid}/download', [StorageApi::class, 'download'])
             ->whereIn('kind', ['disposal', 'transfer'])

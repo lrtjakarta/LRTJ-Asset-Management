@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Assets;
 use App\Models\Disposal;
+use App\Models\MasterStatus;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
 
 class DisposalApi extends Controller
 {
@@ -16,14 +20,14 @@ class DisposalApi extends Controller
         // Validate & normalize
         $v = validator($request->all(), [
             'q'            => ['nullable', 'string', 'max:200'],
-            'workflow'     => ['nullable', 'string', 'max:50'],  // kode_status filter
-            'target'       => ['nullable', 'string', 'max:50'],  // target_status filter
+            'workflow'     => ['nullable', 'string', 'max:50'],
+            'target'       => ['nullable', 'string', 'max:50'],
             'asset_uuid'   => ['nullable', 'uuid'],
-            'sort_by'      => ['nullable', Rule::in(['created_at','updated_at','kode_status','target_status','asset_code'])],
-            'sort_dir'     => ['nullable', Rule::in(['asc','desc'])],
+            'sort_by'      => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'target_status', 'asset_code'])],
+            'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
             'page'         => ['nullable', 'integer', 'min:1'],
-            'with_trashed' => ['nullable', Rule::in(['0','1'])],
+            'with_trashed' => ['nullable', Rule::in(['0', '1'])],
             'from'         => ['nullable', 'date'],
             'to'           => ['nullable', 'date'],
         ])->validate();
@@ -32,7 +36,6 @@ class DisposalApi extends Controller
         $sortDir = $v['sort_dir'] ?? 'desc';
         $tz      = config('app.timezone', 'UTC');
 
-        // Base query + join asset for searching/sorting by asset_code
         $q = Disposal::query()
             ->select([
                 'disposals.*',
@@ -52,18 +55,17 @@ class DisposalApi extends Controller
             ->when(!empty($v['from']),       fn($x) => $x->where('disposals.created_at', '>=', $v['from']))
             ->when(!empty($v['to']),         fn($x) => $x->where('disposals.created_at', '<=', $v['to']))
             ->when(!empty($v['q']), function ($x) use ($v) {
-                $like = '%'.trim($v['q']).'%';
+                $like = '%' . trim($v['q']) . '%';
                 $x->where(function ($w) use ($like) {
                     $w->where('disposals.uuid',           'ILIKE', $like)
-                      ->orWhere('disposals.kode_status',  'ILIKE', $like)
-                      ->orWhere('disposals.target_status','ILIKE', $like)
-                      ->orWhere('disposals.note',         'ILIKE', $like)
-                      ->orWhere('a.asset_code',           'ILIKE', $like)
-                      ->orWhere('a.description',          'ILIKE', $like);
+                        ->orWhere('disposals.kode_status',  'ILIKE', $like)
+                        ->orWhere('disposals.target_status', 'ILIKE', $like)
+                        ->orWhere('disposals.note',         'ILIKE', $like)
+                        ->orWhere('a.asset_code',           'ILIKE', $like)
+                        ->orWhere('a.description',          'ILIKE', $like);
                 });
             });
 
-        // Sort whitelist
         $sortColumns = [
             'created_at'    => 'disposals.created_at',
             'updated_at'    => 'disposals.updated_at',
@@ -73,7 +75,6 @@ class DisposalApi extends Controller
         ];
         $q->orderBy($sortColumns[$sortBy] ?? 'disposals.created_at', $sortDir);
 
-        // Pagination switch (omit per_page/page -> ALL data)
         $paginationRequested = $request->has('per_page') || $request->has('page');
 
         if (!$paginationRequested) {
@@ -97,7 +98,7 @@ class DisposalApi extends Controller
                         'to'           => $request->query('to'),
                     ],
                 ],
-                'links' => ['first'=>null,'prev'=>null,'next'=>null,'last'=>null],
+                'links' => ['first' => null, 'prev' => null, 'next' => null, 'last' => null],
             ]);
         }
 
@@ -140,10 +141,10 @@ class DisposalApi extends Controller
     {
         $tz  = config('app.timezone', 'UTC');
         $row = Disposal::with([
-                'status:id,kode,name',
-                'target:id,kode,name',
-                'asset:uuid,asset_code,description',
-            ])
+            'status:id,kode,name',
+            'target:id,kode,name',
+            'asset:uuid,asset_code,description',
+        ])
             ->where('uuid', $uuid)
             ->firstOrFail();
 
@@ -152,21 +153,15 @@ class DisposalApi extends Controller
         return response()->json(['data' => $data]);
     }
 
-    /**
-     * Map Disposal rows to API shape (no HTML).
-     */
     protected function mapRows($rows, string $tz)
     {
         return $rows->map(function (Disposal $t) use ($tz) {
             $assetLabel    = $t->asset?->asset_code ?: $t->asset_uuid;
             $workflowLabel = $t->status ? ($t->kode_status . ' - ' . $t->status->name) : $t->kode_status;
             $targetLabel   = $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status;
-
-            // Local storage file payload:
-            // We'll build a stable download_url under /v1/files/{uuid}/download.
             $fileObj = null;
             if ($t->file_path) {
-                $disk = 'public'; // local "public" disk
+                $disk = 'public';
                 $fs   = Storage::disk($disk);
 
                 $exists = $fs->exists($t->file_path);
@@ -180,7 +175,6 @@ class DisposalApi extends Controller
                     'sha256'        => $t->file_sha256 ?? null,
                     'last_modified' => $mtime ? gmdate('c', $mtime) : null,
                     'download_url'  => route('files.download', ['uuid' => $t->uuid]),
-                    // For online preview (optional), local public URL:
                     'file_url'      => $exists ? url('storage/' . ltrim($t->file_path, '/')) : null,
                 ];
             }
@@ -206,5 +200,181 @@ class DisposalApi extends Controller
                 'deleted_at'      => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
             ];
         });
+    }
+    public function store(Request $request)
+    {
+        if (is_array($request->input('items'))) {
+            $items = $request->input('items');
+            if (empty($items)) {
+                return response()->json(['message' => 'items must be a non-empty array'], 422);
+            }
+
+            $results = [];
+            foreach ($items as $idx => $payload) {
+                try {
+                    $res = $this->createDisposalFromPayload($request, $payload, /*isBatch*/ true);
+                    $results[] = ['index' => $idx] + $res;
+                } catch (\Throwable $e) {
+                    $results[] = ['index' => $idx, 'ok' => false, 'error' => $e->getMessage()];
+                }
+            }
+
+            return response()->json(['ok' => true, 'batch' => true, 'results' => $results], 200);
+        }
+
+        // Single mode
+        try {
+            $res = $this->createDisposalFromPayload($request, $request->all(), /*isBatch*/ false);
+            return response()->json($res, ($res['duplicate'] ?? false) ? 200 : 201);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+    private function createDisposalFromPayload(Request $rootReq, array $payload, bool $isBatch): array
+    {
+        // ---- Validate ----
+        $rules = [
+            'uuid'              => ['nullable', 'uuid'],
+            'client_request_id' => ['nullable', 'string', 'max:100'],
+            'asset_uuid'        => ['required', 'uuid', 'exists:assets,uuid'],
+            'note'              => ['nullable', 'string', 'max:1000'],
+            'target_status'     => ['nullable', 'string', 'max:50'], // defaulted to 'DIS'
+            'created_at'        => ['nullable', 'date'],
+        ];
+
+        if ($isBatch) {
+            $rules['file_b64'] = ['nullable', 'array'];
+            $rules['file_b64.name'] = ['required_with:file_b64', 'string', 'max:255'];
+            $rules['file_b64.mime'] = ['required_with:file_b64', 'string', 'max:100'];
+            $rules['file_b64.data'] = ['required_with:file_b64', 'string']; // base64 string
+        } else {
+            $rules['file'] = ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'];
+        }
+
+        $data = validator($payload, $rules)->validate();
+
+        // ---- Auth (LDAP session) ----
+        $uid = (string) data_get($rootReq->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        // ---- Idempotency ----
+        $idemKey = $rootReq->header('Idempotency-Key') ?: ($data['client_request_id'] ?? null);
+        if (!empty($data['uuid'])) {
+            if ($existing = Disposal::where('uuid', $data['uuid'])->first()) {
+                return ['ok' => true, 'duplicate' => true, 'via' => 'uuid', 'id' => $existing->uuid, 'code' => $existing->disposal_code];
+            }
+        } elseif ($idemKey) {
+            if ($existing = Disposal::where('idempotency_key', $idemKey)->first()) {
+                return ['ok' => true, 'duplicate' => true, 'via' => 'idempotency_key', 'id' => $existing->uuid, 'code' => $existing->disposal_code];
+            }
+        }
+
+        $asset = Assets::select('uuid', 'asset_code', 'kode_status')->findOrFail($data['asset_uuid']);
+
+        $target = $data['target_status'] ?? 'DIS';
+        $ok = MasterStatus::where('kode', $target)->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))->exists();
+        abort_unless($ok, 422, 'Target disposal status not valid.');
+
+        $seq  = Disposal::where('asset_uuid', $asset->uuid)->count() + 1;
+        $code = 'DSP-' . str_replace(['-', ' '], '', $asset->asset_code) . '-' . $seq;
+
+        // ---- Save file ----
+        $path = $orig = $mime = $size = null;
+        if ($isBatch && !empty($data['file_b64'])) {
+            [$path, $orig, $mime, $size] = $this->saveBase64File(
+                $data['file_b64']['data'],
+                $data['file_b64']['name'],
+                $data['file_b64']['mime'],
+                $asset,
+                $code
+            );
+        } else {
+            [$path, $orig, $mime, $size] = $this->saveUpload($rootReq->file('file'), $asset, $code, null);
+        }
+
+        // ---- Create row ----
+        $row = DB::transaction(function () use ($data, $asset, $target, $code, $uid, $path, $orig, $mime, $size, $idemKey) {
+            $payload = [
+                'uuid'            => $data['uuid'] ?? (string) Str::uuid(),
+                'asset_uuid'      => $asset->uuid,
+                'disposal_code'   => $code,
+                'target_status'   => $target,
+                'kode_status'     => 'APR',                 // waiting for approval
+                'note'            => $data['note'] ?? null,
+                'file_path'       => $path,
+                'file_name'       => $orig,
+                'file_mime'       => $mime,
+                'file_size'       => $size,
+                'pic_request_uid' => $uid,
+                'before_status'   => $asset->kode_status,   // keep current asset status
+                'idempotency_key' => $idemKey,              // nullable column recommended
+            ];
+
+            if (!empty($data['created_at'])) {
+                $payload['created_at'] = $data['created_at'];
+            }
+
+            return Disposal::create($payload);
+        });
+
+        return ['ok' => true, 'id' => $row->uuid, 'code' => $row->disposal_code];
+    }
+    private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?string $subdir): array
+    {
+        if (!$file) return [null, null, null, null];
+
+        $disk   = 'public';
+        $folder = 'disposals/' . ($subdir ?: date('Y/m'));
+        $name   = $code . '__' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+        $ext    = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
+
+        $storedPath = $file->storeAs($folder, $name . '.' . $ext, $disk);
+
+        return [
+            $storedPath,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            $file->getSize(),
+        ];
+    }
+    private function saveBase64File(string $b64, string $originalName, string $mime, Assets $asset, string $code): array
+    {
+        $disk   = 'public';
+        $folder = 'disposals/' . date('Y/m');
+        $name   = $code . '__' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+
+        // infer extension from mime or original
+        $ext = pathinfo($originalName, PATHINFO_EXTENSION);
+        if (!$ext) {
+            $map = [
+                'application/pdf' => 'pdf',
+                'image/png'       => 'png',
+                'image/jpeg'      => 'jpg',
+                'image/webp'      => 'webp',
+                'image/gif'       => 'gif',
+                'text/plain'      => 'txt',
+                'application/msword' => 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+                'application/vnd.ms-excel' => 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+                'text/csv' => 'csv',
+            ];
+            $ext = $map[strtolower($mime)] ?? 'bin';
+        }
+
+        // strip data URL prefix if present
+        if (str_starts_with($b64, 'data:')) {
+            $b64 = substr($b64, strpos($b64, ',') + 1);
+        }
+
+        $binary = base64_decode($b64, true);
+        if ($binary === false) {
+            throw new \RuntimeException('Invalid base64 file data.');
+        }
+
+        $storedPath = $folder . '/' . $name . '.' . strtolower($ext);
+        Storage::disk($disk)->put($storedPath, $binary);
+
+        return [$storedPath, $originalName, $mime, strlen($binary)];
     }
 }
