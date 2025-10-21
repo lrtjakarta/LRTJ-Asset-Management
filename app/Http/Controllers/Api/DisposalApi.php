@@ -46,8 +46,8 @@ class DisposalApi extends Controller
         )->map(fn($x) => trim($x))->filter()->unique()->values();
 
         $uuids = collect(is_array($request->uuids) ? $request->uuids
-          : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
-          ->map(fn($x)=>trim($x))->filter()->unique()->values();
+            : (is_string($request->uuids) ? explode(',', $request->uuids) : []))
+            ->map(fn($x) => trim($x))->filter()->unique()->values();
 
         $q = Disposal::query()
             ->select([
@@ -111,6 +111,7 @@ class DisposalApi extends Controller
                         'with_trashed' => $request->query('with_trashed'),
                         'from'         => $request->query('from'),
                         'to'           => $request->query('to'),
+                        'uuids' => $uuids->all(),
                     ],
                 ],
                 'links' => ['first' => null, 'prev' => null, 'next' => null, 'last' => null],
@@ -141,6 +142,7 @@ class DisposalApi extends Controller
                     'with_trashed' => $request->query('with_trashed'),
                     'from'         => $request->query('from'),
                     'to'           => $request->query('to'),
+                    'uuids' => $uuids->all(),
                 ],
             ],
             'links' => [

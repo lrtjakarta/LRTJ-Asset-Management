@@ -137,6 +137,7 @@ class TransferApi extends Controller
                         'from'         => $request->query('from'),
                         'to'           => $request->query('to'),
                         'with_trashed' => $request->query('with_trashed'),
+                        'uuids' => $uuids->all(),
                     ],
                 ],
                 'links' => ['first' => null, 'prev' => null, 'next' => null, 'last' => null],
@@ -166,6 +167,7 @@ class TransferApi extends Controller
                     'from'         => $request->query('from'),
                     'to'           => $request->query('to'),
                     'with_trashed' => $request->query('with_trashed'),
+                        'uuids' => $uuids->all(),
                 ],
             ],
             'links' => [
