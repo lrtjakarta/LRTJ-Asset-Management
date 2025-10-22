@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\DB;
 
 class AssetReferenceGuard
 {
-    /** Return true if kode is referenced by any asset-related table/column */
     public static function isUsed(string $master, string $kode): bool
     {
         $map = [
@@ -35,7 +34,6 @@ class AssetReferenceGuard
 
         $targets = $map[$master] ?? [];
         foreach ($targets as [$tbl, $col]) {
-            // Count any references (including soft-deleted assets if you want to block those too)
             $exists = DB::table($tbl)->where($col, $kode)->limit(1)->exists();
             if ($exists) return true;
         }

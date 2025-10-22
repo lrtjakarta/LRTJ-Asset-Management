@@ -3,7 +3,6 @@
 @push('scripts')
     <script>
         (function() {
-            // DataTable
             const table = $('#tableMasterUserCode').DataTable({
                 processing: true,
                 serverSide: true,
@@ -83,7 +82,6 @@
                 $('#formMasterUserCode')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
-            // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 $('#formMasterUserCode')[0].reset(); 
                 const uuid = $(this).data('uuid');
@@ -112,11 +110,10 @@
                     });
             });
 
-            // One submit handler for create/update
             $('#formMasterUserCode').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
-                const payload = $f.serialize(); // includes uuid (if any), name, status
+                const payload = $f.serialize(); 
 
                 $.post("{{ route('master.user_code.save') }}", payload)
                     .done(function(res) {
@@ -131,7 +128,6 @@
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
-                        // Show first validation error or fallback message
                         let msg = xhr.responseJSON?.message || 'Failed to save';
                         const errs = xhr.responseJSON?.errors;
                         if (errs) {
@@ -146,7 +142,6 @@
                     });
             });
 
-            // Delete
             $(document).on('click', '.btn-delete', function() {
                 const uuid = $(this).data('uuid');
                 Swal.fire({

@@ -143,14 +143,12 @@
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
             };
 
-            // CSRF
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
 
-            // Helpers
             function preloadSelectValue($select, id, text) {
                 if (!id) return;
                 const opt = new Option(text ?? String(id), id, true, true);
@@ -160,32 +158,26 @@
             function resetTransferFormToCreate() {
                 const $form = $('#formTransfer');
 
-                // 1) Clear edit flag
-                $form.removeData('edit-id'); // ← important
+                $form.removeData('edit-id'); 
                 $('#tf-asset').val(null).empty(); 
 
-                // 2) Reset native fields
-                $form[0].reset(); // resets textarea, hidden inputs in DOM, etc.
+                $form[0].reset();
                 $('textarea[name="note"]').val('');
 
-                // 3) File UI reset
                 const fileInput = document.getElementById('tf-file');
                 if (fileInput) fileInput.value = '';
                 $('#tf-current-file').addClass('d-none');
                 $('#tf-current-file-link').attr('href', '').text('');
                 $('#tf-remove-file').val('0');
 
-                // 4) Default type + target select reset
                 $('#tf-type').val('owner');
 
-                // If select2 already initialized, destroy it first to avoid residue
                 if ($('#tf-target').data('select2')) {
                     $('#tf-target').off('select2:select').select2('destroy');
                 }
-                $('#tf-target').val(null).empty(); // clear options
+                $('#tf-target').val(null).empty();
                 $('#tf-target-hidden').val('');
 
-                // Re-init target for default type
                 initTargetSelect('owner');
             }
 
@@ -250,7 +242,6 @@
                 }
             }
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
-            // Table
             const dt = $('#tbl-transfers-all').DataTable({
                 processing: true,
                 serverSide: true,
@@ -281,7 +272,6 @@
                             if (type !== 'display') return data;
                             const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row
                                 .asset_uuid));
-                            // try to show the code if present, otherwise the label
                             const text = row.asset_code ?? data ?? '';
                             return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
                         }
@@ -367,35 +357,29 @@
                 ]
             });
 
-            // Filter by workflow
             $('#filter-workflow').on('change', () => dt.ajax.reload());
 
-            // Open create modal
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 resetTransferFormToCreate();
                 $('#tf-asset-uuid').val('');
                 $('#tf-target-hidden').val('');
                 $('#tf-type').val('owner');
-                $('#tf-edit-id').val(''); // NEW: ensure create mode
+                $('#tf-edit-id').val('');
                 $('.modal-title', '#modal-transfer').text('New Transfer');
 
-                // init selects
                 initSelect2('#tf-asset', R.assets);
                 initTargetSelect('owner');
 
-                // enable asset selection in create
                 $('#tf-asset').prop('disabled', false);
 
                 $('#modal-transfer').modal('show');
             });
 
-            // Change type in modal
             $('#tf-type').on('change', function() {
                 initTargetSelect(this.value);
             });
 
-            // Submit create
             $('#formTransfer').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
@@ -412,7 +396,6 @@
                     remove_file: $('#tf-remove-file').val() || 0
                 };
 
-                // guards
                 if (!base['after[value]']) {
                     Swal.fire('Target required', 'Please select a transfer target.', 'warning');
                     return;
@@ -465,14 +448,12 @@
                         $('#tf-asset').prop('disabled', false);
                         $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
 
-                        // reset file UI
                         if (fileEl) fileEl.value = '';
                         $('#tf-remove-file').val('0');
                     })
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
-            // Row actions
             $('#tbl-transfers-all').on('click', '.btn-tf-edit', function() {
                 const id = $(this).data('id');
                 $('#modal-transfer').modal('show');
@@ -487,7 +468,6 @@
                     $('#tf-edit-id').val(d.uuid || id);
                     $('#tf-asset-uuid').val(d.asset_uuid || '');
 
-                    // preload asset label
                     const $asset = $('#tf-asset');
                     const assetText = d.asset_label ??
                         (d.asset_code ? (d.asset_desc ? `${d.asset_code} - ${d.asset_desc}` : d

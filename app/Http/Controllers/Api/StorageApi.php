@@ -40,7 +40,6 @@ class StorageApi extends Controller
             'X-File-Id'         => (string) $row->uuid,
         ]);
 
-        // Conditional requests
         if ($request->headers->get('If-None-Match') === "\"$etag\"") {
             return response()->noContent(304)->withHeaders($headers);
         }
@@ -51,7 +50,6 @@ class StorageApi extends Controller
             }
         }
 
-        // Range support
         if ($request->headers->has('Range')) {
             [$unit, $range] = explode('=', $request->headers->get('Range'), 2);
             if (strtolower($unit) === 'bytes') {
@@ -105,11 +103,9 @@ class StorageApi extends Controller
 
         $data = collect();
 
-        // Helper to build a query safely (columns may not exist)
         $build = function (string $table, $model) use ($since) {
             $cols = ['uuid', 'file_path', 'file_name', 'file_mime', 'file_size', 'updated_at'];
 
-            // add optional columns if present
             if (Schema::hasColumn($table, 'file_sha256')) $cols[] = 'file_sha256';
             if (Schema::hasColumn($table, 'file_etag'))   $cols[] = 'file_etag';
             if (Schema::hasColumn($table, 'deleted_at'))  $cols[] = 'deleted_at';
@@ -118,7 +114,6 @@ class StorageApi extends Controller
                 ->whereNotNull('file_path')
                 ->select($cols);
 
-            // default: exclude soft-deleted if the table has deleted_at
             if (in_array('deleted_at', $cols, true)) {
                 $q->whereNull('deleted_at');
             }
@@ -165,7 +160,6 @@ class StorageApi extends Controller
             $size  = $r->file_size ?? ($exists ? $fs->size($filePath) : null);
             $mtime = $exists ? $fs->lastModified($filePath) : null;
 
-            // Prefer DB-provided SHA/ETag if present, else weak etag from mtime+size
             $etag   = $r->file_etag   ?? null;
             $sha256 = $r->file_sha256 ?? null;
             if (!$etag && ($mtime !== null || $size !== null)) {
@@ -182,7 +176,6 @@ class StorageApi extends Controller
                 'etag'          => $etag,
                 'last_modified' => optional($r->updated_at)->toIso8601String(),
                 'download_url'  => route('files.download.kind', ['kind' => $kind, 'uuid' => $r->uuid]),
-                // Optional: direct storage URL (if publicly accessible)
                 'file_url'      => $exists ? url('storage/' . ltrim($filePath, '/')) : null,
             ];
         });
@@ -199,7 +192,6 @@ class StorageApi extends Controller
 
     private function disk(): array
     {
-        // Local public disk for /storage symlink
         $disk = 'public';
         return [$disk, Storage::disk($disk)];
     }

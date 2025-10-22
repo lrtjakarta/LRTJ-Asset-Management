@@ -34,7 +34,7 @@ class AssetChildSequencer
                 ->where('asset_number_parent', $parentCode)
                 ->where('asset_number_child', '<>', '00')
                 ->whereNull('deleted_at')
-                ->orderBy('asset_number_child') // or created_at if you prefer
+                ->orderBy('asset_number_child')
                 ->lockForUpdate()
                 ->get();
 

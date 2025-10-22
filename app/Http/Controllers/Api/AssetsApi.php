@@ -15,7 +15,6 @@ class AssetsApi extends Controller
         // ---- Validate & normalize ----
         $v = validator($request->all(), [
             'q'            => ['nullable', 'string', 'max:200'],
-            // simple exact filters
             'status'       => ['nullable', 'string', 'max:50'],
             'location'     => ['nullable', 'string', 'max:50'],
             'asset_class'  => ['nullable', 'string', 'max:50'],
@@ -27,13 +26,11 @@ class AssetsApi extends Controller
             'uuids'        => ['nullable'],
             'uuids.*'      => ['uuid'],
 
-            // numeric ranges
             'price_min'    => ['nullable', 'numeric'],
             'price_max'    => ['nullable', 'numeric'],
             'total_min'    => ['nullable', 'numeric'],
             'total_max'    => ['nullable', 'numeric'],
 
-            // date range (UTC timestamps in DB)
             'updated_from' => ['nullable', 'date'],
             'updated_to'   => ['nullable', 'date'],
 
@@ -57,14 +54,11 @@ class AssetsApi extends Controller
             ->unique()
             ->values();
 
-        // ---- Base query with joins ----
         $q = DB::table('assets as a')
-            // child tables
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', '=', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', '=', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', '=', 'a.uuid')
-            // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',   '=', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  '=', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   '=', 'a.kode_status')
@@ -74,7 +68,6 @@ class AssetsApi extends Controller
             ->leftJoin('master_user_code    as uu',   'uu.kode',   '=', 'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',  '=', 'g.asset_maintenance')
             ->when(!$withTrashed, fn($qb) => $qb->whereNull('a.deleted_at'))
-            // free text search
             ->when(!empty($v['q']), function ($qb) use ($v) {
                 $like = '%' . trim($v['q']) . '%';
                 $qb->where(function ($w) use ($like) {
@@ -102,7 +95,6 @@ class AssetsApi extends Controller
                         ->orWhere('g.asset_maintenance', 'ILIKE', $like);
                 });
             })
-            // exact filters
             ->when(!empty($v['status']),      fn($qb) => $qb->where('a.kode_status', $v['status']))
             ->when(!empty($v['location']),    fn($qb) => $qb->where('a.kode_location', $v['location']))
             ->when(!empty($v['asset_class']), fn($qb) => $qb->where('a.kode_asset_class', $v['asset_class']))
@@ -111,7 +103,6 @@ class AssetsApi extends Controller
             ->when(!empty($v['maintenance']), fn($qb) => $qb->where('g.asset_maintenance', $v['maintenance']))
             ->when(!empty($v['sumber']),      fn($qb) => $qb->where('a.kode_sumber', $v['sumber']))
             ->when($uuids->isNotEmpty(), fn($qb) => $qb->whereIn('a.uuid', $uuids->all()))
-            // numeric ranges
             ->when(isset($v['price_min']) || isset($v['price_max']), function ($qb) use ($v) {
                 $min = $v['price_min'] ?? null;
                 $max = $v['price_max'] ?? null;
@@ -124,7 +115,6 @@ class AssetsApi extends Controller
                 if ($min !== null) $qb->where('v.total', '>=', $min);
                 if ($max !== null) $qb->where('v.total', '<=', $max);
             })
-            // date range (assumes a.updated_at is UTC in DB)
             ->when(!empty($v['updated_from']), fn($qb) => $qb->where('a.updated_at', '>=', $v['updated_from']))
             ->when(!empty($v['updated_to']),   fn($qb) => $qb->where('a.updated_at', '<=', $v['updated_to']))
             ->select([
@@ -177,7 +167,6 @@ class AssetsApi extends Controller
             ])
             ->orderBy($sortBy, $sortDir);
 
-        // ---- Unpaginated when no pagination params are provided ----
         $paginationRequested = $request->has('per_page') || $request->has('page');
 
         if (!$paginationRequested) {
@@ -185,8 +174,7 @@ class AssetsApi extends Controller
 
             return response()->json([
                 'data' => $rows->map(fn($r) => [
-                    ...((array) $r), // includes *_label + updated_at_local
-                    // Optionally normalize booleans/numbers here
+                    ...((array) $r),
                 ]),
                 'meta' => [
                     'total'     => $rows->count(),
@@ -221,8 +209,6 @@ class AssetsApi extends Controller
                 ],
             ]);
         }
-
-        // ---- Paginated path ----
         $perPage   = (int) ($v['per_page'] ?? 15);
         $paginator = $q->paginate($perPage)->appends($request->query());
 

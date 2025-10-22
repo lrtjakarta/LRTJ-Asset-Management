@@ -38,6 +38,5 @@ class AssetsQr extends Model
 
     public function asset() { return $this->belongsTo(Assets::class, 'asset_uuid'); }
 
-    /* Useful scope */
     public function scopeActive($q) { return $q->where('is_active', true); }
 }

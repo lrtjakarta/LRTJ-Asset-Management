@@ -270,11 +270,9 @@ class DisposalApi extends Controller
 
         $data = validator($payload, $rules)->validate();
 
-        // ---- Auth (LDAP session) ----
         $uid = (string) data_get($rootReq->session()->get('ldap_user'), 'uid', '');
         abort_if($uid === '', 401, 'No session UID.');
 
-        // ---- Idempotency ----
         $idemKey = $rootReq->header('Idempotency-Key') ?: ($data['client_request_id'] ?? null);
         if (!empty($data['uuid'])) {
             if ($existing = Disposal::where('uuid', $data['uuid'])->first()) {
@@ -316,15 +314,15 @@ class DisposalApi extends Controller
                 'asset_uuid'      => $asset->uuid,
                 'disposal_code'   => $code,
                 'target_status'   => $target,
-                'kode_status'     => 'APR',                 // waiting for approval
+                'kode_status'     => 'APR',
                 'note'            => $data['note'] ?? null,
                 'file_path'       => $path,
                 'file_name'       => $orig,
                 'file_mime'       => $mime,
                 'file_size'       => $size,
                 'pic_request_uid' => $uid,
-                'before_status'   => $asset->kode_status,   // keep current asset status
-                'idempotency_key' => $idemKey,              // nullable column recommended
+                'before_status'   => $asset->kode_status,
+                'idempotency_key' => $idemKey,
             ];
 
             if (!empty($data['created_at'])) {
@@ -360,7 +358,6 @@ class DisposalApi extends Controller
         $folder = 'disposals/' . date('Y/m');
         $name   = $code . '__' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
 
-        // infer extension from mime or original
         $ext = pathinfo($originalName, PATHINFO_EXTENSION);
         if (!$ext) {
             $map = [
@@ -379,7 +376,6 @@ class DisposalApi extends Controller
             $ext = $map[strtolower($mime)] ?? 'bin';
         }
 
-        // strip data URL prefix if present
         if (str_starts_with($b64, 'data:')) {
             $b64 = substr($b64, strpos($b64, ',') + 1);
         }

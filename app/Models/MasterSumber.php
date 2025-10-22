@@ -24,7 +24,6 @@ class MasterSumber extends Model
     protected static function booted(): void
     {
         static::deleting(function (self $model) {
-            // Block delete (soft or force) if used by Assets
             if (AssetReferenceGuard::isUsed('master_sumber', $model->kode)) {
                 throw ValidationException::withMessages([
                     'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",
@@ -32,7 +31,6 @@ class MasterSumber extends Model
             }
         });
     }
-    // so routes bind by uuid instead of id
     public function getRouteKeyName(): string
     {
         return 'uuid';

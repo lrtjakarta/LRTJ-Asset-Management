@@ -36,7 +36,6 @@ class TransferApi extends Controller
             'uuids.*' => ['uuid'],
         ])->validate();
 
-        // normalize asset_uuid list
         $assetUuids = collect(
             is_array($request->asset_uuid)
                 ? $request->asset_uuid
@@ -57,8 +56,6 @@ class TransferApi extends Controller
         $q = Transfer::query()
             ->select([
                 'assets_transfers.*',
-
-                // --- Asset core fields ---
                 DB::raw('a.asset_code        as asset_code'),
                 DB::raw('a.description       as asset_description'),
                 DB::raw('a.kode_location     as asset_kode_location'),
@@ -66,7 +63,6 @@ class TransferApi extends Controller
                 DB::raw('a.kode_status       as asset_kode_status'),
                 DB::raw('a.kode_sumber       as asset_kode_sumber'),
 
-                // --- Asset label fields (KODE - Name) ---
                 DB::raw("CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS asset_kode_location_label"),
                 DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS asset_kode_asset_class_label"),
                 DB::raw("CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS asset_kode_status_label"),
@@ -79,13 +75,11 @@ class TransferApi extends Controller
             ->leftJoin('master_sumber       as msrc', 'msrc.kode', '=', 'a.kode_sumber')
             ->with(['status:uuid,kode,name'])
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
-            // filters
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
             ->when($uuids->isNotEmpty(),     fn($x) => $x->whereIn('assets_transfers.uuid', $uuids))
             ->when(!empty($v['type']), fn($x) => $x->where('assets_transfers.type', $v['type']))
             ->when(!empty($v['from']), fn($x) => $x->where('assets_transfers.created_at', '>=', $v['from']))
             ->when(!empty($v['to']),   fn($x) => $x->where('assets_transfers.created_at', '<=', $v['to']))
-            // free text across transfer + asset + master names
             ->when(!empty($v['q']), function ($x) use ($v) {
                 $like = '%' . trim($v['q']) . '%';
                 $x->where(function ($w) use ($like) {
@@ -105,7 +99,6 @@ class TransferApi extends Controller
                 });
             });
 
-        // safe sorting
         $sortColumns = [
             'created_at'        => 'assets_transfers.created_at',
             'updated_at'        => 'assets_transfers.updated_at',
@@ -116,7 +109,6 @@ class TransferApi extends Controller
         ];
         $q->orderBy($sortColumns[$sortBy] ?? 'assets_transfers.created_at', $sortDir);
 
-        // ALL data if no pagination params
         $paginationRequested = $request->has('per_page') || $request->has('page');
 
         if (!$paginationRequested) {
@@ -269,7 +261,6 @@ class TransferApi extends Controller
                 ? ($t->kode_status . ' - ' . $t->status->name)
                 : $t->kode_status;
 
-            // asset bundle from joined columns
             $asset = [
                 'asset_uuid'                    => $t->asset_uuid,
                 'asset_code'                    => $t->getAttribute('asset_code'),
@@ -284,7 +275,6 @@ class TransferApi extends Controller
                 'asset_kode_sumber_label'       => $t->getAttribute('asset_kode_sumber_label'),
             ];
 
-            // file payload (local public disk) — same shape as Disposal
             $fileObj = null;
             if ($t->file_path) {
                 $disk   = 'public';
@@ -311,17 +301,14 @@ class TransferApi extends Controller
                 'kode_status'    => $t->kode_status,
                 'workflow_label' => $workflowLabel,
 
-                // before/after codes & labels
                 'before_code'    => $beforeCode,
                 'after_code'     => $afterCode,
                 'before_display' => $beforeDisplay,
                 'after_display'  => $afterDisplay,
 
-                // asset & file
                 'asset'          => $asset,
                 'file'           => $fileObj,
 
-                // timestamps
                 'created_at'     => optional($t->created_at)->timezone($tz)?->toIso8601String(),
                 'updated_at'     => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
                 'deleted_at'     => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
@@ -392,7 +379,7 @@ class TransferApi extends Controller
             $rules['file_b64'] = ['nullable', 'array'];
             $rules['file_b64.name'] = ['required_with:file_b64', 'string', 'max:255'];
             $rules['file_b64.mime'] = ['required_with:file_b64', 'string', 'max:100'];
-            $rules['file_b64.data'] = ['required_with:file_b64', 'string']; // base64 string
+            $rules['file_b64.data'] = ['required_with:file_b64', 'string'];
         } else {
             $rules['file'] = ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'];
         }

@@ -117,27 +117,24 @@
 @push('scripts')
     <script>
         (function() {
-            // ----- ROUTES (adjust to your named routes) -----
             const R = {
-                data: '{{ route('disposal.data.all') }}', // server-side datatable (global)
-                show: '{{ route('disposal.show', ':id') }}', // GET one
-                update: '{{ route('disposal.update', ':id') }}', // PUT
-                create: '{{ route('disposal.store') }}', // POST
-                destroy: '{{ route('disposal.destroy', ':id') }}', // DELETE (soft)
+                data: '{{ route('disposal.data.all') }}', 
+                show: '{{ route('disposal.show', ':id') }}', 
+                update: '{{ route('disposal.update', ':id') }}',
+                create: '{{ route('disposal.store') }}', 
+                destroy: '{{ route('disposal.destroy', ':id') }}', 
                 approve: id => '{{ route('disposal.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
 
-                assets: '{{ route('assets.options') }}', // select2 asset options
+                assets: '{{ route('assets.options') }}', 
             };
 
-            // CSRF
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
 
-            // Helpers
             function initSelect2(el, url, extra = {}) {
                 $(el).select2({
                     dropdownParent: $('#modal-disposal'),
@@ -172,20 +169,17 @@
                 $('#ds-edit-id').val('');
                 $('#ds-asset-uuid').val('');
                 $form[0].reset();
-                // file area
                 const fileInput = document.getElementById('ds-file');
                 if (fileInput) fileInput.value = '';
                 $('#ds-remove-file').val('0');
                 $('#ds-current-file').addClass('d-none');
                 $('#ds-current-file-link').attr('href', '#').text('');
-                // clear asset select2
                 if ($('#ds-asset').data('select2')) $('#ds-asset').select2('destroy');
                 $('#ds-asset').empty();
                 initSelect2('#ds-asset', R.assets);
                 $('#ds-asset').prop('disabled', false);
             }
 
-            // Open create modal
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 resetFormToCreate();
@@ -193,13 +187,11 @@
                 $('#modal-disposal').modal('show');
             });
 
-            // Remove existing file in edit
             $('#ds-btn-remove-file').off('click').on('click', function() {
                 $('#ds-remove-file').val('1');
                 $('#ds-current-file').addClass('d-none');
             });
 
-            // Datatable
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
             const dt = $('#tbl-disposals-all').DataTable({
                 processing: true,
@@ -300,10 +292,8 @@
                 ]
             });
 
-            // Filter
             $('#filter-workflow').on('change', () => dt.ajax.reload());
 
-            // Submit create/update
             $('#formDisposal').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
@@ -364,13 +354,11 @@
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
-            // Edit preload
             $('#tbl-disposals-all').on('click', '.btn-ds-edit', function() {
                 const id = $(this).data('id');
                 $('#modal-disposal').modal('show');
                 $('.modal-title', '#modal-disposal').text('Edit Disposal');
 
-                // re-init asset select
                 if ($('#ds-asset').data('select2')) $('#ds-asset').select2('destroy');
                 $('#ds-asset').empty();
                 initSelect2('#ds-asset', R.assets);
@@ -404,7 +392,6 @@
                 });
             });
 
-            // Approve
             $('#tbl-disposals-all').on('click', '.btn-ds-approve', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -427,7 +414,6 @@
                     });
             });
 
-            // Reject
             $('#tbl-disposals-all').on('click', '.btn-ds-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -450,7 +436,6 @@
                     });
             });
 
-            // Delete (soft)
             $('#tbl-disposals-all').on('click', '.btn-ds-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({

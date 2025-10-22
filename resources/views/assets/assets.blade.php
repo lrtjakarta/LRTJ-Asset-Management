@@ -6,7 +6,6 @@
             position: fixed !important;
             inset: 0 !important;
             z-index: 1080 !important;
-            /* above drawers/menus */
             width: 100vw !important;
             height: 100vh !important;
             margin: 0 !important;
@@ -15,7 +14,6 @@
 
         body.fs-lock {
             overflow: hidden;
-            /* prevent page scroll behind fullscreen card */
         }
 
         th,
@@ -52,12 +50,11 @@
         (function($) {
             const FS_BTN = '[data-card="fullscreen"]';
 
-            // Click (delegated)
             $(document).on('click', FS_BTN, function(e) {
                 e.preventDefault();
 
                 const $btn = $(this);
-                const $card = $btn.closest('.card')[0]; // DOM node
+                const $card = $btn.closest('.card')[0];
 
                 if (!$card) return;
 
@@ -106,7 +103,6 @@
                 }
             });
 
-            // Keep button state/icons synced with native FS changes
             const syncButtons = function() {
                 const active = document.fullscreenElement || document.webkitFullscreenElement || document
                     .msFullscreenElement;
@@ -120,7 +116,6 @@
 
             $(document).on('fullscreenchange webkitfullscreenchange MSFullscreenChange', syncButtons);
 
-            // ESC also exits fallback mode
             $(document).on('keydown', function(e) {
                 if (e.key === 'Escape') {
                     const $fs = $('.card.card-fullscreen');
@@ -310,7 +305,6 @@
                 }
             });
             const data = await res.json();
-            // TODO: fill your modal with data and show it
         }
 
         async function delAsset(uuid) {

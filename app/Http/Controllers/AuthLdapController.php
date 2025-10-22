@@ -63,21 +63,18 @@ class AuthLdapController extends Controller
         $host    = env('LDAP_HOST', 'ldap.forumsys.com');
         $port    = (int) env('LDAP_PORT', 389);
         $baseDn  = env('LDAP_BASE_DN', 'dc=example,dc=com');
-        $roDn    = env('LDAP_BIND_DN');           // cn=read-only-admin,dc=example,dc=com
+        $roDn    = env('LDAP_BIND_DN');
         $roPass  = env('LDAP_BIND_PASSWORD');
         $timeout = (int) env('LDAP_TIMEOUT', 5);
 
-        // 1) Try direct bind with uid DN
         $userDn = "uid={$username},{$baseDn}";
         if ($this->ldapBind($host, $port, $userDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
             $cn = $attrs['cn'][0] ?? $username;
             $ous = [];
 
-            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn /* or $foundDn */)));
-            // from memberOf (if server returns it)
+            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn )));
             $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
-            // from LDAP attributes (if present)
             if (!empty($attrs['ou'])) {
                 for ($i = 0; $i < $attrs['ou']['count']; $i++) {
                     $ous[] = $attrs['ou'][$i];
@@ -105,10 +102,8 @@ class AuthLdapController extends Controller
             $cn = $attrs['cn'][0] ?? $username;
             $ous = [];
 
-            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn /* or $foundDn */)));
-            // from memberOf (if server returns it)
+            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn)));
             $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
-            // from LDAP attributes (if present)
             if (!empty($attrs['ou'])) {
                 for ($i = 0; $i < $attrs['ou']['count']; $i++) {
                     $ous[] = $attrs['ou'][$i];
@@ -167,7 +162,6 @@ class AuthLdapController extends Controller
         $conn = $this->ldapConnect($host, $port, $timeout);
         if (! $conn) return null;
 
-        // Bind as read-only admin to search
         if ($bindDn && $bindPass) {
             if (! @ldap_bind($conn, $bindDn, $bindPass)) {
                 ldap_unbind($conn);
@@ -226,7 +220,6 @@ class AuthLdapController extends Controller
     }
     private function extractOusFromDn(string $dn): array
     {
-        // ldap_explode_dn is from ldap php extention
         if (function_exists('ldap_explode_dn')) {
             $parts = @ldap_explode_dn($dn, 0);
             if (is_array($parts)) {
@@ -241,7 +234,6 @@ class AuthLdapController extends Controller
             }
         }
 
-        // Fallback: regex parse
         preg_match_all('/ou=([^,]+)/i', $dn, $m);
         return array_map('strval', $m[1] ?? []);
     }
@@ -252,10 +244,8 @@ class AuthLdapController extends Controller
         if (!empty($attrs['memberof'])) {
             for ($i = 0; $i < $attrs['memberof']['count']; $i++) {
                 $dn = $attrs['memberof'][$i];
-                // Try OU first
                 if (preg_match('/ou=([^,]+)/i', $dn, $m)) {
                     $res[] = $m[1];
-                    // Some directories use CN groups; keep CN as a “group” name fallback
                 } elseif (preg_match('/cn=([^,]+)/i', $dn, $m)) {
                     $res[] = $m[1];
                 }

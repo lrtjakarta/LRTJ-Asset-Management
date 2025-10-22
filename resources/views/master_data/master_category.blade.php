@@ -3,7 +3,6 @@
 @push('scripts')
     <script>
         (function() {
-            // DataTable
             const table = $('#tableMasterCategory').DataTable({
                 processing: true,
                 serverSide: true,
@@ -78,7 +77,6 @@
                 ]
             });
 
-            // Init select2 (if you load it) or Metronic KT bindings
             if ($.fn.select2) {
                 $('#kodeAssetType').select2({
                     dropdownParent: $('#kt_modal_add'),
@@ -94,7 +92,6 @@
                     }
                 });
             } else {
-                // fallback: load once
                 fetch("{{ route('master.asset_type.options') }}")
                     .then(r => r.json())
                     .then(data => {
@@ -108,7 +105,6 @@
                     });
             }
 
-            // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.category.show', ':uuid') }}".replace(':uuid', uuid))
@@ -124,7 +120,6 @@
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
                         $f.find('[name="status"]').val(d.status).change?.();
-                        // set select (select2 or plain)
                         if ($.fn.select2) {
                             const opt = new Option(d.kode_asset_type, d.kode_asset_type, true, true);
                             $('#kodeAssetType').append(opt).trigger('change');
@@ -142,11 +137,10 @@
                     });
             });
 
-            // One submit handler for create/update
             $('#formMasterCategory').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
-                const payload = $f.serialize(); // includes uuid (if any), name, status
+                const payload = $f.serialize();
 
                 $.post("{{ route('master.category.save') }}", payload)
                     .done(function(res) {
@@ -160,7 +154,6 @@
                         $('#formMasterCategory')[0].reset(); 
                     })
                     .fail(function(xhr) {
-                        // Show first validation error or fallback message
                         let msg = xhr.responseJSON?.message || 'Failed to save';
                         const errs = xhr.responseJSON?.errors;
                         if (errs) {
@@ -175,7 +168,6 @@
                     });
             });
 
-            // Delete
             $(document).on('click', '.btn-delete', function() {
                 const uuid = $(this).data('uuid');
                 Swal.fire({

@@ -46,7 +46,6 @@ class MasterCategory extends Model
         });
     }
 
-    // so routes bind by uuid instead of id
     public function getRouteKeyName(): string
     {
         return 'uuid';

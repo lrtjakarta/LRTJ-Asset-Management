@@ -20,7 +20,6 @@ class MasterGroupCategory extends Model
         'status' => 'boolean',
     ];
 
-    // If you want route-model binding by uuid:
     public function getRouteKeyName(): string
     {
         return 'uuid';

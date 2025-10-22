@@ -5,10 +5,6 @@ use Illuminate\Support\Facades\DB;
 
 class TransferCodeService
 {
-    /**
-     * Build: TRF-{ASSET_CODE}-{YYYYMMDD}-{#####}
-     * Sequence restarts per asset_code per day.
-     */
     public function nextForAsset(string $assetCode): string
     {
         $date = now('Asia/Jakarta')->format('Ymd');
@@ -25,7 +21,6 @@ class TransferCodeService
                 )
             ");
 
-            // ensure row exists
             DB::statement("
                 INSERT INTO transfer_counters(asset_code, ymd, last_seq)
                 VALUES (?, ?, 0)

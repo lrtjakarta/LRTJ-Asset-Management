@@ -30,7 +30,6 @@ class MasterUserCode extends Model
     protected static function booted(): void
     {
         static::deleting(function (self $model) {
-            // Block delete (soft or force) if used by Assets
             if (AssetReferenceGuard::isUsed('master_user_code', $model->kode)) {
                 throw ValidationException::withMessages([
                     'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",

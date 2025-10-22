@@ -133,13 +133,11 @@ class TrashController extends Controller
         ];
     }
 
-    /** Page */
     public function index()
     {
         return view('trash.trash');
     }
 
-    /** DataTables JSON: union soft-deleted rows from all mapped tables */
     public function data(Request $request)
     {
         $map = $this->map();
@@ -153,7 +151,6 @@ class TrashController extends Controller
             $pk    = $cfg['pk'];
             $label = $cfg['label_col'];
 
-            // PG: cast id & label to text so UNION aligns
             $builders[] = DB::table($tbl)
                 ->selectRaw('?::text as type, ' . $pk . '::text as id, ' . $label . '::text as label, deleted_at', [$type])
                 ->whereNotNull('deleted_at');
@@ -179,7 +176,6 @@ class TrashController extends Controller
             ->make(true);
     }
 
-    /** Restore a row by type/id */
     public function restore(string $type, string $id)
     {
         $cfg = $this->map()[$type] ?? null;
@@ -194,7 +190,6 @@ class TrashController extends Controller
         return response()->json(['ok' => true, 'message' => 'Restored']);
     }
 
-    /** Permanently delete a row by type/id */
     public function force(string $type, string $id)
     {
         $cfg = $this->map()[$type] ?? null;
@@ -213,7 +208,6 @@ class TrashController extends Controller
             return response()->json(['ok' => true, 'message' => 'Asset permanently deleted.']);
         }
 
-        // Non-asset: normal permanent delete
         $row->forceDelete();
         return response()->json(['ok' => true, 'message' => 'Permanently deleted.']);
     }

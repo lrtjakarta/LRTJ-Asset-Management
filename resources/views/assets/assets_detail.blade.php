@@ -813,7 +813,6 @@
                 const row = $('#tbl-transfers').DataTable().row($(this).closest('tr')).data();
                 $('#modal-transfer').modal('show');
 
-                // set form into EDIT mode
                 $('#formTransfer').data('edit-id', row.uuid);
                 $('#tf-type').val(row.type).trigger('change');
 
@@ -830,10 +829,8 @@
                     $('#tf-remove-file').val('1');
                     $('#tf-current-file').addClass('d-none');
                 });
-                // Delay to allow select2 to mount then set target
                 setTimeout(() => {
                     const code = row.after_code || '';
-                    // ensure the target select contains current code
                     const opt = new Option(code, code, true, true);
                     $('#tf-target').append(opt).trigger('change');
                     $('#tf-target-hidden').val(code);
@@ -848,7 +845,6 @@
                 const isEdit = !!$('#formTransfer').data('edit-id');
                 const id = $('#formTransfer').data('edit-id');
 
-                // Common fields
                 const baseFields = {
                     asset_uuid: '{{ $asset->uuid }}',
                     type: $('#tf-type').val(),
@@ -863,13 +859,12 @@
                 let req;
 
                 if (hasFile) {
-                    // ---- multipart when a file is present ----
                     const fd = new FormData();
                     Object.entries(baseFields).forEach(([k, v]) => fd.append(k, v));
                     fd.append('file', fileInput.files[0]);
 
                     const url = isEdit ? ROUTE.update(id) : '{{ route('transfer.store', $asset->uuid) }}';
-                    const type = isEdit ? 'POST' : 'POST'; // use POST + _method override for PUT
+                    const type = isEdit ? 'POST' : 'POST';
                     if (isEdit) fd.append('_method', 'PUT');
 
                     req = $.ajax({
@@ -881,7 +876,6 @@
                     });
 
                 } else {
-                    // ---- your original url-encoded flow when no file ----
                     const payload = baseFields;
 
                     req = isEdit ?
@@ -903,20 +897,17 @@
                         $('#modal-transfer').modal('hide');
                         Swal.fire('Success', isEdit ? 'Transfer updated.' : 'Transfer created.', 'success');
                         $('#tbl-transfers').DataTable().ajax.reload(null, false);
-                        // reset file UI after success
                         if (fileInput) fileInput.value = '';
                         if ($('#tf-remove-file').length) $('#tf-remove-file').val('0');
                     })
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
-            // Optional: when clicking "Remove" on current file in edit modal
             $('#btn-remove-file').off('click').on('click', function() {
                 $('#tf-remove-file').val('1');
                 $('#tf-current-file').addClass('d-none');
             });
 
-            // Approve
             $('#tbl-transfers').on('click', '.btn-tf-approve', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -949,7 +940,6 @@
                     });
             });
 
-            // Reject
             $('#tbl-transfers').on('click', '.btn-tf-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -974,7 +964,6 @@
                     });
             });
 
-            // Delete (soft)
             $('#tbl-transfers').on('click', '.btn-tf-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1009,7 +998,6 @@
 
     <script>
         (function() {
-            // --- Routes for Disposal ---
             const DS = {
                 data: '{{ route('disposal.data', $asset->uuid) }}',
                 create: '{{ route('disposal.store') }}',
@@ -1020,7 +1008,6 @@
                 reject: '{{ route('disposal.reject', ':id') }}',
             };
 
-            // Open modal (new)
             $('#btnOpenDisposal').on('click', function(e) {
                 e.preventDefault();
                 resetDisposalForm();
@@ -1036,13 +1023,11 @@
                 $('#ds-current-file-link').attr('href', '#').text('');
             }
 
-            // Remove existing file toggle in edit
             $('#ds-btn-remove-file').off('click').on('click', function() {
                 $('#ds-remove-file').val('1');
                 $('#ds-current-file').addClass('d-none');
             });
 
-            // Submit create/update (multipart if file chosen)
             $('#formDisposal').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
@@ -1105,7 +1090,7 @@
                 },
                 order: [
                     [7, 'desc']
-                ], // Updated column
+                ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
@@ -1197,7 +1182,6 @@
                 ]
             });
 
-            // Edit (preload)
             $(document).on('click', '.btn-ds-edit', function() {
                 const id = $(this).data('id');
                 $.getJSON(DS.show.replace(':id', id), function(d) {
@@ -1214,7 +1198,6 @@
                 });
             });
 
-            // Approve
             $(document).on('click', '.btn-ds-approve', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1245,7 +1228,6 @@
                 });
             });
 
-            // Reject
             $(document).on('click', '.btn-ds-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1268,7 +1250,6 @@
                 });
             });
 
-            // Delete (soft)
             $(document).on('click', '.btn-ds-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1315,7 +1296,7 @@
                 },
                 order: [
                     [5, 'desc']
-                ], // created_at desc
+                ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
@@ -1430,7 +1411,6 @@
             // window.openReturnModal = function() {
             // };
 
-            // Submit
             $('#formReturn').on('submit', function(e) {
                 e.preventDefault();
                 const id = $('#ret-source').val();

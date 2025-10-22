@@ -31,16 +31,13 @@
 
         .swal2-confirm {
             background-color: #EA242A !important;
-            /* Example: #FF0000 for red */
         }
 
-        /* Make select2 height match .form-select */
         .select2-container .select2-selection--single {
             height: calc(1.5em + .75rem + 2px);
             padding: .375rem .75rem;
             border: 1px solid var(--bs-border-color);
             border-radius: .475rem;
-            /* Metronic-ish rounding */
         }
 
         .select2-container--bootstrap-5 .select2-selection--single .select2-selection__rendered {

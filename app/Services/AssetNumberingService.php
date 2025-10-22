@@ -70,7 +70,6 @@ class AssetNumberingService
             //     return '00';
             // }
 
-            // otherwise bump
             $seq = (int) ($row->last_child_seq ?? 0) + 1;
 
             DB::table('asset_parent_counters')
@@ -91,10 +90,6 @@ class AssetNumberingService
         return (int) ltrim($last6, '0');
     }
 
-    /**
-     * If this asset was the last one issued for its old group, and no one else uses that parent,
-     * roll the group's `last_parent_seq` back by 1.
-     */
     public function rollbackParentIfLatest(string $oldGroup, string $oldParentCode, string $assetUuid): void
     {
         $oldSeq = $this->extractParentSeq($oldParentCode);

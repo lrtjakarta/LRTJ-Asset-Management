@@ -81,7 +81,6 @@ class TransferController extends Controller
 
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
             })
-            // Actions
             ->addColumn('actions', function ($r) {
                 $pending = $r->kode_status === 'APR';
                 $id = e($r->uuid);
@@ -108,7 +107,6 @@ class TransferController extends Controller
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
-        // logged-in UID (from your LDAP session)
         $currentUid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
         if ($currentUid === '') {
             abort(401, 'No session UID.');
@@ -117,7 +115,6 @@ class TransferController extends Controller
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
         $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count();
 
-        // ---- build BEFORE / AFTER + labels ----
         $beforeCode = null;
         switch ($data['type']) {
             case 'owner':
@@ -141,7 +138,6 @@ class TransferController extends Controller
         $beforeLabel = $this->resolveLabel($data['type'], $beforeCode);
         $afterLabel  = $this->resolveLabel($data['type'], $afterCode);
 
-        // WAITING FOR APPROVAL (master_status.kode = APR)
         $initialWorkflow = 'APR';
 
         $transfer = DB::transaction(function () use (
@@ -166,11 +162,9 @@ class TransferController extends Controller
                 'transfer_code'    => $code,
                 'type'             => $data['type'],
 
-                // keep the JSON payloads
                 'before'           => ['value' => $beforeCode],
                 'after'            => ['value' => $afterCode],
 
-                // and store the human labels for fast listing
                 'before_label'     => $beforeLabel,
                 'after_label'      => $afterLabel,
 
@@ -228,10 +222,8 @@ class TransferController extends Controller
 
         $asset = Assets::with(['assignment'])->findOrFail($data['asset_uuid']);
 
-        // Re-compute BEFORE from current asset state (so UI stays truthful)
         $before = $this->currentValueForType($asset, $data['type']);
         $after  = ['value' => $data['after']['value']];
-        // remove existing file
 
         if ($request->boolean('remove_file')) {
             if ($tf->file_path) Storage::disk('public')->delete($tf->file_path);
@@ -241,7 +233,6 @@ class TransferController extends Controller
             $file_size = null;
         }
 
-        // replace with new file if provided
         if ($request->hasFile('file')) {
             [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $tf->transfer_code, $tf);
             $file_path = $path;
@@ -305,7 +296,7 @@ class TransferController extends Controller
                     break;
             }
 
-            $tf->kode_status      = 'ACC';           // Approved
+            $tf->kode_status      = 'ACC';
             $tf->pic_approve_uid  = $uid;
             $tf->save();
         });
@@ -313,7 +304,6 @@ class TransferController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Reject (do NOT change the asset) */
     public function reject(Request $request, string $uuid)
     {
         $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
@@ -322,7 +312,7 @@ class TransferController extends Controller
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be rejected.');
 
-        $tf->kode_status     = 'REJ';  // Rejected
+        $tf->kode_status     = 'REJ';
         $tf->pic_approve_uid = $uid;
         $tf->save();
 
@@ -341,19 +331,16 @@ class TransferController extends Controller
     {
         $q = Transfer::query()
             ->where('asset_uuid', $assetUuid)
-            ->with('status') // for workflow label
+            ->with('status')
             ->orderByDesc('created_at');
 
         return DataTables::of($q)
-            // Workflow label (APR - Waiting for Approval)
             ->addColumn('workflow_label', function (Transfer $r) {
                 return $r->status ? ($r->kode_status . ' - ' . $r->status->name) : $r->kode_status;
             })
-            // Raw codes from JSON (optional)
             ->addColumn('before_code', fn(Transfer $t) => data_get($t->before, 'value'))
             ->addColumn('after_code',  fn(Transfer $t) => data_get($t->after,  'value'))
 
-            // Computed labels (KODE - Name/Department)
             ->addColumn('before_display', function (Transfer $t) {
                 return $this->resolveLabel($t->type, data_get($t->before, 'value'));
             })
@@ -429,7 +416,7 @@ class TransferController extends Controller
         }
 
         static $cache = [
-            'usercode' => [], // owner/user/maintenance
+            'usercode' => [],
             'status'   => [],
             'location' => [],
         ];

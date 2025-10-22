@@ -30,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
         date_default_timezone_set(config('app.timezone'));
         DB::statement("SET TIME ZONE 'Asia/Jakarta'");
         RateLimiter::for('ldap-login', function (Request $request) {
-            $username = strtolower((string) $request->input('username')); // your UID field
+            $username = strtolower((string) $request->input('username'));
             $ip = $request->ip();
 
             return [

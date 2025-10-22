@@ -277,7 +277,6 @@ class ReturnController extends Controller
                     $after  = $resolve($t->type, data_get($t->after,  'value'));
                     return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";
                 }
-                // For disposal returns: simple label
                 if ($r->source_type === 'disposal') {
                     return 'DISPOSAL';
                 }
@@ -337,7 +336,6 @@ class ReturnController extends Controller
                     $after  = $resolve($t->type, data_get($t->after,  'value'));
                     return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";
                 }
-                // For disposal returns: simple label
                 if ($r->source_type === 'disposal') {
                     return 'DISPOSAL';
                 }

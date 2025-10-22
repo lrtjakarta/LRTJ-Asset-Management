@@ -3,7 +3,6 @@
 @push('scripts')
     <script>
         (function() {
-            // DataTable
             const table = $('#tableMasterAssetClass').DataTable({
                 processing: true,
                 serverSide: true,
@@ -92,7 +91,6 @@
                     }
                 });
             } else {
-                // fallback: load once
                 fetch("{{ route('master.transaction.options') }}")
                     .then(r => r.json())
                     .then(data => {
@@ -112,7 +110,6 @@
                 $('#kodeTransaction').val(null).trigger('change');
             });
 
-            // Edit click -> load row then show modal
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.asset_class.show', ':uuid') }}".replace(':uuid', uuid))
@@ -145,11 +142,10 @@
                     });
             });
 
-            // One submit handler for create/update
             $('#formMasterAssetClass').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
-                const payload = $f.serialize(); // includes uuid (if any), name, status
+                const payload = $f.serialize();
 
                 $.post("{{ route('master.asset_class.save') }}", payload)
                     .done(function(res) {
@@ -165,7 +161,6 @@
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
-                        // Show first validation error or fallback message
                         let msg = xhr.responseJSON?.message || 'Failed to save';
                         const errs = xhr.responseJSON?.errors;
                         if (errs) {
@@ -180,7 +175,6 @@
                     });
             });
 
-            // Delete
             $(document).on('click', '.btn-delete', function() {
                 const uuid = $(this).data('uuid');
                 Swal.fire({

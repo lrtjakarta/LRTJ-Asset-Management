@@ -324,7 +324,6 @@
                 }).then((res) => {
                     if (!res.isConfirmed) return;
 
-                    // optional: lock the UI while submitting
                     const $btn = $form.find('button[type="submit"]');
                     $btn.prop('disabled', true).addClass('disabled');
 
@@ -334,7 +333,6 @@
                         didOpen: () => Swal.showLoading()
                     });
 
-                    // now submit for real
                     e.target.submit();
                 });
             });
@@ -365,7 +363,6 @@
             });
         }
 
-        // base endpoints (you already defined routes)
         const R = {
             parent: '{{ route('assets.parent.options') }}',
             parentMeta: (uuid) => '{{ route('assets.parent.meta', ':id') }}'.replace(':id', uuid),
@@ -384,7 +381,6 @@
 
 
         $(function() {
-            // Independent dropdowns
             initSelect2('#sel-parent', R.parent);
             initSelect2('#sel-sumber', R.sumber);
             initSelect2('#sel-transaction', R.trx);
@@ -443,7 +439,6 @@
                 }
             });
 
-            // clear children on parent change
             $('#sel-asset-type').on('change', function() {
                 $('#sel-category').val(null).trigger('change');
                 $('#sel-category-2').val(null).trigger('change');
@@ -472,7 +467,6 @@
                     $('#wrap-parent-picker').show();
                     $('#wrap-classification').hide();
 
-                    // Optional: clear classification inputs so backend won’t validate them
                     $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category, #sel-asset-class')
                         .val(null).trigger('change');
                     // $('#sel-transaction, #sel-asset-class')
@@ -484,7 +478,6 @@
                 }
             });
 
-            // When user picks a parent → autofill classification
             $('#sel-parent').on('select2:select', function(e) {
                 const id = e.params.data.id;
                 $.getJSON(R.parentMeta(id), function(meta) {

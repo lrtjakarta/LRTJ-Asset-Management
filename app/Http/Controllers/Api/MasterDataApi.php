@@ -14,16 +14,6 @@ use Illuminate\Validation\Rule;
 
 class MasterDataApi extends Controller
 {
-    /**
-     * Query params:
-     *  - q: search (e.g: kode/department/description)
-     *  - status: 0|1 (optional)
-     *  - sort_by: kode|department|created_at (default: created_at)
-     *  - sort_dir: asc|desc (default: desc)
-     *  - per_page: 1..100 (default: 15)
-     *  - page: >=1 (default: 1)
-     *  - with_trashed: 0|1 (optional)
-     */
 
 
     public function master_transaction(Request $request)

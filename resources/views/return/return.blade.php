@@ -110,14 +110,12 @@
                 showAsset: uuid => '{{ route('assets.detail', ':uuid') }}'.replace(':uuid', encodeURIComponent(
                     uuid)),
             };
-            // CSRF
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
 
-            // DataTable (global)
             const dt = $('#tbl-returns-all').DataTable({
                 processing: true,
                 serverSide: true,
@@ -127,7 +125,7 @@
                 },
                 order: [
                     [6, 'desc']
-                ], // created_at
+                ], 
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
@@ -200,7 +198,6 @@
                 ]
             });
 
-            // Open modal
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 $('#formReturn')[0].reset();
@@ -251,7 +248,6 @@
                 });
             }
 
-            // Submit create
             $('#formReturn').on('submit', function(e) {
                 e.preventDefault();
                 const id = $('#ret-source').val();
@@ -274,7 +270,6 @@
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error'));
             });
 
-            // Delete
             $('#tbl-returns-all').on('click', '.btn-ret-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({

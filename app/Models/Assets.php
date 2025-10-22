@@ -41,7 +41,6 @@ class Assets extends Model
             ];
 
             if ($asset->isForceDeleting()) {
-                // Permanently remove children + QR/RFID files
                 foreach ($rels as $rel) {
                     $child = $asset->{$rel}()->withTrashed()->first();
                     if ($child) {

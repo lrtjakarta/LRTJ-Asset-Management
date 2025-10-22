@@ -27,7 +27,7 @@ class AssetUpdateRequest extends FormRequest
             'kode_asset_class'        => ['nullable', 'string', 'max:50'],
             'kode_status'             => ['nullable', 'string', 'max:50'],
 
-            // identifiers (optional)
+            // identifiers
             'asset_number_maximo'       => ['nullable', 'string', 'max:120'],
             'asset_number_dynamic_365'  => ['nullable', 'string', 'max:120'],
             'asset_number_internal'     => ['nullable', 'string', 'max:120'],
@@ -45,14 +45,14 @@ class AssetUpdateRequest extends FormRequest
             'asset_user'           => ['required', 'string', 'max:50'],
             'asset_maintenance'    => ['required', 'string', 'max:50'],
 
-            // value (optional)
+            // value
             'price'                 => ['required', 'numeric', 'min:0'],
             'quantity'              => ['required', 'numeric', 'min:0'],
             'is_pajak'              => ['nullable', 'boolean'],
             'kode_uom'              => ['nullable', 'string', 'max:50'],
             'useful_life_month'     => ['nullable', 'integer', 'min:0', 'max:1200'],
 
-            // QR/RFID optional
+            // QR/RFID
             'rfid_epc'              => ['nullable', 'string', 'max:128'],
 
             // document

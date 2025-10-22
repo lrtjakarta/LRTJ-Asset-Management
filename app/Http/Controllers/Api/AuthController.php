@@ -38,7 +38,6 @@ class AuthController extends Controller
         $password = (string) $request->input('password');
         $device   = $request->input('device_name', 'api');
 
-        // 1) Static admin short-circuit
         $staticUser = Str::lower((string) config('auth.static_admin.username', ''));
         $staticPass = (string) config('auth.static_admin.password', '');
         if (
@@ -67,7 +66,6 @@ class AuthController extends Controller
             ], 201);
         }
 
-        // 2) LDAP
         $host    = config('ldap.host');
         $port    = (int) config('ldap.port', 389);
         $baseDn  = (string) config('ldap.base_dn');
@@ -92,7 +90,7 @@ class AuthController extends Controller
             $mail  = $attrs['mail'][0] ?? null;
 
             $user = User::updateOrCreate(
-                ['username' => $username],                         // <-- username key
+                ['username' => $username],
                 ['name' => $cn, 'email' => $mail, 'password' => Hash::make(Str::random(32))]
             );
 
@@ -128,7 +126,7 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $user  = $request->user(); // may be null if not authenticated
+        $user  = $request->user();
         $token = $user?->currentAccessToken();
 
         if ($token instanceof PersonalAccessToken) {
@@ -138,8 +136,6 @@ class AuthController extends Controller
         }
 
         if ($token instanceof TransientToken) {
-            // Cookie (SPA) mode – token isn’t stored, nothing to delete
-            // Destroy session/cookie if you’re mixing guards:
             auth()->guard('web')->logout();
             $request->session()?->invalidate();
             $request->session()?->regenerateToken();
@@ -157,7 +153,6 @@ class AuthController extends Controller
             // Revoke all stored tokens
             $user->tokens()->delete();
         }
-        // Also clear session if cookie mode was used:
         auth()->guard('web')->logout();
         $request->session()?->invalidate();
         $request->session()?->regenerateToken();

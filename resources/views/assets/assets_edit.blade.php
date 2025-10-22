@@ -328,7 +328,6 @@
         ];
     @endphp
     <script>
-        /* confirm before submit */
         $(function() {
             const $form = $('#assetEditForm');
             $form.on('submit', function(e) {
@@ -354,7 +353,6 @@
             });
         });
 
-        /* select2 helpers */
         function initSelect2(el, url, extra = {}) {
             $(el).select2({
                 placeholder: 'Select...',
@@ -402,7 +400,6 @@
             $(selector).append(opt).trigger('change');
         }
 
-        /* endpoints */
         const R = {
             sumber: '{{ route('master.sumber.options') }}',
             trx: '{{ route('master.transaction.options') }}',
@@ -419,11 +416,9 @@
             parentMeta: (uuid) => '{{ route('assets.parent.meta', ':id') }}'.replace(':id', uuid),
         };
 
-        /* current values from server */
         const CURRENT = @json($current);
 
         $(function() {
-            // independent
             initSelect2('#sel-sumber', R.sumber);
             initSelect2('#sel-transaction', R.trx);
             initSelect2('#sel-asset-type', R.type);
@@ -439,7 +434,6 @@
             initSelect2('#sel-sub-category', R.subcat);
             initSelect2('#sel-parent', R.parent);
 
-            // dependent
             initSelect2('#sel-category', R.cat, () => ({
                 kode_asset_type: $('#sel-asset-type').val() || ''
             }));
@@ -461,11 +455,9 @@
                 $('#sel-category-2').val(null).trigger('change');
             });
 
-            // preload current values (in correct dependency order)
             preloadValue('#sel-transaction', CURRENT['trx'], R.trx);
             preloadValue('#sel-asset-type', CURRENT['type'], R.type, () => ({}));
 
-            // after type is loaded, preload category & cat2
             setTimeout(() => {
                 preloadValue('#sel-category', CURRENT['cat'], R.cat, () => ({
                     kode_asset_type: $('#sel-asset-type').val() || ''
@@ -514,7 +506,6 @@
                     $('#sel-parent').val(null).trigger('change');
                 }
             });
-            // When a parent is selected, autofill classification
             $('#sel-parent').on('select2:select', function(e) {
                 const id = e.params.data.id;
                 $.getJSON(R.parentMeta(id), function(meta) {
