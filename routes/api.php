@@ -6,7 +6,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MasterDataApi;
 use App\Http\Controllers\Api\TransferApi;
 use App\Http\Controllers\Api\DisposalApi;
+use App\Http\Controllers\Api\ReturnHistoryApi;
 use App\Http\Controllers\Api\StorageApi;
+use App\Models\ReturnHistory;
 
 Route::prefix('v1')->group(function () {
     // PUBLIC
@@ -32,6 +34,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/disposals', [DisposalApi::class, 'index']);
         Route::get('/disposals/{uuid}', [DisposalApi::class, 'show']);
         Route::post('/disposals', [DisposalApi::class, 'store']);   
+        // RETURN HISTORY
+        Route::get('/return', [ReturnHistoryApi::class, 'index']);
+        Route::get('/return/{uuid}', [ReturnHistoryApi::class, 'show']);
+        Route::post('/return', [ReturnHistoryApi::class, 'store']);
+        Route::post('/return/options', [ReturnHistoryApi::class, 'options']);
         // FILES/STORAGE
         Route::get('/files/{kind}/{uuid}/download', [StorageApi::class, 'download'])
             ->whereIn('kind', ['disposal', 'transfer'])
