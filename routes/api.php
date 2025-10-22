@@ -27,10 +27,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/assets', [AssetsApi::class, 'index']);
         // TRANSFERS
         Route::get('/transfers', [TransferApi::class, 'index']);
-        Route::post('/transfers', [TransferApi::class, 'store']);   
+        Route::post('/transfers', [TransferApi::class, 'store']);
         // DISPOSAL
         Route::get('/disposals', [DisposalApi::class, 'index']);
-        Route::post('/disposals', [DisposalApi::class, 'store']);   
+        Route::post('/disposals', [DisposalApi::class, 'store']);
         // RETURN HISTORY
         Route::get('/return', [ReturnHistoryApi::class, 'index']);
         Route::post('/return', [ReturnHistoryApi::class, 'store']);
