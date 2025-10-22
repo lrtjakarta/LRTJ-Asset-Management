@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\TransferApi;
 use App\Http\Controllers\Api\DisposalApi;
 use App\Http\Controllers\Api\ReturnHistoryApi;
 use App\Http\Controllers\Api\StorageApi;
-use App\Models\ReturnHistory;
 
 Route::prefix('v1')->group(function () {
     // PUBLIC
@@ -28,15 +27,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/assets', [AssetsApi::class, 'index']);
         // TRANSFERS
         Route::get('/transfers', [TransferApi::class, 'index']);
-        Route::get('/transfers/{uuid}', [TransferApi::class, 'show']);
         Route::post('/transfers', [TransferApi::class, 'store']);   
         // DISPOSAL
         Route::get('/disposals', [DisposalApi::class, 'index']);
-        Route::get('/disposals/{uuid}', [DisposalApi::class, 'show']);
         Route::post('/disposals', [DisposalApi::class, 'store']);   
         // RETURN HISTORY
         Route::get('/return', [ReturnHistoryApi::class, 'index']);
-        Route::get('/return/{uuid}', [ReturnHistoryApi::class, 'show']);
         Route::post('/return', [ReturnHistoryApi::class, 'store']);
         Route::post('/return/options', [ReturnHistoryApi::class, 'options']);
         // FILES/STORAGE
