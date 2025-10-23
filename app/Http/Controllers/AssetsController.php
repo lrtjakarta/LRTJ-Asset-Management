@@ -671,7 +671,7 @@ class AssetsController extends Controller
                 return $n / 100.0;
             }
             $n = (float)$raw;
-            return $n > 1 ? $n / 100.0 : $n; 
+            return $n > 1 ? $n / 100.0 : $n;
         };
 
         $headers = [];
@@ -712,7 +712,7 @@ class AssetsController extends Controller
             'price'                    => 'value.price',
             'pajak'                    => 'value.is_pajak',
             'is_pajak'                 => 'value.is_pajak',
-            'useful_life'              => 'value.useful_life_month',
+            'useful_life_month'        => 'value.useful_life_month',
 
             'no_po_perjanjian_spk'     => 'documents.no_po_perjanjian_spk',
             'nota_referensi'           => 'documents.nota_referensi',
@@ -886,6 +886,10 @@ class AssetsController extends Controller
                     if (!array_key_exists('total', $valuePayload)) {
                         $vat = (float)($valuePayload['vat_in'] ?? 0);
                         $valuePayload['total'] = round($subtotal + $vat, 2);
+                    }
+                    if (isset($valuePayload['useful_life_month']) && $valuePayload['useful_life_month'] !== null) {
+                        $months = (float)$valuePayload['useful_life_month'];
+                        $valuePayload['useful_life_year'] = round($months / 12, 2);
                     }
 
                     $existsV = DB::table($tableValues)->where('asset_uuid', $asset->uuid)->first();

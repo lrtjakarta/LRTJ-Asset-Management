@@ -42,41 +42,8 @@
             @endif
 
             <div class="row g-6">
-                {{-- Download template --}}
-                <div class="col-xl-4">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h3 class="card-title fw-bold">Template</h3>
-                        </div>
-                        <div class="card-body">
-
-                            <div class="small text-gray-700">
-                                <div class="fw-semibold mb-2">Notes:</div>
-                                <ul class="mb-0 ps-6">
-                                    <li>Accepted files: <strong>.xlsx, .xls, .csv</strong> (max 10 MB)</li>
-                                    <li>Codes must exist in master tables (Status, Location, User Code, etc.)</li>
-                                    <li>Dates use <em>YYYY-MM-DD</em></li>
-                                </ul>
-                            </div>
-                            <hr class="my-5">
-                            <p class="text-muted mb-4">
-                                Download the latest Excel template. Do not change the header names or sheet name.
-                            </p>
-
-                            <a href="{{ route('assets.download.template') }}" class="btn btn-danger"><i
-                                    class="ki-duotone ki-down-square fs-2">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i> Download Template
-                            </a>
-
-
-                        </div>
-                    </div>
-                </div>
-
                 {{-- Upload file --}}
-                <div class="col-xl-8">
+                <div class="col-xl-12">
                     <div class="card">
                         <div class="card-header">
                             <h3 class="card-title fw-bold">Upload Excel</h3>
@@ -91,23 +58,30 @@
                                     <div class="form-text">Choose the filled template file to import.</div>
                                 </div>
 
-                                <hr class="my-5">
-                                {{-- <div class="mb-6">
-                                    <label class="form-label">Options</label>
-                                    <div class="form-check form-switch mb-2">
-                                        <input class="form-check-input" type="checkbox" name="dry_run" id="dry_run"
-                                            value="1">
-                                        <label class="form-check-label" for="dry_run">Dry run (validate only, don’t
-                                            save)</label>
-                                    </div>
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" name="update_if_exists"
-                                            id="update_if_exists" value="1">
-                                        <label class="form-check-label" for="update_if_exists">Update if Asset Code
-                                            exists</label>
-                                    </div>
-                                </div> --}}
+                                {{-- <hr class="my-5"> --}}
 
+                                <div class="">
+                                    <div class="fw-semibold mb-2">Notes:</div>
+                                    <ul class="mb-0 ps-6">
+                                        <li>You must use the template from this website</li>
+                                        <li>Never change template's header</li>
+                                        <li>System check Asset Number Parent and Child (Combination). If exists it will become update function based on what changed in cells. If cell is empty then the former data stay as it is (not changed to null)</li>
+                                        <li>If Parent and Child (Combination) doesn't exists it will inserted as new data</li>
+                                        <li>Accepted files: <strong>.xlsx, .xls, .csv</strong> (max 20 MB)</li>
+                                        <li>Codes must exist in master tables (Status, Location, User Code, etc.)</li>
+                                        <li>Dates use <em>YYYY-MM-DD</em></li>
+                                    </ul>
+                                </div>
+
+                                <hr class="my-5">
+                        
+                                <a href="{{ route('assets.download.template') }}" class="btn btn-light-danger"><i
+                                        class="ki-duotone ki-down-square fs-2">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i> Download Template
+                                </a>
+                                &nbsp;        
                                 <button type="submit" class="btn btn-danger">
                                     <i class="ki-duotone ki-up-square fs-2">
                                         <span class="path1"></span>
