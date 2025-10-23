@@ -290,7 +290,7 @@
                                     @endif
                                 </dd>
 
-                                <dt class="col-sm-5">Total</dt>
+                                <dt class="col-sm-5">Acquisition</dt>
                                 <dd class="col-sm-7"> :
                                     {{ is_null($asset->value?->total) ? '' : number_format($asset->value->total, 2) }}
                                 </dd>

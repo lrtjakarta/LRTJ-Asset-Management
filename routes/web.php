@@ -132,7 +132,11 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/save', [AssetsController::class, 'store'])->name('store');
         Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
         Route::get('/brief/{uuid}', [AssetsController::class, 'brief'])->name('brief');
+        Route::get('/bulk-upload', [AssetsController::class, 'bulk_upload'])->name('upload.bulk');
+        Route::get('/download-template', [AssetsController::class, 'download_template'])->name('download.template');
+        Route::post('/upload-excel', [AssetsController::class, 'upload_excel'])->name('upload.excel');
     });
+
 
     // TRANSFER ROUTE
     Route::prefix('transfer')->name('transfer.')->group(function () {

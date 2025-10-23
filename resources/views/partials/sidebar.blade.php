@@ -294,8 +294,56 @@
                     </div>
                     <!--end:Menu item-->
 
+                     <!--begin:Menu item-->
+                    <div data-kt-menu-trigger="click" class="menu-item {{ request()->segment(1) == 'assets' ? 'show here' : '' }} menu-accordion">
+                        <!--begin:Menu link-->
+                        <span class="menu-link">
+                            <span class="menu-icon">
+                                <i class="ki-duotone ki-abstract-26 fs-2">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
+                            </span>
+                            <span class="menu-title">Assets</span>
+                            <span class="menu-arrow"></span>
+                        </span>
+                        <!--end:Menu link-->
+                        <!--begin:Menu sub-->
+                        <div class="menu-sub menu-sub-accordion">
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'assets' && request()->segment(2) != 'bulk-upload' ? 'active' : '' }} "
+                                href="{{ route('assets.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Assets</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(2) == 'bulk-upload' ? 'active' : '' }} "
+                                href="{{ route('assets.upload.bulk') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Bulk Upload</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                        </div>
+                        <!--end:Menu sub-->
+                    </div>
+                    <!--end:Menu item-->
+
                     <!--begin:Menu item-->
-                    <div class="menu-item">
+                    {{-- <div class="menu-item">
                         <!--begin:Menu link-->
                         <a class="menu-link {{ request()->segment(1) == 'assets' ? 'active' : '' }}"
                             href="{{ route('assets.index') }}">
@@ -309,7 +357,7 @@
                             <span class="menu-title">Assets</span>
                         </a>
                         <!--end:Menu link-->
-                    </div>
+                    </div> --}}
                     <!--end:Menu item-->
 
                     <!--begin:Menu item-->
