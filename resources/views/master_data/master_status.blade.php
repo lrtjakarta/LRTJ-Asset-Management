@@ -81,6 +81,7 @@
                 const $f = $('#formMasterStatus');
                 $('#formMasterStatus')[0].reset();
                 $f.find('[name="uuid"]').val(null);
+                $f.find('[name="type"]').val('Asset').trigger('change');
             });
 
             $(document).on('click', '.btn-edit', function() {
