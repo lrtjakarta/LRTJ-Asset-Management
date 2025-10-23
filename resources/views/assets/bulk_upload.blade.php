@@ -65,6 +65,7 @@
                                     <ul class="mb-0 ps-6">
                                         <li>You must use the template from this website</li>
                                         <li>Never change template's header</li>
+                                        <li>Data in template serve as example. Please erase it before you upload it</li>
                                         <li>System check Asset Number Parent and Child (Combination). If exists it will become update function based on what changed in cells. If cell is empty then the former data stay as it is (not changed to null)</li>
                                         <li>If Parent and Child (Combination) doesn't exists it will inserted as new data</li>
                                         <li>Accepted files: <strong>.xlsx, .xls, .csv</strong> (max 20 MB)</li>
