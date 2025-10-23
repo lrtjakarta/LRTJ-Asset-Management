@@ -80,6 +80,36 @@
                                 <select id="tf-asset" class="form-select" required></select>
                                 <div class="form-text">Search by code or description</div>
                             </div>
+                            <div id="tf-asset-snapshot" class="mt-4 d-none">
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                    <div class="row gy-2">
+                                        <div class="col-6">
+                                            <div class="text-muted">Owner</div>
+                                            <div id="snap-owner" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">User</div>
+                                            <div id="snap-user" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-6">
+                                            <div class="text-muted">Maintenance</div>
+                                            <div id="snap-maintenance" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Status</div>
+                                            <div id="snap-status" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <div class="text-muted">Location</div>
+                                            <div id="snap-location" class="fw-semibold"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="col-md-6">
                                 <label class="form-label required">Type</label>
                                 <select name="type" id="tf-type" class="form-select" required>
@@ -138,6 +168,7 @@
                 usercode: '{{ route('master.user_code.options') }}',
                 status: '{{ route('master.status.options') }}',
                 location: '{{ route('master.location.options') }}',
+                assetBrief: id => '{{ route('assets.brief', ':id') }}'.replace(':id', id),
                 approve: id => '{{ route('transfer.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('transfer.reject', ':id') }}'.replace(':id', id),
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
@@ -155,11 +186,36 @@
                 $select.append(opt).trigger('change');
             }
 
+            function renderSnapshot(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner').text(safe(d.owner_label));
+                $('#snap-user').text(safe(d.user_label));
+                $('#snap-maintenance').text(safe(d.maintenance_label));
+                $('#snap-status').text(safe(d.status_label));
+                $('#snap-location').text(safe(d.location_label));
+                $('#tf-asset-snapshot').removeClass('d-none');
+            }
+
+            function clearSnapshot() {
+                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location').text('');
+                $('#tf-asset-snapshot').addClass('d-none');
+            }
+
+            function fetchAssetSnapshot(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot();
+                    return;
+                }
+                $.getJSON(R.assetBrief(assetUuid))
+                    .done(renderSnapshot)
+                    .fail(() => clearSnapshot());
+            }
+
             function resetTransferFormToCreate() {
                 const $form = $('#formTransfer');
 
-                $form.removeData('edit-id'); 
-                $('#tf-asset').val(null).empty(); 
+                $form.removeData('edit-id');
+                $('#tf-asset').val(null).empty();
 
                 $form[0].reset();
                 $('textarea[name="note"]').val('');
@@ -179,6 +235,8 @@
                 $('#tf-target-hidden').val('');
 
                 initTargetSelect('owner');
+
+                clearSnapshot();
             }
 
             function endpointForType(type) {
@@ -217,7 +275,14 @@
                         $('#tf-target-hidden').val(e.params.data.id);
                     }
                     if (this.id === 'tf-asset') {
-                        $('#tf-asset-uuid').val(e.params.data.id);
+                        const assetUuid = e.params.data.id;
+                        $('#tf-asset-uuid').val(assetUuid);
+                        fetchAssetSnapshot(assetUuid);
+                    }
+                }).on('select2:clear', function() {
+                    if (this.id === 'tf-asset') {
+                        $('#tf-asset-uuid').val('');
+                        clearSnapshot();
                     }
                 });
             }
@@ -467,6 +532,7 @@
                 $.getJSON(R.show.replace(':id', id), function(d) {
                     $('#tf-edit-id').val(d.uuid || id);
                     $('#tf-asset-uuid').val(d.asset_uuid || '');
+                    fetchAssetSnapshot(d.asset_uuid || '');
 
                     const $asset = $('#tf-asset');
                     const assetText = d.asset_label ??

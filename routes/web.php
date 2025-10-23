@@ -131,6 +131,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
         Route::post('/save', [AssetsController::class, 'store'])->name('store');
         Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
+        Route::get('/brief/{uuid}', [AssetsController::class, 'brief'])->name('brief');
     });
 
     // TRANSFER ROUTE

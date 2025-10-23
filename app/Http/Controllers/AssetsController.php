@@ -15,7 +15,10 @@ use App\Models\{
     AssetsValue,
     AssetsDocument,
     AssetsQr,
-    AssetsRfid
+    AssetsRfid,
+    MasterLocation,
+    MasterStatus,
+    MasterUserCode
 };
 use App\Services\AssetChildSequencer;
 use App\Services\AssetNumberingService;
@@ -341,21 +344,21 @@ class AssetsController extends Controller
             //     if ($oldParent) {
             //         $num->rollbackChildIfLatest($oldParent, $asset->asset_number_child, $asset->uuid);
             //     }
-                // if ($v->mode === 'existing') {
-                //     $targetParent = $newParent;
-                //     $nextChild    = $num->nextChild($targetParent);
-                // } else {
-                //     $targetParent = $num->nextParent($newGroup);
-                //     $nextChild    = $num->nextChild($targetParent);
-                // }
+            // if ($v->mode === 'existing') {
+            //     $targetParent = $newParent;
+            //     $nextChild    = $num->nextChild($targetParent);
+            // } else {
+            //     $targetParent = $num->nextParent($newGroup);
+            //     $nextChild    = $num->nextChild($targetParent);
+            // }
 
-                // $asset->fill([
-                    // 'description'         => $v->description,
-                    // 'kode_group_category' => $newGroup,
-                    // 'asset_number_parent' => $targetParent,
-                    // 'asset_number_child'  => $nextChild,
-                    // 'asset_code'          => $targetParent . '-' . $nextChild,
-                // ])->save();
+            // $asset->fill([
+            // 'description'         => $v->description,
+            // 'kode_group_category' => $newGroup,
+            // 'asset_number_parent' => $targetParent,
+            // 'asset_number_child'  => $nextChild,
+            // 'asset_code'          => $targetParent . '-' . $nextChild,
+            // ])->save();
 
             //     $sequencer->normalizeChildren($targetParent);
             //     if ($oldParent && $oldParent !== $targetParent) {
@@ -530,6 +533,74 @@ class AssetsController extends Controller
         return response()->json([
             'results'    => $results,
             'pagination' => ['more' => $rows->hasMorePages()],
+        ]);
+    }
+    public function brief(string $uuid)
+    {
+        $a = Assets::query()
+            ->select('uuid','asset_code','description','kode_status','kode_location')
+            ->with(['assignment' => function ($q) {
+                $q->select('asset_uuid','asset_owner','asset_user','asset_maintenance');
+            }])
+            ->findOrFail($uuid);
+
+        $ownerCode = $a->assignment?->asset_owner;
+        $userCode  = $a->assignment?->asset_user;
+        $mntCode   = $a->assignment?->asset_maintenance;
+        $stCode    = $a->kode_status;
+        $locCode   = $a->kode_location;
+
+        $ucodes = collect([$ownerCode, $userCode, $mntCode])
+            ->filter()
+            ->unique()
+            ->values();
+
+        $deptByKode = $ucodes->isEmpty()
+            ? collect()
+            : MasterUserCode::query()
+                ->whereIn('kode', $ucodes)
+                ->pluck('department', 'kode');
+
+        $statusName = $stCode
+            ? MasterStatus::query()
+                ->where('kode', $stCode)
+                ->where(function ($q) {
+                    $q->where('type', 'Asset')->orWhereNull('type');
+                })
+                ->value('name')
+            : null;
+
+        // Resolve location name
+        $locName = $locCode
+            ? MasterLocation::query()
+                ->where('kode', $locCode)
+                ->value('name')
+            : null;
+
+        $ownerLabel = $ownerCode ? ($ownerCode.' - '.($deptByKode[$ownerCode] ?? '')) : '(empty)';
+        $userLabel  = $userCode  ? ($userCode .' - '.($deptByKode[$userCode]  ?? '')) : '(empty)';
+        $mntLabel   = $mntCode   ? ($mntCode  .' - '.($deptByKode[$mntCode]   ?? '')) : '(empty)';
+        $statusLabel   = $stCode ? ($stCode   .' - '.($statusName ?? ''))        : '(empty)';
+        $locationLabel = $locCode ? ($locCode .' - '.($locName ?? ''))           : '(empty)';
+
+        return response()->json([
+            'asset_uuid'       => $a->uuid,
+            'asset_label'      => trim($a->asset_code.' '.($a->description ? ('- '.$a->description) : '')),
+
+            'owner_code'       => $ownerCode,
+            'owner_label'      => $ownerLabel,
+
+            'user_code'        => $userCode,
+            'user_label'       => $userLabel,
+
+            'maintenance_code' => $mntCode,
+            'maintenance_label'=> $mntLabel,
+
+            'status_code'      => $stCode,
+            'status_label'     => $statusLabel,
+
+            'location_code'    => $locCode,
+            'location_label'   => $locationLabel,
         ]);
     }
 }
