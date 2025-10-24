@@ -226,26 +226,26 @@
                                         </div>
                                     </div>
 
-                                    <hr class="my-6" />
+                                    {{-- <hr class="my-6" /> --}}
 
                                     {{-- Value (1:1) --}}
-                                    <div class="row g-5">
+                                    <div class="row g-5 d-none">
                                         <div class="col-12">
                                             <h5 class="fw-bold">Value</h5>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label required">Price</label>
                                             <input type="number" step="0.01" name="price"
-                                                value="{{ old('price') }}" class="form-control" required>
+                                                value="{{ old('price') }}" class="form-control">
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label required">Quantity</label>
                                             <input type="number" name="quantity" value="{{ old('quantity') }}"
-                                                class="form-control" required>
+                                                class="form-control">
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label required">UOM</label>
-                                            <select name="kode_uom" id="sel-uom" class="form-select" required></select>
+                                            <select name="kode_uom" id="sel-uom" class="form-select"></select>
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label">Include Tax (VAT-IN)?</label>
@@ -257,7 +257,7 @@
                                         <div class="col-md-3">
                                             <label class="form-label required">Useful Life (Month)</label>
                                             <input type="number" name="useful_life_month"
-                                                value="{{ old('useful_life_month') }}" class="form-control" required>
+                                                value="{{ old('useful_life_month') }}" class="form-control">
                                         </div>
                                     </div>
 

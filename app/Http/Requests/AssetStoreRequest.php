@@ -47,8 +47,8 @@ class AssetStoreRequest extends FormRequest
             'asset_maintenance'    => ['required', 'string', 'max:50'],
 
             // value 
-            'price'                 => ['required', 'numeric', 'min:0'],
-            'quantity'              => ['required', 'numeric', 'min:0'],
+            'price'                 => ['nullable', 'numeric', 'min:0'],
+            'quantity'              => ['nullable', 'numeric', 'min:0'],
             'is_pajak'              => ['nullable', 'boolean'],
             'kode_uom'              => ['nullable', 'string', 'max:50'],
             'useful_life_month'     => ['nullable', 'integer', 'min:0', 'max:1200'],

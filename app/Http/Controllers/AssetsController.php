@@ -274,14 +274,14 @@ class AssetsController extends Controller
             $vatIn = $v->is_pajak ? round($v->price * ($vatRate / 100), 2) : 0.00;
             AssetsValue::create([
                 'asset_uuid'        => $asset->uuid,
-                'price'             => $v->price,
-                'quantity'          => $v->quantity,
-                'is_pajak'          => $v->is_pajak,
-                'vat_in'            => $vatIn,
-                'kode_uom'          => $v->kode_uom,
-                'total'             => round(($v->price * $v->quantity) + $vatIn, 2),
-                'useful_life_month' => $v->useful_life_month,
-                'useful_life_year'  => round($v->useful_life_month / 12, 2),
+                'price'             => $v->price ?? null,
+                'quantity'          => $v->quantity ?? null,
+                'is_pajak'          => $v->is_pajak ?? null,
+                'vat_in'            => $vatIn ?? null,
+                'kode_uom'          => $v->kode_uom ?? null,
+                'total'             => round(($v->price * $v->quantity) + $vatIn, 2) ?? null,
+                'useful_life_month' => $v->useful_life_month ?? null,
+                'useful_life_year'  => round($v->useful_life_month / 12, 2) ?? null,
             ]);
 
             // QR            
@@ -419,14 +419,14 @@ class AssetsController extends Controller
             $asset->value()->updateOrCreate(
                 ['asset_uuid' => $asset->uuid],
                 [
-                    'price'             => $v->price,
-                    'quantity'          => $v->quantity,
-                    'is_pajak'          => $v->is_pajak,
-                    'vat_in'            => $vatIn,
-                    'kode_uom'          => $v->kode_uom,
-                    'total'             => round(($v->price * $v->quantity) + $vatIn, 2),
-                    'useful_life_month' => $v->useful_life_month,
-                    'useful_life_year'  => round($v->useful_life_month / 12, 2),
+                    'price'             => $v->price ?? null,
+                    'quantity'          => $v->quantity ?? null,
+                    'is_pajak'          => $v->is_pajak ?? null,
+                    'vat_in'            => $vatIn ?? null,
+                    'kode_uom'          => $v->kode_uom ?? null,
+                    'total'             => round(($v->price * $v->quantity) + $vatIn, 2) ?? null,
+                    'useful_life_month' => $v->useful_life_month ?? null,
+                    'useful_life_year'  => round($v->useful_life_month / 12, 2) ?? null,
                 ]
             );
             $qrRelativePath = "qrcodes/{$asset->uuid}.svg";
