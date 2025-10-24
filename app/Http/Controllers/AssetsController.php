@@ -850,6 +850,30 @@ class AssetsController extends Controller
                 }
                 $asset->save();
                 $isNew ? $inserted++ : $updated++;
+                
+                // generate qr
+                try {
+                    $displayLabel = $asset->asset_code . ($asset->description ? (' (' . $asset->description . ')') : '');
+
+                    $labeledSvg = $this->generate_qr($asset->uuid, $displayLabel);
+
+                    if (! Storage::disk('public')->exists('qrcodes')) {
+                        Storage::disk('public')->makeDirectory('qrcodes');
+                    }
+
+                    $qrRelativePath = "qrcodes/{$asset->uuid}.svg";
+
+                    Storage::disk('public')->put($qrRelativePath, $labeledSvg);
+
+                    $qr = AssetsQr::firstOrNew(['asset_uuid' => $asset->uuid]);
+                    $qr->qr_data      = $asset->uuid;
+                    $qr->image_path   = $qrRelativePath;
+                    $qr->is_active    = true;
+                    $qr->generated_at = now();
+                    $qr->save();
+                } catch (\Throwable $e) {
+                    report($e);
+                }
 
                 if ($hasAssignments && !empty($assignmentPayload)) {
                     $exists = DB::table('assets_assignment')->where('asset_uuid', $asset->uuid)->first();
