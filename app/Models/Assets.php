@@ -194,7 +194,7 @@ class Assets extends Model
     /* ------------- Helpers ------------- */
     public function getDisplayCodeAttribute(): string
     {
-        return $this->asset_number_parent . '-' . $this->asset_number_child; // equals asset_code in your design
+        return $this->asset_number_parent . '-' . $this->asset_number_child;
     }
 
     public function activeQr()

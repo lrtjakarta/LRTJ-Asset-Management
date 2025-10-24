@@ -430,7 +430,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a class="menu-link {{ request()->segment(2) == 'stock-opname' ? 'active' : '' }}" 
+                                    href="{{ route('transaction.stockopname.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>

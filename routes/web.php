@@ -190,6 +190,9 @@ Route::middleware('ldap.session')->group(function () {
     // STOCK OPNAME ROUTE
     Route::prefix('stock-opname')->name('stockopname.')->group(function () {
         Route::get('{asset}/data',   [StockOpnameController::class, 'dataByAsset'])->name('data');
+        Route::get('/data',   [StockOpnameController::class, 'datatable'])->name('data.all');
+        Route::post('/create/transfer', [StockOpnameController::class, 'store_transfer'])->name('transfer.store');
+        Route::post('/create/disposal', [StockOpnameController::class, 'store_disposal'])->name('disposal.store');
     });
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
@@ -197,6 +200,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/transfer', [TransferController::class, 'index'])->name('transfer.index');
         Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
+        Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stockopname.index');
     });
 
     // TRASH ROUTE
