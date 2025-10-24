@@ -446,6 +446,9 @@
             $('#sel-category').on('change', function() {
                 $('#sel-category-2').val(null).trigger('change');
             });
+            $('#sel-transaction').on('change', function() {
+                $('#sel-asset-class').val(null).trigger('change');
+            });
 
             preloadOld('#sel-sumber', '{{ old('kode_sumber') }}', R.sumber);
             preloadOld('#sel-transaction', '{{ old('kode_asset_transaction') }}', R.trx);

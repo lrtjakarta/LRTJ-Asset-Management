@@ -23,6 +23,7 @@
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenDisposal">Disposal</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenReturn">Return</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenAcq">Acquisition</a>
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
                 <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
                     class="d-inline">
@@ -421,10 +422,37 @@
                             </table>
                         </div>
                         <div class="tab-pane fade" id="tab_acquisition" role="tabpanel" aria-labelledby="tab-acq-link">
-                            Acquisition
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-acq">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-380px">Details</th>
+                                        <th class="min-w-220px">Note</th>
+                                        <th class="min-w-160px">Requester</th>
+                                        <th class="min-w-180px">Created</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                         <div class="tab-pane fade" id="tab_stock_opname" role="tabpanel" aria-labelledby="tab-so-link">
-                            Stock Opname
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-so">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-170px">Code</th>
+                                        <th class="min-w-120px">Source</th>
+                                        <th class="min-w-140px">Type</th>
+                                        <th class="min-w-300px">Detail</th>
+                                        <th class="min-w-220px">Note</th>
+                                        <th class="min-w-140px">Requester</th>
+                                        <th class="min-w-140px">Approver</th>
+                                        <th class="min-w-160px">File</th>
+                                        <th class="min-w-180px">Updated</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -590,6 +618,72 @@
                     <div class="modal-footer">
                         <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                         <button type="submit" class="btn btn-danger">Create Return</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    {{-- ===== Acquisition Modal ===== --}}
+    <div class="modal fade" id="modal-acq" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formAcq">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">Acquisition — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <label class="form-label required">Quantity</label>
+                                <input type="number" step="0.0001" min="0" class="form-control"
+                                    name="quantity" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">UOM</label>
+                                <select name="kode_uom" id="acq-uom" class="form-select" required></select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Price</label>
+                                <input type="number" step="0.0001" min="0" class="form-control" name="price"
+                                    required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label required">Useful Life (Months)</label>
+                                <input type="number" step="1" min="0" class="form-control"
+                                    name="useful_life_month" required>
+                                <div class="form-text">Year will be auto-calculated</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Include Tax (VAT-IN)?</label>
+                                <select name="is_pajak" class="form-select" required>
+                                    <option value="1" selected>Yes</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Actual Date</label>
+                                <input type="date" class="form-control" name="actual_date" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Capitalization Date</label>
+                                <input type="date" class="form-control" name="capitalization_date" required>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea class="form-control" rows="3" name="note" placeholder="Optional note…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Save</button>
                     </div>
                 </form>
             </div>
@@ -1470,6 +1564,239 @@
                 });
             });
 
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const ACQ = {
+                latest: '{{ route('acquisition.latest', $asset->uuid) }}',
+                store: '{{ route('acquisition.store', $asset->uuid) }}',
+                data: '{{ route('acquisition.data', $asset->uuid) }}',
+            };
+
+
+            $('#btnOpenAcq').on('click', function(e) {
+                e.preventDefault();
+                $('#formAcq')[0].reset();
+
+                if ($('#acq-uom').data('select2')) {
+                    $('#acq-uom').val(null).trigger('change');
+                }
+
+                $.getJSON(ACQ.latest, function(res) {
+                    if (res.exists && res.value) {
+                        $('input[name="quantity"]').val(res.value.quantity ?? '');
+                        $('input[name="price"]').val(res.value.price ?? '');
+                        $('input[name="useful_life_month"]').val(res.value.useful_life_month ?? '');
+                        $('select[name="is_pajak"]').val((res.value.is_pajak ?? 0) ? '1' : '0');
+                        $('input[name="actual_date"]').val(res.value.actual_date ?? '');
+                        $('input[name="capitalization_date"]').val(res.value.capitalization_date ?? '');
+
+                        const kode = res.value.kode_uom;
+                        const text = res.value.uom_text ||
+                            kode;
+                        if (kode) {
+                            const opt = new Option(text, kode, true, true);
+                            $('#acq-uom').append(opt).trigger('change');
+                        }
+                    }
+                    $('#modal-acq').modal('show');
+                }).fail(() => $('#modal-acq').modal('show'));
+            });
+
+            $('#acq-uom').select2({
+                dropdownParent: $('#modal-acq'),
+                placeholder: 'Select UOM…',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: '{{ route('master.uom.options') }}',
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
+            }).on('select2:select', e => {
+                const kode = e.params.data.id;
+                $('#acq-uom-hidden').val(kode);
+            }).on('select2:clear', () => {
+                $('#acq-uom-hidden').val('');
+            });
+
+            $('#formAcq').on('submit', function(e) {
+                e.preventDefault();
+
+                const payload = {
+                    quantity: $('input[name="quantity"]').val(),
+                    kode_uom: $('#acq-uom').val(), // <-- FIXED
+                    price: $('input[name="price"]').val(),
+                    useful_life_month: $('input[name="useful_life_month"]').val(),
+                    is_pajak: $('select[name="is_pajak"]').val(), // '0' or '1'
+                    actual_date: $('input[name="actual_date"]').val(),
+                    capitalization_date: $('input[name="capitalization_date"]').val(),
+                    note: $('textarea[name="note"]').val(),
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                };
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+                $.post(ACQ.store, payload)
+                    .done(() => {
+                        $('#modal-acq').modal('hide');
+                        Swal.fire('Saved', 'Acquisition saved.', 'success');
+                        if ($.fn.DataTable.isDataTable('#tbl-acq')) $('#tbl-acq').DataTable().ajax.reload(
+                            null, false);
+                        setTimeout(() => location.reload(), 400);
+                    })
+                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+            });
+
+            $('#tbl-acq').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: ACQ.data,
+                    type: 'GET'
+                },
+                order: [
+                    [3, 'desc']
+                ], // created_at desc
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'detail',
+                        name: 'detail',
+                        orderable: false,
+                        searchable: true
+                    },
+                    {
+                        data: 'note',
+                        name: 'note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'pic_request_uid'
+                    },
+                    {
+                        data: 'created_at',
+                        name: 'created_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    }
+                ]
+            });
+
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const SO = {
+                data: '{{ route('stockopname.data', $asset->uuid) }}'
+            };
+
+            $('#tbl-so').DataTable({
+                processing: true,
+                serverSide: false,
+                ajax: {
+                    url: SO.data,
+                    type: 'GET',
+                },
+                order: [
+                    [8, 'desc']
+                ],
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'code',
+                        name: 'code'
+                    },
+                    {
+                        data: 'source',
+                        name: 'source'
+                    },
+                    {
+                        data: 'type',
+                        name: 'type'
+                    },
+                    {
+                        data: 'detail',
+                        name: 'detail',
+                        orderable: false,
+                        searchable: true
+                    },
+                    {
+                        data: 'note',
+                        name: 'note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'pic_request_uid'
+                    },
+                    {
+                        data: 'pic_approve_uid',
+                        name: 'pic_approve_uid'
+                    },
+                    {
+                        data: 'file',
+                        name: 'file',
+                        orderable: false,
+                        searchable: false,
+                        defaultContent: ''
+                    },
+                    {
+                        data: 'updated_at',
+                        name: 'updated_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    }
+                ]
+            });
         })();
     </script>
 @endpush
