@@ -54,7 +54,7 @@
                         <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="f-asset" class="form-control"
-                                placeholder="e.g. LAP-001 / Laptop Dell">
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
                         </div>
                         <div class="col-md-4">
                             <button id="btnFilter" class="btn btn-danger">Apply Filter</button>
