@@ -86,6 +86,36 @@
                                 <select id="ds-asset" class="form-select" required></select>
                                 <div class="form-text">Search by code or description</div>
                             </div>
+                            <div id="ds-asset-snapshot" class="mt-4 d-none">
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                    <div class="row gy-2">
+                                        <div class="col-6">
+                                            <div class="text-muted">Owner</div>
+                                            <div id="snap-owner" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">User</div>
+                                            <div id="snap-user" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-6">
+                                            <div class="text-muted">Maintenance</div>
+                                            <div id="snap-maintenance" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Status</div>
+                                            <div id="snap-status" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <div class="text-muted">Location</div>
+                                            <div id="snap-location" class="fw-semibold"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
@@ -129,6 +159,7 @@
                 update: '{{ route('disposal.update', ':id') }}',
                 create: '{{ route('disposal.store') }}', 
                 destroy: '{{ route('disposal.destroy', ':id') }}', 
+                assetBrief: id => '{{ route('assets.brief', ':id') }}'.replace(':id', id),
                 approve: id => '{{ route('disposal.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
 
@@ -160,6 +191,12 @@
                 }).on('select2:select', function(e) {
                     if (this.id === 'ds-asset') {
                         $('#ds-asset-uuid').val(e.params.data.id);
+                        fetchAssetSnapshot(e.params.data.id);
+                    }
+                }).on('select2:clear', function() {
+                    if (this.id === 'ds-asset') {
+                        $('#ds-asset-uuid').val('');
+                        clearSnapshot();
                     }
                 });
             }
@@ -197,6 +234,32 @@
                 $('#ds-remove-file').val('1');
                 $('#ds-current-file').addClass('d-none');
             });
+            
+
+            function renderSnapshot(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner').text(safe(d.owner_label));
+                $('#snap-user').text(safe(d.user_label));
+                $('#snap-maintenance').text(safe(d.maintenance_label));
+                $('#snap-status').text(safe(d.status_label));
+                $('#snap-location').text(safe(d.location_label));
+                $('#ds-asset-snapshot').removeClass('d-none');
+            }
+
+            function clearSnapshot() {
+                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location').text('');
+                $('#ds-asset-snapshot').addClass('d-none');
+            }
+
+            function fetchAssetSnapshot(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot();
+                    return;
+                }
+                $.getJSON(R.assetBrief(assetUuid))
+                    .done(renderSnapshot)
+                    .fail(() => clearSnapshot());
+            }
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
             const dt = $('#tbl-disposals-all').DataTable({

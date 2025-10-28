@@ -1181,7 +1181,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1198,7 +1198,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1215,7 +1215,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1242,7 +1242,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1265,7 +1265,7 @@ class MasterDataController
                 ->orWhere('name', 'ilike', "%{$search}%"));
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1282,7 +1282,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1299,7 +1299,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1316,7 +1316,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1334,7 +1334,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1356,7 +1356,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->name}"]);
 
         return response()->json(['results' => $rows]);
@@ -1373,7 +1373,7 @@ class MasterDataController
             });
         }
 
-        $rows = $q->limit(20)->get()
+        $rows = $q->get()
             ->map(fn($r) => ['id' => $r->kode, 'text' => "{$r->kode} - {$r->department}"]);
 
         return response()->json(['results' => $rows]);
