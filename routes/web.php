@@ -5,6 +5,7 @@ use App\Http\Controllers\AssetsController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DepreciationController;
 use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\ReturnController;
@@ -195,12 +196,33 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/create/disposal', [StockOpnameController::class, 'store_disposal'])->name('disposal.store');
     });
 
+    // DEPRECIATION ROUTE
+    Route::prefix('depreciation')->name('depreciation.')->group(function () {
+        // DataTables
+        Route::get('/monthly',   [DepreciationController::class, 'dtMonthly'])->name('dt.monthly');
+        Route::get('/yearly',    [DepreciationController::class, 'dtYearly'])->name('dt.yearly');
+        Route::get('/policies',  [DepreciationController::class, 'dtPolicies'])->name('dt.policies');
+
+        // Processing
+        Route::post('/run-month', [DepreciationController::class, 'runMonth'])->name('run.month');
+        Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
+
+        // Movement writers
+        Route::post('/movement/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
+        Route::post('/movement/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
+        Route::post('/movement/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
+        Route::post('/movement/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
+        Route::post('/movement/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
+    });
+
+
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
         Route::get('/transfer', [TransferController::class, 'index'])->name('transfer.index');
         Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stockopname.index');
+        Route::get('/depreciation', [DepreciationController::class, 'index'])->name('depreciation.index');
     });
 
     // TRASH ROUTE
