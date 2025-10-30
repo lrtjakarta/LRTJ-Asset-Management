@@ -13,7 +13,9 @@ use App\Models\{
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Yajra\DataTables\Facades\DataTables;
+use Illuminate\Support\Str;
 
 class DepreciationController extends Controller
 {
@@ -325,7 +327,7 @@ class DepreciationController extends Controller
         $data = $r->validate([
             'asset_uuid' => ['required', 'uuid'],
             'amount'     => ['required', 'numeric', 'min:0.01'],
-            'actual_date' => ['required', 'date'], 
+            'actual_date' => ['required', 'date'],
             'note'       => ['nullable', 'string', 'max:300'],
             'source_type' => ['nullable', 'string', 'max:64'],
             'source_uuid' => ['nullable', 'uuid'],
@@ -349,7 +351,23 @@ class DepreciationController extends Controller
         ]);
 
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
-        $group  = $data['group_uuid'] ?? \Illuminate\Support\Str::uuid();
+        $group  = $data['group_uuid'] ?? Str::uuid();
+
+        $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
+        if ((float)$data['amount'] > $cap['remaining']) {
+            throw ValidationException::withMessages([
+                'amount' => sprintf(
+                    'Amount exceeds max allowed for %s. Beginning Value: %s, Last NBV (%s): %s, Max: %s, Already transferred this month: %s, Remaining: %s.',
+                    Carbon::parse($data['actual_date'])->toDateString(),
+                    number_format($cap['begin_total'], 2),
+                    optional($cap['last_closed_period'])->format('Y-m-d') ?? '-',
+                    number_format($cap['last_nbv'], 2),
+                    number_format($cap['max'], 2),
+                    number_format($cap['already_out'], 2),
+                    number_format($cap['remaining'], 2),
+                )
+            ]);
+        }
 
         $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
         $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
@@ -369,6 +387,7 @@ class DepreciationController extends Controller
                 'source_uuid'       => $data['source_uuid'] ?? null,
                 'note'              => $data['note'] ?? null,
             ]);
+
             AssetDeprMovement::create([
                 'asset_uuid'        => $data['to_asset_uuid'],
                 'period'            => $period,
@@ -382,7 +401,7 @@ class DepreciationController extends Controller
             ]);
         });
 
-        return response()->json(['ok' => true, 'message' => 'Transfer recorded', 'group_uuid' => (string)$group]);
+        return response()->json(['ok' => true, 'message' => 'Transfer recorded', 'group_uuid' => (string)$group, 'cap' => $cap]);
     }
 
     public function recordDisposal(Request $r)
@@ -487,5 +506,63 @@ class DepreciationController extends Controller
     {
         $start = Carbon::parse($startDate)->startOfMonth();
         return max(0, $start->diffInMonths($period));
+    }
+    private function computeMaxTransfer(string $assetUuid, Carbon $actualDate): array
+    {
+        $monthStart = $actualDate->copy()->startOfMonth();
+
+        $total = (float) DB::table('assets_value')
+            ->where('asset_uuid', $assetUuid)
+            ->value('total');
+
+        $lastRow = AssetDeprMonthly::query()
+            ->where('asset_uuid', $assetUuid)
+            ->whereDate('period', '<', $monthStart)
+            ->orderBy('period', 'desc')
+            ->first();
+
+        $lastNbv  = $lastRow ? (float)$lastRow->ending_balance : $total;
+        $lastPeriod = $lastRow?->period;
+
+        $max = max(0.0, $total - $lastNbv);
+
+        $alreadyOut = (float) AssetDeprMovement::query()
+            ->where('asset_uuid', $assetUuid)
+            ->where('category', AssetDeprMovement::TRANSFER_OUT)
+            ->whereDate('period', $monthStart)
+            ->sum('amount');
+
+        $remaining = max(0.0, $max - $alreadyOut);
+
+        return [
+            'begin_total'        => $total,
+            'last_closed_period' => $lastPeriod,
+            'last_nbv'           => $lastNbv,
+            'max'                => $max,
+            'already_out'        => $alreadyOut,
+            'remaining'          => $remaining,
+        ];
+    }
+    public function transferLimit(Request $r)
+    {
+        $data = $r->validate([
+            'from_asset_uuid' => ['required', 'uuid'],
+            'actual_date'     => ['required', 'date'],
+        ]);
+
+        $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
+        return response()->json(['ok' => true] + $cap);
+    }
+    public function assetSearch(Request $r)
+    {
+        $q = trim($r->get('q', ''));
+        $rows = Assets::query()
+            ->select('uuid', 'asset_code', 'description')
+            ->when($q, fn($qq) => $qq->where('asset_code', 'ilike', "%{$q}%")
+                ->orWhere('description', 'ilike', "%{$q}%"))
+            ->orderBy('asset_code')
+            ->limit(20)
+            ->get();
+        return response()->json(['data' => $rows]);
     }
 }

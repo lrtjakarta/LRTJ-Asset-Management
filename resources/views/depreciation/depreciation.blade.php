@@ -44,18 +44,21 @@
                 </div>
                 <div class="card-toolbar">
                     <form id="form-process-month" method="POST" action="{{ route('depreciation.run.month') }}"
-                        class="d-inline-flex align-items-center gap-2">
+                        class="d-inline-flex align-items-center gap-2 me-2">
                         @csrf
                         <input type="hidden" name="period" id="period" value="{{ $currentMonth }}">
                         <button type="submit" id="btn-process-month" class="btn btn-danger btn-sm">
                             <span class="indicator-label">
-                                <i class="ki-duotone ki-refresh fs-4 me-2"></i>Process Current Month
+                                Process Current Month
                             </span>
                             <span class="indicator-progress">
                                 Processing… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                             </span>
                         </button>
                     </form>
+                    <button type="button" id="btn-open-transfer" class="btn btn-primary btn-sm">
+                        Transfer Value
+                    </button>
                 </div>
             </div>
 
@@ -73,8 +76,8 @@
                             <th class="min-w-200px">Useful Life (Month)</th>
                             <th class="min-w-200px">Ending Balance {{ $prevYearLabel }}</th>
                             <th class="min-w-200px">Remaining Useful Life</th>
-                            {{-- <th class="min-w-200px">Transfer In</th>
-                            <th class="min-w-200px">Transfer Out</th> --}}
+                            <th class="min-w-200px">Transfer In</th>
+                            <th class="min-w-200px">Transfer Out</th>
                             <th class="min-w-200px">Adjusment Depreciation</th> {{-- adjustment_depreciation --}}
                             <th class="min-w-200px">Depreciation</th> {{-- depr_expense --}}
                             <th class="min-w-200px">Total Addition</th> {{-- Addition + In - Out + Adj Nilai - Disposal --}}
@@ -85,6 +88,62 @@
                         </tr>
                     </thead>
                 </table>
+            </div>
+        </div>
+    </div>
+    {{-- Transfer Value Modal --}}
+    <div class="modal fade" id="modal-transfer" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Transfer Value Partials or Full from Asset A to B</h5>
+                    
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form id="form-transfer" autocomplete="off">
+                    @csrf
+                    <div class="modal-body py-4">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label required">From Asset</label>
+                                <select id="tr-from-asset" class="form-select" style="width:100%"></select>
+                                <input type="hidden" id="tr-from-uuid" name="from_asset_uuid">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">To Asset</label>
+                                <select id="tr-to-asset" class="form-select" style="width:100%"></select>
+                                <input type="hidden" id="tr-to-uuid" name="to_asset_uuid">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">Amount</label>
+                                <input type="number" step="0.01" min="0.01" class="form-control" id="tr-amount"
+                                    name="amount" placeholder="e.g. 15000000">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">Actual Date</label>
+                                <input type="date" class="form-control" id="tr-date" name="actual_date"
+                                    value="{{ Carbon::now()->toDateString() }}">
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Note</label>
+                                <input type="text" class="form-control" id="tr-note" name="note"
+                                    maxlength="300" placeholder="Optional note">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="btn-submit-transfer" class="btn btn-primary">
+                            <span class="indicator-label">Submit Transfer</span>
+                            <span class="indicator-progress">Saving… <span
+                                    class="spinner-border spinner-border-sm align-middle ms-2"></span></span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -101,6 +160,52 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(Number(v ?? 0));
+            const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
+            $('#btn-open-transfer').on('click', () => {
+                $('#form-transfer')[0].reset();
+                $('#tr-from-uuid, #tr-to-uuid').val('');
+                $('#tr-from-asset, #tr-to-asset').val(null).trigger('change');
+                $modal.show();
+            });
+            const initAssetSelect = ($el) => {
+                $el.select2({
+                    dropdownParent: $('#modal-transfer'),
+                    placeholder: 'Search asset code/name…',
+                    allowClear: true,
+                    minimumInputLength: 1,
+                    ajax: {
+                        url: "{{ route('depreciation.assets.search') }}",
+                        dataType: 'json',
+                        delay: 250,
+                        data: params => ({
+                            q: params.term
+                        }),
+                        processResults: data => ({
+                            results: (data?.data || data || []).map(it => ({
+                                id: it.uuid || it.asset_uuid,
+                                text: (it.asset_code ? it.asset_code : '') + (it
+                                    .description ? ' - ' + it.description : '')
+                            }))
+                        })
+                    }
+                });
+            };
+            $('#tr-from-asset').on('select2:select select2:clear', () => {
+                $('#tr-from-uuid').val($('#tr-from-asset').val() || '');
+                refreshTransferCap();
+            });
+            $('#tr-date').on('change', refreshTransferCap);
+            $('#tr-to-asset').on('select2:select select2:clear', function() {
+                $('#tr-to-uuid').val($(this).val() || '');
+            });
+            const $btnSave = $('#btn-submit-transfer');
+            const setBusyTransfer = (b) => {
+                if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
+                else $btnSave.removeAttr('data-kt-indicator').prop('disabled', false);
+            };
+
+            initAssetSelect($('#tr-from-asset'));
+            initAssetSelect($('#tr-to-asset'));
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
             const setBusy = (busy) => {
@@ -205,16 +310,16 @@
                         data: 'remaining_useful_life_months',
                         className: 'text-end'
                     },
-                    // {
-                    //     data: 'transfers_in',
-                    //     render: money,
-                    //     className: 'text-end'
-                    // },
-                    // {
-                    //     data: 'transfers_out',
-                    //     render: money,
-                    //     className: 'text-end'
-                    // },
+                    {
+                        data: 'transfers_in',
+                        render: money,
+                        className: 'text-end'
+                    },
+                    {
+                        data: 'transfers_out',
+                        render: money,
+                        className: 'text-end'
+                    },
                     {
                         data: 'adjustment_depreciation',
                         render: money,
@@ -260,6 +365,36 @@
                 ]
             });
 
+            async function refreshTransferCap() {
+                const fromUUID = $('#tr-from-uuid').val();
+                const date = $('#tr-date').val();
+                if (!fromUUID || !date) {
+                    $('#tr-cap-help').text('');
+                    return;
+                }
+
+                try {
+                    const res = await $.get("{{ route('depreciation.mv.transfer.limit') }}", {
+                        from_asset_uuid: fromUUID,
+                        actual_date: date
+                    });
+                    const cap = res || {};
+                    const fmt = v => new Intl.NumberFormat(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }).format(Number(v || 0));
+                    const lastP = cap.last_closed_period ? new Date(cap.last_closed_period).toISOString().slice(0,
+                        10) : '-';
+                    $('#tr-cap-help').text(
+                        `Max: ${fmt(cap.remaining)} (Begin: ${fmt(cap.begin_total)} − Last NBV ${lastP}: ${fmt(cap.last_nbv)} − This month OUT: ${fmt(cap.already_out)})`
+                    );
+                    $('#tr-amount').data('capRemaining', Number(cap.remaining || 0));
+                } catch {
+                    $('#tr-cap-help').text('Max not available');
+                    $('#tr-amount').data('capRemaining', 0);
+                }
+            }
+
             $form.on('submit', async function(e) {
                 e
                     .preventDefault();
@@ -284,6 +419,64 @@
                 }
             });
 
+            $('#form-transfer').on('submit', async function(e) {
+                e.preventDefault();
+
+                const fromUUID = $('#tr-from-uuid').val();
+                const toUUID = $('#tr-to-uuid').val();
+                const amount = Number($('#tr-amount').val() || 0);
+                const date = $('#tr-date').val();
+                const capRem = Number($('#tr-amount').data('capRemaining') || 0);
+                const amt = Number($('#tr-amount').val() || 0);
+
+                if (!fromUUID || !toUUID) {
+                    toastr?.error('Please pick both assets');
+                    return;
+                }
+                if (fromUUID === toUUID) {
+                    toastr?.error('From/To asset cannot be the same');
+                    return;
+                }
+                if (!(amount > 0)) {
+                    toastr?.error('Amount must be greater than 0');
+                    return;
+                }
+                if (!date) {
+                    toastr?.error('Actual Date is required');
+                    return;
+                }
+                if (amt > capRem) {
+                    e.preventDefault();
+                    toastr?.error('Amount exceeds max allowed for that month.');
+                    return false;
+                }
+                try {
+                    setBusyTransfer(true);
+                    await $.ajax({
+                        url: "{{ route('depreciation.mv.transfer') }}",
+                        type: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                        },
+                        data: {
+                            from_asset_uuid: fromUUID,
+                            to_asset_uuid: toUUID,
+                            amount: amount,
+                            actual_date: date,
+                            note: $('#tr-note').val(),
+                            source_type: 'manual'
+                        }
+                    });
+                    toastr?.success('Transfer saved');
+                    $('#tbl-monthly').DataTable().ajax.reload(null, false);
+                    $modal.hide();
+                } catch (err) {
+                    console.error(err);
+                    toastr?.error('Failed to save transfer');
+                } finally {
+                    setBusyTransfer(false);
+                }
+            });
         })();
     </script>
 @endpush
