@@ -1,4 +1,3 @@
-{{-- resources/views/transactions/depreciation/index.blade.php --}}
 @php
     use Carbon\Carbon;
     $currentMonth = Carbon::now()->startOfMonth()->toDateString();
@@ -124,7 +123,7 @@
                                        name="amount" placeholder="e.g. 15000000">
                                 <small id="tr-cap-help" class="text-muted d-block mt-1"></small>    
                                 <small id="tr-carry-help" class="text-warning d-block mt-1"></small> 
-                                <div id="tr-preview" class="alert alert-secondary d-none py-2 px-3 mt-2 small"></div> 
+                                <div id="tr-preview" class="alert d-none py-2 px-3 mt-2 small"></div> 
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
