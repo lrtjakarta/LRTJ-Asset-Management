@@ -20,6 +20,7 @@ use Illuminate\Support\Str;
 class DepreciationController extends Controller
 {
     private const TRANSFER_TYPE_CARRY_OVER = 'carry_over_gross_accum';
+    private const TRANSFER_TYPE_ACQ_FIX    = 'acq_fix';
 
     public function index()
     {
@@ -161,7 +162,6 @@ class DepreciationController extends Controller
             ->toJson();
     }
 
-
     public function dtYearly(Request $r)
     {
         $q = AssetDeprYearly::query()
@@ -268,7 +268,7 @@ class DepreciationController extends Controller
                     )
                     : $period;
 
-                $eligible  = $eligibleStart->lte($period);
+                $eligible   = $eligibleStart->lte($period);
                 $lifeMonths = (int) ($policy->useful_life_months ?: 60);
                 if ($lifeMonths <= 0) $lifeMonths = 60;
 
@@ -301,7 +301,6 @@ class DepreciationController extends Controller
 
         return response()->json(['ok' => true, 'message' => "Depreciation processed for {$period->toDateString()}"]);
     }
-
 
     public function buildYear(Request $r)
     {
@@ -359,7 +358,7 @@ class DepreciationController extends Controller
     public function recordTransfer(Request $r)
     {
         $data = $r->validate([
-            'transfer_type'   => ['nullable', 'in:tf-val,' . self::TRANSFER_TYPE_CARRY_OVER],
+            'transfer_type'   => ['nullable', 'in:tf-val,' . self::TRANSFER_TYPE_CARRY_OVER . ',' . self::TRANSFER_TYPE_ACQ_FIX],
             'from_asset_uuid' => ['required', 'uuid'],
             'to_asset_uuid'   => ['required', 'uuid', 'different:from_asset_uuid'],
             'amount'          => ['required', 'numeric', 'min:0.01'],
@@ -378,6 +377,110 @@ class DepreciationController extends Controller
         $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
         $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
         $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
+
+        if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
+
+            $amount = (float) $data['amount'];
+
+            $fromTotal = (float) DB::table('assets_value')
+                ->where('asset_uuid', $data['from_asset_uuid'])
+                ->value('total');
+
+            if ($amount > $fromTotal) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Amount exceeds gross value of the source asset.',
+                ]);
+            }
+
+            if (!$fromPolicy || !$toPolicy) {
+                throw ValidationException::withMessages([
+                    'from_asset_uuid' => 'Both assets must have active depreciation policies for acquisition correction.',
+                ]);
+            }
+
+            $fromLife = (int) ($fromPolicy->useful_life_months ?: 0);
+            $toLife   = (int) ($toPolicy->useful_life_months   ?: 0);
+
+            if ($fromLife <= 0 || $toLife <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Useful life (months) must be set for both assets for acquisition correction.',
+                ]);
+            }
+
+            $fromRate = $amount / $fromLife;
+            $toRate   = $amount / $toLife;
+
+            $monthsFromYtd = $this->componentMonthsYtd($fromPolicy, $period);
+            $monthsToYtd   = $this->componentMonthsYtd($toPolicy, $period);
+
+            $depFromYtd = $fromRate * $monthsFromYtd;
+            $depToYtd   = $toRate   * $monthsToYtd;
+
+            $adjDepA = $depToYtd;
+            $adjDepB = -$depFromYtd; 
+
+            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjDepA, $adjDepB) {
+
+                // Gross out FROM
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_OUT,
+                    'amount'            => $amount,
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross OUT'),
+                ]);
+
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_IN,
+                    'amount'            => $amount,
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross IN'),
+                ]);
+
+                if (abs($adjDepB) > 0.0001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['from_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => $adjDepB,
+                        'depr_start_period' => $period,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix reverse YTD'),
+                    ]);
+                }
+
+                if (abs($adjDepA) > 0.0001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['to_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => $adjDepA,
+                        'depr_start_period' => $period,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix add YTD'),
+                    ]);
+                }
+            });
+
+            return response()->json([
+                'ok'         => true,
+                'message'    => 'Acquisition correction transfer recorded',
+                'group_uuid' => (string) $group,
+            ]);
+        }
 
         if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
             $info = $this->computeCarryOver($data['from_asset_uuid'], Carbon::parse($data['actual_date']), (float)$data['amount']);
@@ -441,8 +544,8 @@ class DepreciationController extends Controller
             });
 
             return response()->json([
-                'ok' => true,
-                'message' => 'Carry-Over transfer recorded',
+                'ok'         => true,
+                'message'    => 'Carry-Over transfer recorded',
                 'group_uuid' => (string)$group
             ]);
         }
@@ -715,6 +818,7 @@ class DepreciationController extends Controller
             ->get();
         return response()->json(['data' => $rows]);
     }
+
     private function deriveStartDateFromAV(object $av): ?string
     {
         $d = $av->capitalization_date ?? $av->actual_date ?? $av->in_service_date ?? $av->created_at ?? null;
@@ -727,5 +831,29 @@ class DepreciationController extends Controller
         if ($life <= 0 && isset($av->useful_life_months)) $life = (int)$av->useful_life_months;
         if ($life <= 0 && isset($av->useful_life_year))   $life = (int) round(((float)$av->useful_life_year) * 12);
         return $life > 0 ? $life : 60;
+    }
+
+    private function componentMonthsYtd(AssetDeprPolicy $policy, Carbon $transferPeriod): int
+    {
+        $yearStart   = $transferPeriod->copy()->startOfYear();
+        $monthBefore = $transferPeriod->copy()->subMonth()->startOfMonth();
+
+        if ($monthBefore->lt($yearStart)) {
+            return 0;
+        }
+
+        $startDate = Carbon::parse($policy->depr_start_date);
+        $cutoff    = $policy->cutoff_day ?? 15;
+
+        $addMonths     = ($startDate->day <= $cutoff) ? 1 : 2;
+        $eligibleStart = $startDate->copy()->startOfMonth()->addMonths($addMonths);
+
+        $effectiveStart = $eligibleStart->gt($yearStart) ? $eligibleStart : $yearStart;
+
+        if ($monthBefore->lt($effectiveStart)) {
+            return 0;
+        }
+
+        return $effectiveStart->diffInMonths($monthBefore) + 1;
     }
 }
