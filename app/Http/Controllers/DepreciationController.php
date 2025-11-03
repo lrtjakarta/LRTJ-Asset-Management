@@ -19,11 +19,12 @@ use Illuminate\Support\Str;
 
 class DepreciationController extends Controller
 {
+    private const TRANSFER_TYPE_CARRY_OVER = 'carry_over_gross_accum';
+
     public function index()
     {
         return view('depreciation.depreciation');
     }
-
 
     public function dtPolicies(Request $r)
     {
@@ -32,11 +33,11 @@ class DepreciationController extends Controller
             ->when(
                 $r->asset_q,
                 fn($qq) =>
-                $qq->whereHas('asset', function ($qa) use ($r) {
-                    $s = trim($r->asset_q);
-                    $qa->where('asset_code', 'ilike', "%{$s}%")
-                        ->orWhere('description', 'ilike', "%{$s}%");
-                })
+                    $qq->whereHas('asset', function ($qa) use ($r) {
+                        $s = trim($r->asset_q);
+                        $qa->where('asset_code', 'ilike', "%{$s}%")
+                           ->orWhere('description', 'ilike', "%{$s}%");
+                    })
             );
 
         return DataTables::eloquent($q)
@@ -60,7 +61,7 @@ class DepreciationController extends Controller
             ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
             ->leftJoin('assets_depr_yearly as y', function ($j) use ($prevYear) {
                 $j->on('y.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
-                    ->where('y.fiscal_year', '=', $prevYear);
+                  ->where('y.fiscal_year', '=', $prevYear);
             })
             ->whereDate('assets_depr_ledger_monthly.period', $period)
             ->select([
@@ -81,60 +82,58 @@ class DepreciationController extends Controller
 
                 'av.total as total_value',
                 DB::raw("
-                COALESCE(
-                    NULLIF(av.useful_life_month, 0)
-                ) as useful_life_months
-            "),
+                    COALESCE(
+                        NULLIF(av.useful_life_month, 0)
+                    ) as useful_life_months
+                "),
 
                 'y.ending_balance_year as ending_balance_prev_year',
                 DB::raw("
-                GREATEST(
-                    COALESCE(
-                        (
-                            -- total life in months (same expression as above)
-                            COALESCE(
-                                NULLIF(p.useful_life_months, 0),
-                                NULLIF(av.useful_life_month, 0),
-                                CASE WHEN av.useful_life_year IS NOT NULL THEN (av.useful_life_year * 12)::int ELSE NULL END,
-                                0
-                            )
-                            -
-                            -- elapsed months from FIRST ELIGIBLE PERIOD (cutoff applied) up to the requested period
-                            GREATEST(
-                                (
-                                    DATE_PART('year', AGE(
-                                        date_trunc('month', assets_depr_ledger_monthly.period),
-                                        CASE
-                                          WHEN p.depr_start_date IS NULL THEN NULL
-                                          WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
-                                            THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                          ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                        END
-                                    ))::int * 12
-                                    +
-                                    DATE_PART('month', AGE(
-                                        date_trunc('month', assets_depr_ledger_monthly.period),
-                                        CASE
-                                          WHEN p.depr_start_date IS NULL THEN NULL
-                                          WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
-                                            THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                          ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                        END
-                                    ))::int
-                                ),
-                                0
-                            )
+                    GREATEST(
+                        COALESCE(
+                            (
+                                COALESCE(
+                                    NULLIF(p.useful_life_months, 0),
+                                    NULLIF(av.useful_life_month, 0),
+                                    CASE WHEN av.useful_life_year IS NOT NULL THEN (av.useful_life_year * 12)::int ELSE NULL END,
+                                    0
+                                )
+                                -
+                                GREATEST(
+                                    (
+                                        DATE_PART('year', AGE(
+                                            date_trunc('month', assets_depr_ledger_monthly.period),
+                                            CASE
+                                              WHEN p.depr_start_date IS NULL THEN NULL
+                                              WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                                THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
+                                              ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
+                                            END
+                                        ))::int * 12
+                                        +
+                                        DATE_PART('month', AGE(
+                                            date_trunc('month', assets_depr_ledger_monthly.period),
+                                            CASE
+                                              WHEN p.depr_start_date IS NULL THEN NULL
+                                              WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                                THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
+                                              ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
+                                            END
+                                        ))::int
+                                    ),
+                                    0
+                                )
+                            ),
+                            0
                         ),
-                        0
-                    ),
-                0) AS remaining_useful_life_months
-            "),
+                    0) AS remaining_useful_life_months
+                "),
             ])
             ->when($r->asset_q, function ($qq) use ($r) {
                 $s = trim($r->asset_q);
                 $qq->whereHas('asset', function ($qa) use ($s) {
                     $qa->where('asset_code', 'ilike', "%{$s}%")
-                        ->orWhere('description', 'ilike', "%{$s}%");
+                       ->orWhere('description', 'ilike', "%{$s}%");
                 });
             });
 
@@ -151,17 +150,16 @@ class DepreciationController extends Controller
             ->with('asset:uuid,asset_code,description')
             ->when(
                 $r->year,
-                fn($qq) =>
-                $qq->where('fiscal_year', (int)$r->year)
+                fn($qq) => $qq->where('fiscal_year', (int)$r->year)
             )
             ->when(
                 $r->asset_q,
                 fn($qq) =>
-                $qq->whereHas('asset', function ($qa) use ($r) {
-                    $s = trim($r->asset_q);
-                    $qa->where('asset_code', 'ilike', "%{$s}%")
-                        ->orWhere('description', 'ilike', "%{$s}%");
-                })
+                    $qq->whereHas('asset', function ($qa) use ($r) {
+                        $s = trim($r->asset_q);
+                        $qa->where('asset_code', 'ilike', "%{$s}%")
+                           ->orWhere('description', 'ilike', "%{$s}%");
+                    })
             );
 
         return DataTables::eloquent($q)
@@ -170,24 +168,24 @@ class DepreciationController extends Controller
             ->toJson();
     }
 
-
     public function runMonth(Request $r)
     {
         $r->validate(['period' => ['required', 'date']]);
         $period = Carbon::parse($r->period)->startOfMonth();
 
         DB::transaction(function () use ($period) {
-            $missing = [];
-            $assets = DB::table('assets')
+
+            $assetsNeedingPolicy = DB::table('assets')
                 ->select('assets.uuid as asset_uuid', 'assets.asset_code')
                 ->join('assets_value AS av', 'av.asset_uuid', '=', 'assets.uuid')
                 ->leftJoin('assets_depr_policy AS p', 'p.asset_uuid', '=', 'assets.uuid')
                 ->whereNull('p.asset_uuid')
                 ->get();
 
-            foreach ($assets as $a) {
+            foreach ($assetsNeedingPolicy as $a) {
                 $av = DB::table('assets_value')->where('asset_uuid', $a->asset_uuid)->first();
                 if (!$av) continue;
+
                 $deprStart =
                     ($av->capitalization_date ?? null)
                     ?: ($av->actual_date ?? null)
@@ -195,12 +193,14 @@ class DepreciationController extends Controller
                     ?: ($av->created_at ?? null);
 
                 if (!$deprStart) {
-                    $missing[] = $a->asset_code ?: $a->asset_uuid;
                     continue;
                 }
 
                 $lifeMonths = (int)($av->useful_life_month ?? 0);
-                if ($lifeMonths <= 0 && $av->useful_life_year) {
+                if ($lifeMonths <= 0 && isset($av->useful_life_months)) {
+                    $lifeMonths = (int)$av->useful_life_months;
+                }
+                if ($lifeMonths <= 0 && isset($av->useful_life_year)) {
                     $lifeMonths = (int)round(((float)$av->useful_life_year) * 12);
                 }
                 if ($lifeMonths <= 0) $lifeMonths = 60;
@@ -210,7 +210,7 @@ class DepreciationController extends Controller
                     'method'             => AssetDeprPolicy::METHOD_SL,
                     'useful_life_months' => $lifeMonths,
                     'salvage_value'      => 0,
-                    'depr_start_date'    => Carbon::parse($deprStart)->toDateString(),
+                    'depr_start_date'    => \Carbon\Carbon::parse($deprStart)->toDateString(),
                     'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
                     'cutoff_day'         => 15,
                     'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
@@ -224,7 +224,7 @@ class DepreciationController extends Controller
                 $assetUuid = $policy->asset_uuid;
 
                 $av = DB::table('assets_value')->where('asset_uuid', $assetUuid)->first();
-                $capDate = $av?->capitalization_date ?? $av?->actual_date;
+                $capDate  = $av?->capitalization_date ?? $av?->actual_date ?? null;
                 $capTotal = (float)($av?->total ?? 0);
 
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
@@ -235,29 +235,34 @@ class DepreciationController extends Controller
                 $accPrev = (float) ($prev->accumulated_depr_end ?? 0.0);
 
                 if (!$prev && $capDate) {
-                    $cap = Carbon::parse($capDate)->endOfMonth();
-                    if ($cap->gte($period->copy()->startOfMonth())) {
-                        $opening = $capTotal;
-                    } else {
-                        $opening = $capTotal;
-                    }
+                    $opening = $capTotal;
                 }
 
-                $additions = $tin = $tout = $disposals = $adjValue = $adjDepr = 0.0;
+                $additions = 0.0;
+                $tin       = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::TRANSFER_IN)->sum('amount');
+                $tout      = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::TRANSFER_OUT)->sum('amount');
+                $disposals = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::DISPOSAL)->sum('amount');
+                $adjValue  = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::ADJUSTMENT_VALUE)->sum('amount');
+                $adjDepr   = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::ADJUSTMENT_DEPRECIATION)->sum('amount');
 
-                $startPeriod = $this->calcDeprStartPeriod($policy->depr_start_date, $policy->cutoff_day ?? 15);
-                $startPeriodCarbon = Carbon::parse($startPeriod)->startOfMonth();
+                $start = Carbon::parse($policy->depr_start_date);
+                $addMonths = ($start->day <= ($policy->cutoff_day ?? 15)) ? 1 : 2;
+                $eligibleStart = $start->copy()->startOfMonth()->addMonths($addMonths);
 
-                $eligibleThisMonth = $startPeriodCarbon->lte($period);
+                $eligibleThisMonth = $eligibleStart->lte($period);
 
-                $elapsed = $eligibleThisMonth ? max(0, $this->monthsElapsed($policy->depr_start_date, $period, $policy->convention)) : 0;
-                $remainingMonths = $eligibleThisMonth ? max(0, ((int)$policy->useful_life_months) - $elapsed) : 0;
+                $elapsed = $eligibleThisMonth ? $eligibleStart->diffInMonths($period) : 0;
+
+                $lifeMonths = (int) $policy->useful_life_months;
+                $remainingMonths = $eligibleThisMonth ? max(0, $lifeMonths - $elapsed) : 0;
 
                 $deprBase = $eligibleThisMonth
                     ? max(($opening + $adjValue + $tin - $tout - $disposals) - (float)$policy->salvage_value, 0.0)
                     : 0.0;
 
-                $deprExpense = ($eligibleThisMonth && $remainingMonths > 0) ? floor($deprBase / $remainingMonths) : 0.0;
+                $deprExpense = ($eligibleThisMonth && $remainingMonths > 0)
+                    ? floor($deprBase / $remainingMonths)
+                    : 0.0;
 
                 $ending = $opening + $additions + $tin - $tout - $disposals + $adjValue - $deprExpense + $adjDepr;
                 $accEnd = $accPrev + $deprExpense + $adjDepr;
@@ -282,7 +287,6 @@ class DepreciationController extends Controller
 
         return response()->json(['ok' => true, 'message' => "Depreciation processed for {$period->toDateString()}"]);
     }
-
 
     public function buildYear(Request $r)
     {
@@ -325,13 +329,13 @@ class DepreciationController extends Controller
     public function recordAddition(Request $r)
     {
         $data = $r->validate([
-            'asset_uuid' => ['required', 'uuid'],
-            'amount'     => ['required', 'numeric', 'min:0.01'],
+            'asset_uuid'  => ['required', 'uuid'],
+            'amount'      => ['required', 'numeric', 'min:0.01'],
             'actual_date' => ['required', 'date'],
-            'note'       => ['nullable', 'string', 'max:300'],
+            'note'        => ['nullable', 'string', 'max:300'],
             'source_type' => ['nullable', 'string', 'max:64'],
             'source_uuid' => ['nullable', 'uuid'],
-            'group_uuid' => ['nullable', 'uuid'],
+            'group_uuid'  => ['nullable', 'uuid'],
         ]);
 
         return $this->writeMovementWithCutoff($data, AssetDeprMovement::ADDITION);
@@ -340,6 +344,7 @@ class DepreciationController extends Controller
     public function recordTransfer(Request $r)
     {
         $data = $r->validate([
+            'transfer_type'   => ['nullable', 'in:tf-val,'.self::TRANSFER_TYPE_CARRY_OVER],
             'from_asset_uuid' => ['required', 'uuid'],
             'to_asset_uuid'   => ['required', 'uuid', 'different:from_asset_uuid'],
             'amount'          => ['required', 'numeric', 'min:0.01'],
@@ -350,9 +355,89 @@ class DepreciationController extends Controller
             'group_uuid'      => ['nullable', 'uuid'],
         ]);
 
+        $type   = $data['transfer_type'] ?? 'tf-val';
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
         $group  = $data['group_uuid'] ?? Str::uuid();
 
+        $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
+        $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
+        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
+        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
+
+        if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
+            // === Carry-Over (Gross + Accumulated Depreciation) ===
+            $info = $this->computeCarryOver($data['from_asset_uuid'], Carbon::parse($data['actual_date']), (float)$data['amount']);
+            if ((float)$data['amount'] > $info['cap_remaining']) {
+                throw ValidationException::withMessages([
+                    'amount' => sprintf(
+                        'Amount exceeds gross remaining. Total: %s, Lifetime transferred: %s, Remaining: %s.',
+                        number_format($info['total_gross'], 2),
+                        number_format($info['total_gross'] - $info['cap_remaining'], 2),
+                        number_format($info['cap_remaining'], 2)
+                    )
+                ]);
+            }
+
+            DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart, $info) {
+                // FROM A: gross out
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_OUT,
+                    'amount'            => $data['amount'],
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '').' | carry-over gross out'),
+                ]);
+                // FROM A: reduce accumulated (negative adj)
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                    'amount'            => -$info['acc_move'],
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '').' | carry-over accum -FROM'),
+                ]);
+
+                // TO B: gross in
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_IN,
+                    'amount'            => $data['amount'],
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '').' | carry-over gross in'),
+                ]);
+                // TO B: add accumulated (positive adj)
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                    'amount'            => +$info['acc_move'],
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '').' | carry-over accum +TO'),
+                ]);
+            });
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Carry-Over transfer recorded',
+                'group_uuid' => (string)$group
+            ]);
+        }
+
+        // === Default Case-1 (Gross only; your existing behavior with monthly max) ===
         $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
         if ((float)$data['amount'] > $cap['remaining']) {
             throw ValidationException::withMessages([
@@ -368,12 +453,6 @@ class DepreciationController extends Controller
                 )
             ]);
         }
-
-        $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
-        $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
-
-        $fromStart = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
-        $toStart   = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
 
         DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart) {
             AssetDeprMovement::create([
@@ -401,19 +480,19 @@ class DepreciationController extends Controller
             ]);
         });
 
-        return response()->json(['ok' => true, 'message' => 'Transfer recorded', 'group_uuid' => (string)$group, 'cap' => $cap]);
+        return response()->json(['ok' => true, 'message' => 'Transfer recorded', 'group_uuid' => (string)$group]);
     }
 
     public function recordDisposal(Request $r)
     {
         $data = $r->validate([
-            'asset_uuid' => ['required', 'uuid'],
-            'amount'     => ['required', 'numeric', 'min:0.01'],
+            'asset_uuid'  => ['required', 'uuid'],
+            'amount'      => ['required', 'numeric', 'min:0.01'],
             'actual_date' => ['required', 'date'],
-            'note'       => ['nullable', 'string', 'max:300'],
+            'note'        => ['nullable', 'string', 'max:300'],
             'source_type' => ['nullable', 'string', 'max:64'],
             'source_uuid' => ['nullable', 'uuid'],
-            'group_uuid' => ['nullable', 'uuid'],
+            'group_uuid'  => ['nullable', 'uuid'],
         ]);
 
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
@@ -436,10 +515,10 @@ class DepreciationController extends Controller
     public function recordAdjustmentValue(Request $r)
     {
         $data = $r->validate([
-            'asset_uuid' => ['required', 'uuid'],
-            'amount'     => ['required', 'numeric', 'min:0.01'],
+            'asset_uuid'  => ['required', 'uuid'],
+            'amount'      => ['required', 'numeric', 'min:0.01'],
             'actual_date' => ['required', 'date'],
-            'note'       => ['nullable', 'string', 'max:300'],
+            'note'        => ['nullable', 'string', 'max:300'],
         ]);
 
         return $this->writeMovementWithCutoff($data, AssetDeprMovement::ADJUSTMENT_VALUE);
@@ -448,10 +527,10 @@ class DepreciationController extends Controller
     public function recordAdjustmentDepreciation(Request $r)
     {
         $data = $r->validate([
-            'asset_uuid' => ['required', 'uuid'],
-            'amount'     => ['required', 'numeric'],
+            'asset_uuid'  => ['required', 'uuid'],
+            'amount'      => ['required', 'numeric'],
             'actual_date' => ['required', 'date'],
-            'note'       => ['nullable', 'string', 'max:300'],
+            'note'        => ['nullable', 'string', 'max:300'],
         ]);
 
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
@@ -468,7 +547,6 @@ class DepreciationController extends Controller
 
         return response()->json(['ok' => true, 'message' => 'Depreciation adjustment recorded']);
     }
-
 
     private function writeMovementWithCutoff(array $data, string $category)
     {
@@ -492,14 +570,12 @@ class DepreciationController extends Controller
         return response()->json(['ok' => true, 'message' => "{$category} recorded"]);
     }
 
-    private function calcDeprStartPeriod(string|\DateTimeInterface $actualDate, int $cutoffDay): string
+    private function calcDeprStartPeriod(string|\DateTimeInterface $startDate, ?int $cutoffDay = 15): string
     {
-        $d = Carbon::parse($actualDate);
-        $monthStart = $d->copy()->startOfMonth();
-        if ((int)$d->format('d') <= $cutoffDay) {
-            return $monthStart->copy()->addMonth()->toDateString();
-        }
-        return $monthStart->copy()->addMonths(2)->toDateString();
+        $cutoffDay = $cutoffDay ?: 15;
+        $d = Carbon::parse($startDate);
+        $addMonths = ($d->day <= $cutoffDay) ? 1 : 2;
+        return $d->copy()->startOfMonth()->addMonths($addMonths)->toDateString();
     }
 
     private function monthsElapsed(string|\DateTimeInterface $startDate, Carbon $period, string $convention): int
@@ -507,6 +583,7 @@ class DepreciationController extends Controller
         $start = Carbon::parse($startDate)->startOfMonth();
         return max(0, $start->diffInMonths($period));
     }
+
     private function computeMaxTransfer(string $assetUuid, Carbon $actualDate): array
     {
         $monthStart = $actualDate->copy()->startOfMonth();
@@ -521,7 +598,7 @@ class DepreciationController extends Controller
             ->orderBy('period', 'desc')
             ->first();
 
-        $lastNbv  = $lastRow ? (float)$lastRow->ending_balance : $total;
+        $lastNbv    = $lastRow ? (float)$lastRow->ending_balance : $total;
         $lastPeriod = $lastRow?->period;
 
         $max = max(0.0, $total - $lastNbv);
@@ -543,6 +620,67 @@ class DepreciationController extends Controller
             'remaining'          => $remaining,
         ];
     }
+
+    public function carryOverPreview(Request $r)
+    {
+        $data = $r->validate([
+            'from_asset_uuid' => ['required','uuid'],
+            'actual_date'     => ['required','date'],
+            'amount'          => ['required','numeric','min:0.01'],
+        ]);
+
+        $info = $this->computeCarryOver(
+            $data['from_asset_uuid'],
+            Carbon::parse($data['actual_date']),
+            (float)$data['amount']
+        );
+
+        return response()->json(['ok' => true] + $info);
+    }
+
+    private function lastClosedRowBeforeMonth(string $assetUuid, Carbon $monthStart): ?AssetDeprMonthly
+    {
+        return AssetDeprMonthly::where('asset_uuid', $assetUuid)
+            ->whereDate('period', '<', $monthStart)
+            ->orderBy('period', 'desc')
+            ->first();
+    }
+
+    private function grossRemaining(string $assetUuid): float
+    {
+        $total = (float) DB::table('assets_value')->where('asset_uuid', $assetUuid)->value('total');
+        $outAll = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+            ->where('category', AssetDeprMovement::TRANSFER_OUT)
+            ->sum('amount');
+        return max(0.0, $total - $outAll);
+    }
+
+    private function computeCarryOver(string $fromUuid, Carbon $actualDate, float $amount): array
+    {
+        $monthStart = $actualDate->copy()->startOfMonth();
+
+        $totalGross = (float) DB::table('assets_value')->where('asset_uuid', $fromUuid)->value('total');
+
+        $last = $this->lastClosedRowBeforeMonth($fromUuid, $monthStart);
+        $accAsOfLast = (float) ($last->accumulated_depr_end ?? 0);
+
+        $ratio   = ($totalGross > 0) ? ($amount / $totalGross) : 0.0;
+        $accMove = round($accAsOfLast * $ratio, 2);
+        $nbvMove = max(0.0, $amount - $accMove);
+
+        $capRemaining = $this->grossRemaining($fromUuid);
+
+        return [
+            'total_gross'        => $totalGross,
+            'accum_as_of_last'   => $accAsOfLast,
+            'ratio'              => $ratio,
+            'acc_move'           => $accMove,
+            'nbv_move'           => $nbvMove,
+            'cap_remaining'      => $capRemaining,
+            'last_closed_period' => optional($last)->period,
+        ];
+    }
+
     public function transferLimit(Request $r)
     {
         $data = $r->validate([
@@ -553,13 +691,14 @@ class DepreciationController extends Controller
         $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
         return response()->json(['ok' => true] + $cap);
     }
+
     public function assetSearch(Request $r)
     {
         $q = trim($r->get('q', ''));
         $rows = Assets::query()
             ->select('uuid', 'asset_code', 'description')
             ->when($q, fn($qq) => $qq->where('asset_code', 'ilike', "%{$q}%")
-                ->orWhere('description', 'ilike', "%{$q}%"))
+                                     ->orWhere('description', 'ilike', "%{$q}%"))
             ->orderBy('asset_code')
             ->limit(20)
             ->get();
