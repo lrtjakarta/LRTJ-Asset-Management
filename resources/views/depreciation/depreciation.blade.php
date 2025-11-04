@@ -142,11 +142,72 @@
                                 <label class="form-label required">From Asset</label>
                                 <select id="tr-from-asset" class="form-select" style="width:100%"></select>
                                 <input type="hidden" id="tr-from-uuid" name="from_asset_uuid">
+                                <div id="tf-asset-snapshot-1" class="mt-4 d-none">
+                                    <div class="p-3 border rounded bg-light">
+                                        <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                        <div class="row gy-2">
+                                            <div class="col-6">
+                                                <div class="text-muted">Owner</div>
+                                                <div id="snap-owner-1" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">User</div>
+                                                <div id="snap-user-1" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-6">
+                                                <div class="text-muted">Maintenance</div>
+                                                <div id="snap-maintenance-1" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">Status</div>
+                                                <div id="snap-status-1" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-12">
+                                                <div class="text-muted">Location</div>
+                                                <div id="snap-location-1" class="fw-semibold"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label required">To Asset</label>
                                 <select id="tr-to-asset" class="form-select" style="width:100%"></select>
                                 <input type="hidden" id="tr-to-uuid" name="to_asset_uuid">
+
+                                <div id="tf-asset-snapshot-2" class="mt-4 d-none">
+                                    <div class="p-3 border rounded bg-light">
+                                        <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                        <div class="row gy-2">
+                                            <div class="col-6">
+                                                <div class="text-muted">Owner</div>
+                                                <div id="snap-owner-2" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">User</div>
+                                                <div id="snap-user-2" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-6">
+                                                <div class="text-muted">Maintenance</div>
+                                                <div id="snap-maintenance-2" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">Status</div>
+                                                <div id="snap-status-2" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-12">
+                                                <div class="text-muted">Location</div>
+                                                <div id="snap-location-2" class="fw-semibold"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="col-md-6">
@@ -237,7 +298,7 @@
                     dropdownParent: $('#modal-transfer'),
                     placeholder: 'Search asset code/name…',
                     allowClear: true,
-                    minimumInputLength: 1,
+                    // minimumInputLength: 1,
                     ajax: {
                         url: "{{ route('depreciation.assets.search') }}",
                         dataType: 'json',
@@ -253,10 +314,75 @@
                             }))
                         })
                     }
+                }).on('select2:select', function(e) {
+                    if (this.id === 'tr-from-asset') {
+                        const assetUuid = e.params.data.id;
+                        fetchAssetSnapshot1(assetUuid);
+                    }
+                    if (this.id === 'tr-to-asset') {
+                        const assetUuid = e.params.data.id;
+                        fetchAssetSnapshot2(assetUuid);
+                    }
+                }).on('select2:clear', function() {
+                    if (this.id === 'tr-from-asset') {
+                        clearSnapshot1();
+                    }
+                    if (this.id === 'tr-to-asset') {
+                        clearSnapshot2();
+                    }
                 });
             };
             initAssetSelect($('#tr-from-asset'));
             initAssetSelect($('#tr-to-asset'));
+
+            function fetchAssetSnapshot1(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot1();
+                    return;
+                }
+                $.getJSON('{{ route('assets.brief', ':id') }}'.replace(':id', assetUuid))
+                    .done(renderSnapshot1)
+                    .fail(() => clearSnapshot1());
+            }
+            function renderSnapshot1(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner-1').text(safe(d.owner_label));
+                $('#snap-user-1').text(safe(d.user_label));
+                $('#snap-maintenance-1').text(safe(d.maintenance_label));
+                $('#snap-status-1').text(safe(d.status_label));
+                $('#snap-location-1').text(safe(d.location_label));
+                $('#tf-asset-snapshot-1').removeClass('d-none');
+            }
+
+            function clearSnapshot1() {
+                $('#snap-owner-1,#snap-user-1,#snap-maintenance-1,#snap-status-1,#snap-location-1').text('');
+                $('#tf-asset-snapshot-1').addClass('d-none');
+            }
+
+            
+            function fetchAssetSnapshot2(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot2();
+                    return;
+                }
+                $.getJSON('{{ route('assets.brief', ':id') }}'.replace(':id', assetUuid))
+                    .done(renderSnapshot2)
+                    .fail(() => clearSnapshot2());
+            }
+            function renderSnapshot2(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner-2').text(safe(d.owner_label));
+                $('#snap-user-2').text(safe(d.user_label));
+                $('#snap-maintenance-2').text(safe(d.maintenance_label));
+                $('#snap-status-2').text(safe(d.status_label));
+                $('#snap-location-2').text(safe(d.location_label));
+                $('#tf-asset-snapshot-2').removeClass('d-none');
+            }
+
+            function clearSnapshot2() {
+                $('#snap-owner-2,#snap-user-2,#snap-maintenance-2,#snap-status-2,#snap-location-2').text('');
+                $('#tf-asset-snapshot-2').addClass('d-none');
+            }
 
             $('#tr-from-asset').on('select2:select select2:clear', () => {
                 $('#tr-from-uuid').val($('#tr-from-asset').val() || '');
@@ -615,7 +741,7 @@
                         console.error('runMonth after transfer failed', e2);
                         toastr?.warning(
                             'Transfer saved, but monthly recompute failed. Please press "Process Current Month".'
-                            );
+                        );
                     }
 
                     toastr?.success('Transfer saved');

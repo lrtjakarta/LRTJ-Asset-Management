@@ -544,6 +544,9 @@ class AssetsController extends Controller
             ->with(['assignment' => function ($q) {
                 $q->select('asset_uuid', 'asset_owner', 'asset_user', 'asset_maintenance');
             }])
+            ->with(['value' => function ($c) {
+                $c->select('asset_uuid', 'price', 'quantity', 'vat_in', 'total', 'kode_uom', 'useful_life_month');
+            }])
             ->findOrFail($uuid);
 
         $ownerCode = $a->assignment?->asset_owner;
@@ -572,7 +575,6 @@ class AssetsController extends Controller
             ->value('name')
             : null;
 
-        // Resolve location name
         $locName = $locCode
             ? MasterLocation::query()
             ->where('kode', $locCode)
@@ -603,6 +605,14 @@ class AssetsController extends Controller
 
             'location_code'    => $locCode,
             'location_label'   => $locationLabel,
+
+
+            'price'              => $a->value?->price,
+            'quantity'           => $a->value?->quantity,
+            'vat_in'             => $a->value?->vat_in,
+            'total'              => $a->value?->total,
+            'kode_uom'           => $a->value?->kode_uom,
+            'useful_life_month'  => $a->value?->useful_life_month,
         ]);
     }
     public function bulk_upload()
@@ -850,7 +860,7 @@ class AssetsController extends Controller
                 }
                 $asset->save();
                 $isNew ? $inserted++ : $updated++;
-                
+
                 // generate qr
                 try {
                     $displayLabel = $asset->asset_code . ($asset->description ? (' (' . $asset->description . ')') : '');

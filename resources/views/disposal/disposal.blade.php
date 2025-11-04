@@ -89,7 +89,6 @@
                             <div id="ds-asset-snapshot" class="mt-4 d-none">
                                 <div class="p-3 border rounded bg-light">
                                     <div class="fw-semibold mb-2">Current Asset Info</div>
-
                                     <div class="row gy-2">
                                         <div class="col-6">
                                             <div class="text-muted">Owner</div>
@@ -112,6 +111,36 @@
                                         <div class="col-12">
                                             <div class="text-muted">Location</div>
                                             <div id="snap-location" class="fw-semibold"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="fw-semibold mb-2">Acquisition Info</div>
+                                    <div class="row gy-2">
+                                        <div class="col-6">
+                                            <div class="text-muted">Price</div>
+                                            <div id="snap-price" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Quantity</div>
+                                            <div id="snap-quantity" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">VAT In</div>
+                                            <div id="snap-vat-in" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">UOM</div>
+                                            <div id="snap-uom" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Total</div>
+                                            <div id="snap-total" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Useful Life (Month)</div>
+                                            <div id="snap-useful-life" class="fw-semibold"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -154,16 +183,16 @@
     <script>
         (function() {
             const R = {
-                data: '{{ route('disposal.data.all') }}', 
-                show: '{{ route('disposal.show', ':id') }}', 
+                data: '{{ route('disposal.data.all') }}',
+                show: '{{ route('disposal.show', ':id') }}',
                 update: '{{ route('disposal.update', ':id') }}',
-                create: '{{ route('disposal.store') }}', 
-                destroy: '{{ route('disposal.destroy', ':id') }}', 
+                create: '{{ route('disposal.store') }}',
+                destroy: '{{ route('disposal.destroy', ':id') }}',
                 assetBrief: id => '{{ route('assets.brief', ':id') }}'.replace(':id', id),
                 approve: id => '{{ route('disposal.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
 
-                assets: '{{ route('assets.options') }}', 
+                assets: '{{ route('assets.options') }}',
             };
 
             $.ajaxSetup({
@@ -234,7 +263,7 @@
                 $('#ds-remove-file').val('1');
                 $('#ds-current-file').addClass('d-none');
             });
-            
+
 
             function renderSnapshot(d) {
                 const safe = (v) => v || '';
@@ -243,6 +272,13 @@
                 $('#snap-maintenance').text(safe(d.maintenance_label));
                 $('#snap-status').text(safe(d.status_label));
                 $('#snap-location').text(safe(d.location_label));
+                
+                $('#snap-price').text(safe(d.price));
+                $('#snap-quantity').text(safe(d.quantity));
+                $('#snap-vat-in').text(safe(d.vat_in));
+                $('#snap-uom').text(safe(d.kode_uom));
+                $('#snap-total').text(safe(d.total));
+                $('#snap-useful-life').text(safe(d.useful_life_month));
                 $('#ds-asset-snapshot').removeClass('d-none');
             }
 
