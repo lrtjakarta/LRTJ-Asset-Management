@@ -514,6 +514,7 @@ class AssetsController extends Controller
         $q = trim($request->string('q'));
         $page = max(1, (int) $request->input('page', 1));
         $per  = 10;
+        $type = trim((string) $request->get('type')) ?? null;
 
         $rows = Assets::query()
             ->when($q, function ($qq) use ($q) {
@@ -521,6 +522,9 @@ class AssetsController extends Controller
                     $w->where('asset_code', 'ilike', "%{$q}%")
                         ->orWhere('description', 'ilike', "%{$q}%");
                 });
+            })
+            ->when($type === 'disposal', function ($qq) {
+                $qq->where('kode_status', '!=', 'DIS');
             })
             ->orderBy('asset_code')
             ->paginate($per, ['*'], 'page', $page);

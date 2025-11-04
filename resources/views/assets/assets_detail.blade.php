@@ -21,7 +21,7 @@
 
             <div class="d-flex align-items-center gap-2 gap-lg-3">
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
-                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenDisposal">Disposal</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary {{ $asset->kode_status == 'DIS' ? 'disabled' : '' }} " id="btnOpenDisposal">Disposal</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenReturn">Return</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenAcq">Acquisition</a>
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>

@@ -213,7 +213,8 @@
                         delay: 150,
                         data: params => Object.assign({
                             q: params.term || '',
-                            page: params.page || 1
+                            page: params.page || 1,
+                            type: 'disposal',
                         }, (typeof extra === 'function') ? extra() : (extra || {})),
                         processResults: d => d
                     }
