@@ -8,7 +8,8 @@ use App\Models\{
     AssetDeprPolicy,
     AssetDeprMovement,
     AssetDeprMonthly,
-    AssetDeprYearly
+    AssetDeprYearly,
+    AssetDeprTransferRequest
 };
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -16,11 +17,15 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 class DepreciationController extends Controller
 {
     private const TRANSFER_TYPE_CARRY_OVER = 'carry_over_gross_accum';
     private const TRANSFER_TYPE_ACQ_FIX    = 'acq_fix';
+    private const STATUS_APR = 'APR';
+    private const STATUS_ACC = 'ACC';
+    private const STATUS_REJ = 'REJ';
 
     public function index()
     {
@@ -191,6 +196,17 @@ class DepreciationController extends Controller
         $r->validate(['period' => ['required', 'date']]);
         $period = Carbon::parse($r->period)->startOfMonth();
 
+        // use shared logic
+        $this->processMonthlyDepr($period);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => "Depreciation processed for {$period->toDateString()}",
+        ]);
+    }
+
+    private function processMonthlyDepr(Carbon $period): void
+    {
         DB::transaction(function () use ($period) {
 
             $assets = DB::table('assets')
@@ -298,8 +314,6 @@ class DepreciationController extends Controller
                 );
             }
         });
-
-        return response()->json(['ok' => true, 'message' => "Depreciation processed for {$period->toDateString()}"]);
     }
 
     public function buildYear(Request $r)
@@ -369,230 +383,12 @@ class DepreciationController extends Controller
             'group_uuid'      => ['nullable', 'uuid'],
         ]);
 
-        $type   = $data['transfer_type'] ?? 'tf-val';
-        $period = Carbon::parse($data['actual_date'])->startOfMonth();
-        $group  = $data['group_uuid'] ?? Str::uuid();
+        $msg = $this->applyTransfer($data);
 
-        $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
-        $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
-        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
-        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
-
-        if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
-
-            $amount = (float) $data['amount'];
-
-            $fromTotal = (float) DB::table('assets_value')
-                ->where('asset_uuid', $data['from_asset_uuid'])
-                ->value('total');
-
-            if ($amount > $fromTotal) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Amount exceeds gross value of the source asset.',
-                ]);
-            }
-
-            if (!$fromPolicy || !$toPolicy) {
-                throw ValidationException::withMessages([
-                    'from_asset_uuid' => 'Both assets must have active depreciation policies for acquisition correction.',
-                ]);
-            }
-
-            $fromLife = (int) ($fromPolicy->useful_life_months ?: 0);
-            $toLife   = (int) ($toPolicy->useful_life_months   ?: 0);
-
-            if ($fromLife <= 0 || $toLife <= 0) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Useful life (months) must be set for both assets for acquisition correction.',
-                ]);
-            }
-
-            $fromRate = $amount / $fromLife;
-            $toRate   = $amount / $toLife;
-
-            $monthsFromYtd = $this->componentMonthsYtd($fromPolicy, $period);
-            $monthsToYtd   = $this->componentMonthsYtd($toPolicy, $period);
-
-            $depFromYtd = $fromRate * $monthsFromYtd;
-            $depToYtd   = $toRate   * $monthsToYtd;
-
-            $adjDepA = $depToYtd;
-            $adjDepB = -$depFromYtd; 
-
-            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjDepA, $adjDepB) {
-
-                // Gross out FROM
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['from_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::TRANSFER_OUT,
-                    'amount'            => $amount,
-                    'depr_start_period' => $fromStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross OUT'),
-                ]);
-
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['to_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::TRANSFER_IN,
-                    'amount'            => $amount,
-                    'depr_start_period' => $toStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross IN'),
-                ]);
-
-                if (abs($adjDepB) > 0.0001) {
-                    AssetDeprMovement::create([
-                        'asset_uuid'        => $data['from_asset_uuid'],
-                        'period'            => $period,
-                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepB,
-                        'depr_start_period' => $period,
-                        'group_uuid'        => $group,
-                        'source_type'       => $data['source_type'] ?? 'manual',
-                        'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix reverse YTD'),
-                    ]);
-                }
-
-                if (abs($adjDepA) > 0.0001) {
-                    AssetDeprMovement::create([
-                        'asset_uuid'        => $data['to_asset_uuid'],
-                        'period'            => $period,
-                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepA,
-                        'depr_start_period' => $period,
-                        'group_uuid'        => $group,
-                        'source_type'       => $data['source_type'] ?? 'manual',
-                        'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix add YTD'),
-                    ]);
-                }
-            });
-
-            return response()->json([
-                'ok'         => true,
-                'message'    => 'Acquisition correction transfer recorded',
-                'group_uuid' => (string) $group,
-            ]);
-        }
-
-        if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
-            $info = $this->computeCarryOver($data['from_asset_uuid'], Carbon::parse($data['actual_date']), (float)$data['amount']);
-            if ((float)$data['amount'] > $info['cap_remaining']) {
-                throw ValidationException::withMessages([
-                    'amount' => sprintf(
-                        'Amount exceeds gross remaining. Total: %s, Lifetime transferred: %s, Remaining: %s.',
-                        number_format($info['total_gross'], 2),
-                        number_format($info['total_gross'] - $info['cap_remaining'], 2),
-                        number_format($info['cap_remaining'], 2)
-                    )
-                ]);
-            }
-
-            DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart, $info) {
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['from_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::TRANSFER_OUT,
-                    'amount'            => $data['amount'],
-                    'depr_start_period' => $fromStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross out'),
-                ]);
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['from_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                    'amount'            => -$info['acc_move'],
-                    'depr_start_period' => $fromStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum -FROM'),
-                ]);
-
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['to_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::TRANSFER_IN,
-                    'amount'            => $data['amount'],
-                    'depr_start_period' => $toStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross in'),
-                ]);
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['to_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                    'amount'            => +$info['acc_move'],
-                    'depr_start_period' => $toStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum +TO'),
-                ]);
-            });
-
-            return response()->json([
-                'ok'         => true,
-                'message'    => 'Carry-Over transfer recorded',
-                'group_uuid' => (string)$group
-            ]);
-        }
-
-        $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
-        if ((float)$data['amount'] > $cap['remaining']) {
-            throw ValidationException::withMessages([
-                'amount' => sprintf(
-                    'Amount exceeds max allowed for %s. Beginning Value: %s, Last NBV (%s): %s, Max: %s, Already transferred this month: %s, Remaining: %s.',
-                    Carbon::parse($data['actual_date'])->toDateString(),
-                    number_format($cap['begin_total'], 2),
-                    optional($cap['last_closed_period'])->format('Y-m-d') ?? '-',
-                    number_format($cap['last_nbv'], 2),
-                    number_format($cap['max'], 2),
-                    number_format($cap['already_out'], 2),
-                    number_format($cap['remaining'], 2),
-                )
-            ]);
-        }
-
-        DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart) {
-            AssetDeprMovement::create([
-                'asset_uuid'        => $data['from_asset_uuid'],
-                'period'            => $period,
-                'category'          => AssetDeprMovement::TRANSFER_OUT,
-                'amount'            => $data['amount'],
-                'depr_start_period' => $fromStart,
-                'group_uuid'        => $group,
-                'source_type'       => $data['source_type'] ?? 'manual',
-                'source_uuid'       => $data['source_uuid'] ?? null,
-                'note'              => $data['note'] ?? null,
-            ]);
-
-            AssetDeprMovement::create([
-                'asset_uuid'        => $data['to_asset_uuid'],
-                'period'            => $period,
-                'category'          => AssetDeprMovement::TRANSFER_IN,
-                'amount'            => $data['amount'],
-                'depr_start_period' => $toStart,
-                'group_uuid'        => $group,
-                'source_type'       => $data['source_type'] ?? 'manual',
-                'source_uuid'       => $data['source_uuid'] ?? null,
-                'note'              => $data['note'] ?? null,
-            ]);
-        });
-
-        return response()->json(['ok' => true, 'message' => 'Transfer recorded', 'group_uuid' => (string)$group]);
+        return response()->json([
+            'ok'         => true,
+            'message'    => $msg,
+        ]);
     }
 
     public function recordDisposal(Request $r)
@@ -814,7 +610,6 @@ class DepreciationController extends Controller
             ->when($q, fn($qq) => $qq->where('asset_code', 'ilike', "%{$q}%")
                 ->orWhere('description', 'ilike', "%{$q}%"))
             ->orderBy('asset_code')
-            ->limit(20)
             ->get();
         return response()->json(['data' => $rows]);
     }
@@ -855,5 +650,476 @@ class DepreciationController extends Controller
         }
 
         return $effectiveStart->diffInMonths($monthBefore) + 1;
+    }
+
+    private function applyTransfer(array $data): string
+    {
+        $type   = $data['transfer_type'] ?? 'tf-val';
+        $period = Carbon::parse($data['actual_date'])->startOfMonth();
+        $group  = $data['group_uuid'] ?? Str::uuid();
+
+        $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
+        $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
+        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
+        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
+
+        // === Case 2: Acquisition Fix (acq_fix) ===
+        if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
+
+            $amount = (float) $data['amount'];
+
+            $fromTotal = (float) DB::table('assets_value')
+                ->where('asset_uuid', $data['from_asset_uuid'])
+                ->value('total');
+
+            if ($amount > $fromTotal) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Amount exceeds gross value of the source asset.',
+                ]);
+            }
+
+            if (!$fromPolicy || !$toPolicy) {
+                throw ValidationException::withMessages([
+                    'from_asset_uuid' => 'Both assets must have active depreciation policies for acquisition correction.',
+                ]);
+            }
+
+            $fromLife = (int) ($fromPolicy->useful_life_months ?: 0);
+            $toLife   = (int) ($toPolicy->useful_life_months   ?: 0);
+
+            if ($fromLife <= 0 || $toLife <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Useful life (months) must be set for both assets for acquisition correction.',
+                ]);
+            }
+
+            $fromRate = $amount / $fromLife;
+            $toRate   = $amount / $toLife;
+
+            $monthsFromYtd = $this->componentMonthsYtd($fromPolicy, $period);
+            $monthsToYtd   = $this->componentMonthsYtd($toPolicy, $period);
+
+            $depFromYtd = $fromRate * $monthsFromYtd;
+            $depToYtd   = $toRate   * $monthsToYtd;
+
+            $adjDepA = $depToYtd;
+            $adjDepB = -$depFromYtd;
+
+            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjDepA, $adjDepB) {
+
+                // Gross out FROM
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_OUT,
+                    'amount'            => $amount,
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross OUT'),
+                ]);
+
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_IN,
+                    'amount'            => $amount,
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross IN'),
+                ]);
+
+                if (abs($adjDepB) > 0.0001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['from_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => $adjDepB,
+                        'depr_start_period' => $period,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix reverse YTD'),
+                    ]);
+                }
+
+                if (abs($adjDepA) > 0.0001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['to_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => $adjDepA,
+                        'depr_start_period' => $period,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix add YTD'),
+                    ]);
+                }
+            });
+
+            return 'Acquisition correction transfer recorded';
+        }
+
+        // === Case 3: Carry-over (gross + accum) ===
+        if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
+            $info = $this->computeCarryOver($data['from_asset_uuid'], Carbon::parse($data['actual_date']), (float)$data['amount']);
+            if ((float)$data['amount'] > $info['cap_remaining']) {
+                throw ValidationException::withMessages([
+                    'amount' => sprintf(
+                        'Amount exceeds gross remaining. Total: %s, Lifetime transferred: %s, Remaining: %s.',
+                        number_format($info['total_gross'], 2),
+                        number_format($info['total_gross'] - $info['cap_remaining'], 2),
+                        number_format($info['cap_remaining'], 2)
+                    )
+                ]);
+            }
+
+            DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart, $info) {
+                // FROM
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_OUT,
+                    'amount'            => $data['amount'],
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross out'),
+                ]);
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                    'amount'            => -$info['acc_move'],
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum -FROM'),
+                ]);
+
+                // TO
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_IN,
+                    'amount'            => $data['amount'],
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross in'),
+                ]);
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                    'amount'            => +$info['acc_move'],
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum +TO'),
+                ]);
+            });
+
+            return 'Carry-Over transfer recorded';
+        }
+
+        // === Case 1: tf-val (gross only, with NBV cap per month) ===
+        $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
+        if ((float)$data['amount'] > $cap['remaining']) {
+            throw ValidationException::withMessages([
+                'amount' => sprintf(
+                    'Amount exceeds max allowed for %s. Beginning Value: %s, Last NBV (%s): %s, Max: %s, Already transferred this month: %s, Remaining: %s.',
+                    Carbon::parse($data['actual_date'])->toDateString(),
+                    number_format($cap['begin_total'], 2),
+                    optional($cap['last_closed_period'])->format('Y-m-d') ?? '-',
+                    number_format($cap['last_nbv'], 2),
+                    number_format($cap['max'], 2),
+                    number_format($cap['already_out'], 2),
+                    number_format($cap['remaining'], 2),
+                )
+            ]);
+        }
+
+        DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart) {
+            AssetDeprMovement::create([
+                'asset_uuid'        => $data['from_asset_uuid'],
+                'period'            => $period,
+                'category'          => AssetDeprMovement::TRANSFER_OUT,
+                'amount'            => $data['amount'],
+                'depr_start_period' => $fromStart,
+                'group_uuid'        => $group,
+                'source_type'       => $data['source_type'] ?? 'manual',
+                'source_uuid'       => $data['source_uuid'] ?? null,
+                'note'              => $data['note'] ?? null,
+            ]);
+
+            AssetDeprMovement::create([
+                'asset_uuid'        => $data['to_asset_uuid'],
+                'period'            => $period,
+                'category'          => AssetDeprMovement::TRANSFER_IN,
+                'amount'            => $data['amount'],
+                'depr_start_period' => $toStart,
+                'group_uuid'        => $group,
+                'source_type'       => $data['source_type'] ?? 'manual',
+                'source_uuid'       => $data['source_uuid'] ?? null,
+                'note'              => $data['note'] ?? null,
+            ]);
+        });
+
+        return 'Transfer recorded';
+    }
+
+    /* ============================================================
+     *  TRANSFER REQUESTS
+     * ============================================================
+     */
+
+    public function transferRequestsIndex()
+    {
+        return view('depreciation.transfer_requests');
+    }
+
+    public function dtTransferRequests(Request $r)
+    {
+        $q = AssetDeprTransferRequest::query()
+            ->with(['fromAsset:uuid,asset_code,description', 'toAsset:uuid,asset_code,description']);
+
+        if ($status = $r->get('status')) {
+            $q->where('kode_status', $status);
+        }
+
+        if ($search = trim($r->get('asset_q', ''))) {
+            $q->where(function ($qq) use ($search) {
+                $qq->whereHas('fromAsset', function ($qa) use ($search) {
+                    $qa->where('asset_code', 'ilike', "%{$search}%")
+                        ->orWhere('description', 'ilike', "%{$search}%");
+                })->orWhereHas('toAsset', function ($qa) use ($search) {
+                    $qa->where('asset_code', 'ilike', "%{$search}%")
+                        ->orWhere('description', 'ilike', "%{$search}%");
+                });
+            });
+        }
+
+        return DataTables::eloquent($q)
+            ->addColumn('from_uuid', fn($row) => $row->fromAsset?->uuid)
+            ->addColumn('from_code', fn($row) => $row->fromAsset?->asset_code)
+            ->addColumn('from_name', fn($row) => $row->fromAsset?->description)
+            ->addColumn('to_uuid',   fn($row) => $row->toAsset?->uuid)
+            ->addColumn('to_code',   fn($row) => $row->toAsset?->asset_code)
+            ->addColumn('to_name',   fn($row) => $row->toAsset?->description)
+            ->addColumn('attachment_url', function ($row) {
+                return $row->attachment_path ? Storage::url($row->attachment_path) : null;
+            })
+            ->toJson();
+    }
+
+    public function storeTransferRequest(Request $r)
+    {
+        $data = $r->validate([
+            'transfer_type'   => ['nullable', 'in:tf-val,' . self::TRANSFER_TYPE_CARRY_OVER . ',' . self::TRANSFER_TYPE_ACQ_FIX],
+            'from_asset_uuid' => ['required', 'uuid'],
+            'to_asset_uuid'   => ['required', 'uuid', 'different:from_asset_uuid'],
+            'amount'          => ['required', 'numeric', 'min:0.01'],
+            'actual_date'     => ['required', 'date'],
+            'note'            => ['nullable', 'string', 'max:300'],
+            'attachment'      => ['nullable', 'file', 'max:5120'],
+        ]);
+
+        $type = $data['transfer_type'] ?? 'tf-val';
+        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        if ($type === 'tf-val') {
+            $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
+            if ((float)$data['amount'] > $cap['remaining']) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Amount exceeds max allowed for that month (tf-val).',
+                ]);
+            }
+        }
+
+        $path = null;
+        if ($r->hasFile('attachment')) {
+            $path = $r->file('attachment')->store('depr_transfer_attachments', 'public');
+        }
+
+
+        $req = AssetDeprTransferRequest::create([
+            'from_asset_uuid' => $data['from_asset_uuid'],
+            'to_asset_uuid'   => $data['to_asset_uuid'],
+            'transfer_type'   => $type,
+            'amount'          => $data['amount'],
+            'actual_date'     => $data['actual_date'],
+            'note'            => $data['note'] ?? null,
+            'attachment_path' => $path,
+            'kode_status'     => self::STATUS_APR,
+            'requested_by'    => $uid,
+            'group_uuid'      => Str::uuid(),
+        ]);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Transfer request saved. Waiting for approval.',
+            'uuid'    => (string) $req->uuid,
+        ]);
+    }
+
+    public function approveTransferRequest(Request $r, string $uuid)
+    {
+        $req = AssetDeprTransferRequest::where('uuid', $uuid)
+            ->where('kode_status', self::STATUS_APR)
+            ->firstOrFail();
+
+        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        DB::transaction(function () use ($req, $uid) {
+            $this->applyTransfer([
+                'transfer_type'   => $req->transfer_type,
+                'from_asset_uuid' => $req->from_asset_uuid,
+                'to_asset_uuid'   => $req->to_asset_uuid,
+                'amount'          => (float) $req->amount,
+                'actual_date'     => $req->actual_date->toDateString(),
+                'note'            => $req->note,
+                'source_type'     => 'depr_transfer_request',
+                'source_uuid'     => $req->uuid,
+                'group_uuid'      => $req->group_uuid,
+            ]);
+
+            $req->kode_status = self::STATUS_ACC;
+            $req->approved_by = $uid;
+            $req->approved_at = now();
+            $req->save();
+        });
+
+        // runmonth to change immediately the table
+        $period = Carbon::parse($req->actual_date)->startOfMonth();
+        $this->processMonthlyDepr($period);
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Transfer approved, posted into depreciation, and month recomputed.',
+        ]);
+    }
+
+    public function rejectTransferRequest(Request $r, string $uuid)
+    {
+        $data = $r->validate([
+            'status_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
+        abort_if($uid === '', 401, 'No session UID.');
+
+        $req = AssetDeprTransferRequest::where('uuid', $uuid)
+            ->where('kode_status', self::STATUS_APR)
+            ->firstOrFail();
+
+        $req->kode_status = self::STATUS_REJ;
+        $req->approved_by = $uid;
+        $req->approved_at = now();
+        if (!empty($data['status_note'])) {
+            $req->note = trim(($req->note ? $req->note . ' | ' : '') . 'REJ: ' . $data['status_note']);
+        }
+        $req->save();
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Transfer rejected.',
+        ]);
+    }
+
+    public function destroyTransferRequest(string $uuid)
+    {
+        $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
+
+        if ($req->kode_status !== self::STATUS_APR) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Only APR requests can be deleted.',
+            ], 422);
+        }
+
+        $req->delete();
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Transfer request deleted.',
+        ]);
+    }
+    public function downloadTransferRequestAttachment(string $uuid)
+    {
+        $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
+
+        if (!$req->attachment_path || !Storage::disk('public')->exists($req->attachment_path)) {
+            abort(404, 'Attachment not found.');
+        }
+
+        return Storage::disk('public')->download(
+            $req->attachment_path,
+            basename($req->attachment_path)
+        );
+    }
+    public function updateTransferRequest(Request $r, string $uuid)
+    {
+        $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
+
+        if ($req->kode_status !== self::STATUS_APR) {
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Only APR (waiting approval) requests can be edited.',
+            ], 422);
+        }
+
+        $data = $r->validate([
+            'transfer_type' => ['nullable', 'in:tf-val,' . self::TRANSFER_TYPE_CARRY_OVER . ',' . self::TRANSFER_TYPE_ACQ_FIX],
+            'amount'        => ['required', 'numeric', 'min:0.01'],
+            'actual_date'   => ['required', 'date'],
+            'note'          => ['nullable', 'string', 'max:300'],
+            'attachment'    => ['nullable', 'file', 'max:5120'],
+        ]);
+
+        $type = $data['transfer_type'] ?? $req->transfer_type;
+
+        if ($type === 'tf-val') {
+            $cap = $this->computeMaxTransfer(
+                $req->from_asset_uuid,
+                Carbon::parse($data['actual_date'])
+            );
+
+            if ((float) $data['amount'] > $cap['remaining']) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Amount exceeds max allowed for that month (tf-val).',
+                ]);
+            }
+        }
+
+        $path = $req->attachment_path;
+        if ($r->hasFile('attachment')) {
+            if ($path && Storage::disk('public')->exists($path)) {
+                Storage::disk('public')->delete($path);
+            }
+            $path = $r->file('attachment')->store('depr_transfer_attachments', 'public');
+        }
+
+        $req->transfer_type   = $type;
+        $req->amount          = $data['amount'];
+        $req->actual_date     = $data['actual_date'];
+        $req->note            = $data['note'] ?? null;
+        $req->attachment_path = $path;
+        $req->save();
+
+        return response()->json([
+            'ok'      => true,
+            'message' => 'Transfer request updated.',
+        ]);
     }
 }

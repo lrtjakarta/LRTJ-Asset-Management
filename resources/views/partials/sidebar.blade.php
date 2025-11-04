@@ -62,7 +62,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-company' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'master-company' ? 'active' : '' }}"
                                     href="{{ route('master.company') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -140,7 +140,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-location' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'master-location' ? 'active' : '' }}"
                                     href="{{ route('master.location') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -153,7 +153,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-uom' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'master-uom' ? 'active' : '' }}"
                                     href="{{ route('master.uom') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -166,7 +166,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-status' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'master-status' ? 'active' : '' }}"
                                     href="{{ route('master.status') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -179,7 +179,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-asset-class' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'master-asset-class' ? 'active' : '' }}"
                                     href="{{ route('master.asset_class') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -294,8 +294,9 @@
                     </div>
                     <!--end:Menu item-->
 
-                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item {{ request()->segment(1) == 'assets' ? 'show here' : '' }} menu-accordion">
+                    <!--begin:Menu item-->
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'assets' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
@@ -314,7 +315,7 @@
                             <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(1) == 'assets' && request()->segment(2) != 'bulk-upload' ? 'active' : '' }} "
-                                href="{{ route('assets.index') }}">
+                                    href="{{ route('assets.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -328,7 +329,7 @@
                             <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'bulk-upload' ? 'active' : '' }} "
-                                href="{{ route('assets.upload.bulk') }}">
+                                    href="{{ route('assets.upload.bulk') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -361,7 +362,8 @@
                     <!--end:Menu item-->
 
                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item {{ request()->segment(1) == 'transaction' ? 'show here' : '' }} menu-accordion">
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'transaction' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
@@ -379,7 +381,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'transfer' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'transfer' ? 'active' : '' }}"
                                     href="{{ route('transaction.transfer.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -392,7 +394,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'return' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'return' ? 'active' : '' }}"
                                     href="{{ route('transaction.return.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -405,7 +407,7 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'disposal' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'disposal' ? 'active' : '' }}"
                                     href="{{ route('transaction.disposal.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -416,9 +418,9 @@
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'depreciation' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'depreciation' ? 'active' : '' }}"
                                     href="{{ route('transaction.depreciation.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
@@ -426,12 +428,54 @@
                                     <span class="menu-title">Depreciation</span>
                                 </a>
                                 <!--end:Menu link-->
+                            </div> --}}
+                            <div data-kt-menu-trigger="click"
+                                class="menu-item here {{ request()->segment(2) == 'depreciation' ? 'show' : '' }} menu-accordion">
+                                <!--begin:Menu link-->
+                                <span class="menu-link">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Depreciation</span>
+                                    <span class="menu-arrow"></span>
+                                </span>
+                                <!--end:Menu link-->
+                                <!--begin:Menu sub-->
+                                <div class="menu-sub menu-sub-accordion menu-active-bg">
+                                    <!--begin:Menu item-->
+                                    <div class="menu-item">
+                                        <!--begin:Menu link-->
+                                        <a class="menu-link {{ request()->segment(2) == 'depreciation' && request()->segment(3) != 'transfer-requests' ? 'active' : '' }}"
+                                            href="{{ route('transaction.depreciation.index') }}">
+                                            <span class="menu-bullet">
+                                                <span class="bullet bullet-dot"></span>
+                                            </span>
+                                            <span class="menu-title">Depreciation</span>
+                                        </a>
+                                        <!--end:Menu link-->
+                                    </div>
+                                    <!--end:Menu item-->
+                                    <!--begin:Menu item-->
+                                    <div class="menu-item">
+                                        <!--begin:Menu link-->
+                                        <a class="menu-link {{ request()->segment(3) == 'transfer-requests' ? 'active' : '' }}" 
+                                        href="{{ route('transaction.depreciation.transfer-requests.index') }}">
+                                            <span class="menu-bullet">
+                                                <span class="bullet bullet-dot"></span>
+                                            </span>
+                                            <span class="menu-title">Transfer Requests</span>
+                                        </a>
+                                        <!--end:Menu link-->
+                                    </div>
+                                    <!--end:Menu item-->
+                                </div>
+                                <!--end:Menu sub-->
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'stock-opname' ? 'active' : '' }}" 
+                                <a class="menu-link {{ request()->segment(2) == 'stock-opname' ? 'active' : '' }}"
                                     href="{{ route('transaction.stockopname.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>

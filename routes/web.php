@@ -214,8 +214,20 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/movement/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
         Route::post('/movement/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
         Route::post('/movement/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
-
         Route::get('/movement/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
+
+        // TRANSFER REQUESTS
+        Route::prefix('transfer-requests')->name('transfer-requests.')->group(function () {
+            Route::get('/',        [DepreciationController::class, 'transferRequestsIndex'])->name('index');
+            Route::get('/dt',      [DepreciationController::class, 'dtTransferRequests'])->name('dt');
+            Route::post('/',       [DepreciationController::class, 'storeTransferRequest'])->name('store');
+            Route::put('/{uuid}',  [DepreciationController::class, 'updateTransferRequest'])->name('update');
+            Route::post('/{uuid}/approve', [DepreciationController::class, 'approveTransferRequest'])->name('approve');
+            Route::post('/{uuid}/reject',  [DepreciationController::class, 'rejectTransferRequest'])->name('reject');
+            Route::delete('/{uuid}',       [DepreciationController::class, 'destroyTransferRequest'])->name('destroy');
+            Route::get('/{uuid}/attachment', [DepreciationController::class, 'downloadTransferRequestAttachment'])
+                ->name('attachment');
+        });
 
         // AJAX SELECT 2
         Route::get('/assets/search', [DepreciationController::class, 'assetSearch'])->name('assets.search');
@@ -229,6 +241,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stockopname.index');
         Route::get('/depreciation', [DepreciationController::class, 'index'])->name('depreciation.index');
+        Route::get('/depreciation/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('depreciation.transfer-requests.index');
     });
 
     // TRASH ROUTE

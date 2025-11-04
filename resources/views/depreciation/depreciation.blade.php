@@ -107,7 +107,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
-                <form id="form-transfer" autocomplete="off">
+                <form id="form-transfer" autocomplete="off" enctype="multipart/form-data">
                     @csrf
                     <div class="modal-body py-4">
                         <div class="row g-4">
@@ -225,10 +225,14 @@
                                     value="{{ Carbon::now()->toDateString() }}">
                             </div>
 
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (Optional)</label>
+                                <input type="file" class="form-control" id="tr-attachment" name="attachment">
+                            </div>
+
                             <div class="col-12">
-                                <label class="form-label">Note</label>
-                                <input type="text" class="form-control" id="tr-note" name="note"
-                                    maxlength="300" placeholder="Optional note">
+                                <label class="form-label">Note (Optional)</label>
+                                <textarea class="form-control" id="tr-note" name="note" placeholder="Optional note"></textarea>
                             </div>
                         </div>
                     </div>
@@ -344,6 +348,7 @@
                     .done(renderSnapshot1)
                     .fail(() => clearSnapshot1());
             }
+
             function renderSnapshot1(d) {
                 const safe = (v) => v || '';
                 $('#snap-owner-1').text(safe(d.owner_label));
@@ -359,7 +364,7 @@
                 $('#tf-asset-snapshot-1').addClass('d-none');
             }
 
-            
+
             function fetchAssetSnapshot2(assetUuid) {
                 if (!assetUuid) {
                     clearSnapshot2();
@@ -369,6 +374,7 @@
                     .done(renderSnapshot2)
                     .fail(() => clearSnapshot2());
             }
+
             function renderSnapshot2(d) {
                 const safe = (v) => v || '';
                 $('#snap-owner-2').text(safe(d.owner_label));
@@ -707,49 +713,37 @@
                     }
                 }
 
+                const fd = new FormData();
+                fd.append('transfer_type', type);
+                fd.append('from_asset_uuid', fromUUID);
+                fd.append('to_asset_uuid', toUUID);
+                fd.append('amount', amount);
+                fd.append('actual_date', date);
+                fd.append('note', $('#tr-note').val() || '');
+                const fileInput = document.getElementById('tr-attachment');
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    fd.append('attachment', fileInput.files[0]);
+                }
+
                 try {
                     setBusyTransfer(true);
                     await $.ajax({
-                        url: "{{ route('depreciation.mv.transfer') }}",
+                        url: "{{ route('depreciation.transfer-requests.store') }}",
                         type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false,
                         headers: {
                             'X-CSRF-TOKEN': "{{ csrf_token() }}"
-                        },
-                        data: {
-                            transfer_type: type,
-                            from_asset_uuid: fromUUID,
-                            to_asset_uuid: toUUID,
-                            amount: amount,
-                            actual_date: date,
-                            note: $('#tr-note').val(),
-                            source_type: 'manual'
                         }
                     });
 
-                    try {
-                        await $.ajax({
-                            url: "{{ route('depreciation.run.month') }}",
-                            type: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': "{{ csrf_token() }}"
-                            },
-                            data: {
-                                period: date
-                            }
-                        });
-                    } catch (e2) {
-                        console.error('runMonth after transfer failed', e2);
-                        toastr?.warning(
-                            'Transfer saved, but monthly recompute failed. Please press "Process Current Month".'
-                        );
-                    }
-
-                    toastr?.success('Transfer saved');
+                    toastr?.success('Transfer request saved. Waiting for approval.');
                     $('#tbl-monthly').DataTable().ajax.reload(null, false);
                     $modal.hide();
                 } catch (err) {
                     console.error(err);
-                    const msg = err?.responseJSON?.message || 'Failed to save transfer';
+                    const msg = err?.responseJSON?.message || 'Failed to save transfer request';
                     toastr?.error(msg);
                 } finally {
                     setBusyTransfer(false);
