@@ -196,7 +196,6 @@ class DepreciationController extends Controller
         $r->validate(['period' => ['required', 'date']]);
         $period = Carbon::parse($r->period)->startOfMonth();
 
-        // use shared logic
         $this->processMonthlyDepr($period);
 
         return response()->json([
@@ -208,7 +207,6 @@ class DepreciationController extends Controller
     private function processMonthlyDepr(Carbon $period): void
     {
         DB::transaction(function () use ($period) {
-
             $assets = DB::table('assets')
                 ->join('assets_value AS av', 'av.asset_uuid', '=', 'assets.uuid')
                 ->leftJoin('assets_depr_policy AS p', 'p.asset_uuid', '=', 'assets.uuid')
@@ -219,37 +217,67 @@ class DepreciationController extends Controller
                     'av.created_at AS av_created_at',
                     'av.useful_life_month',
                     'av.useful_life_year',
-                    'p.asset_uuid AS has_policy'
+
+                    'p.asset_uuid         AS has_policy',
+                    'p.depr_start_date    AS policy_depr_start_date',
+                    'p.useful_life_months AS policy_life_months',
+                    'p.cutoff_day         AS policy_cutoff_day'
                 )
                 ->get();
 
             foreach ($assets as $row) {
-                if ($row->has_policy) continue;
-
-                $start = $row->capitalization_date
+                $startFromAv = $row->capitalization_date
                     ?: ($row->actual_date ?: $row->av_created_at);
-                if (!$start) continue;
 
-                $life = (int)($row->useful_life_month ?? 0);
-                if ($life <= 0 && isset($row->useful_life_year)) {
-                    $life = (int) round(((float)$row->useful_life_year) * 12);
+                $lifeFromAv = (int) ($row->useful_life_month ?? 0);
+                if ($lifeFromAv <= 0 && isset($row->useful_life_year)) {
+                    $lifeFromAv = (int) round(((float) $row->useful_life_year) * 12);
                 }
-                if ($life <= 0) $life = 60;
+                if ($lifeFromAv <= 0) {
+                    $lifeFromAv = 60;
+                }
 
-                AssetDeprPolicy::create([
-                    'asset_uuid'         => $row->asset_uuid,
-                    'method'             => AssetDeprPolicy::METHOD_SL,
-                    'useful_life_months' => $life,
-                    'salvage_value'      => 0,
-                    'depr_start_date'    => Carbon::parse($start)->toDateString(),
-                    'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                    'cutoff_day'         => 15,
-                    'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
-                    'is_active'          => true,
-                ]);
+                if (!$row->has_policy) {
+                    if (!$startFromAv) {
+                        continue;
+                    }
+
+                    AssetDeprPolicy::create([
+                        'asset_uuid'         => $row->asset_uuid,
+                        'method'             => AssetDeprPolicy::METHOD_SL,
+                        'useful_life_months' => $lifeFromAv,
+                        'salvage_value'      => 0,
+                        'depr_start_date'    => Carbon::parse($startFromAv)->toDateString(),
+                        'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
+                        'cutoff_day'         => 15,
+                        'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
+                        'is_active'          => true,
+                    ]);
+
+                    continue;
+                }
+
+                if ($startFromAv) {
+                    $newStart = Carbon::parse($startFromAv)->toDateString();
+
+                    if (
+                        !$row->policy_depr_start_date ||
+                        Carbon::parse($newStart)->lt(Carbon::parse($row->policy_depr_start_date))
+                    ) {
+                        AssetDeprPolicy::where('asset_uuid', $row->asset_uuid)
+                            ->update(['depr_start_date' => $newStart]);
+                    }
+                }
+
+                if ($lifeFromAv > 0 && (int) $row->policy_life_months <= 0) {
+                    AssetDeprPolicy::where('asset_uuid', $row->asset_uuid)
+                        ->update(['useful_life_months' => $lifeFromAv]);
+                }
             }
 
-            $policies = AssetDeprPolicy::with('asset')->where('is_active', true)->get();
+            $policies = AssetDeprPolicy::with('asset')
+                ->where('is_active', true)
+                ->get();
 
             foreach ($policies as $policy) {
                 $assetUuid = $policy->asset_uuid;
@@ -260,7 +288,7 @@ class DepreciationController extends Controller
                     ->first();
 
                 $capDate  = $av?->capitalization_date ?? $av?->actual_date ?? $av?->created_at;
-                $capTotal = (float)($av?->total ?? 0);
+                $capTotal = (float) ($av?->total ?? 0);
 
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
                     ->whereDate('period', '<', $period)
@@ -271,13 +299,30 @@ class DepreciationController extends Controller
                 $accPrev = (float) ($prev->accumulated_depr_end ?? 0.0);
 
                 $additions = 0.0;
-                $tin       = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::TRANSFER_IN)->sum('amount');
-                $tout      = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::TRANSFER_OUT)->sum('amount');
-                $disposals = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::DISPOSAL)->sum('amount');
-                $adjValue  = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::ADJUSTMENT_VALUE)->sum('amount');
-                $adjDepr   = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)->whereDate('period', $period)->where('category', AssetDeprMovement::ADJUSTMENT_DEPRECIATION)->sum('amount');
+                $tin       = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+                    ->whereDate('period', $period)
+                    ->where('category', AssetDeprMovement::TRANSFER_IN)
+                    ->sum('amount');
+                $tout      = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+                    ->whereDate('period', $period)
+                    ->where('category', AssetDeprMovement::TRANSFER_OUT)
+                    ->sum('amount');
+                $disposals = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+                    ->whereDate('period', $period)
+                    ->where('category', AssetDeprMovement::DISPOSAL)
+                    ->sum('amount');
+                $adjValue  = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+                    ->whereDate('period', $period)
+                    ->where('category', AssetDeprMovement::ADJUSTMENT_VALUE)
+                    ->sum('amount');
+                $adjDepr   = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+                    ->whereDate('period', $period)
+                    ->where('category', AssetDeprMovement::ADJUSTMENT_DEPRECIATION)
+                    ->sum('amount');
 
-                $startBase     = $policy->depr_start_date ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
+                $startBase     = $policy->depr_start_date
+                    ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
+
                 $eligibleStart = $startBase
                     ? Carbon::parse($startBase)->startOfMonth()->addMonths(
                         (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 15)) ? 1 : 2
@@ -291,25 +336,45 @@ class DepreciationController extends Controller
                 $elapsed   = $eligible ? $eligibleStart->diffInMonths($period) : 0;
                 $remaining = $eligible ? max(0, $lifeMonths - $elapsed) : 0;
 
-                $deprBase    = $eligible ? max(($opening + $adjValue + $tin - $tout - $disposals) - (float)$policy->salvage_value, 0.0) : 0.0;
-                $deprExpense = ($eligible && $remaining > 0) ? floor($deprBase / $remaining) : 0.0;
+                $deprBase    = $eligible
+                    ? max(
+                        ($opening + $adjValue + $tin - $tout - $disposals)
+                            - (float) $policy->salvage_value,
+                        0.0
+                    )
+                    : 0.0;
 
-                $ending = $opening + $additions + $tin - $tout - $disposals + $adjValue - $deprExpense + $adjDepr;
+                $deprExpense = ($eligible && $remaining > 0)
+                    ? floor($deprBase / $remaining)
+                    : 0.0;
+
+                $ending = $opening
+                    + $additions
+                    + $tin
+                    - $tout
+                    - $disposals
+                    + $adjValue
+                    - $deprExpense
+                    + $adjDepr;
+
                 $accEnd = $accPrev + $deprExpense + $adjDepr;
 
                 AssetDeprMonthly::updateOrCreate(
-                    ['asset_uuid' => $assetUuid, 'period' => $period->toDateString()],
                     [
-                        'opening_balance'          => $opening,
-                        'additions'                => $additions,
-                        'transfers_in'             => $tin,
-                        'transfers_out'            => $tout,
-                        'disposals'                => $disposals,
-                        'adjustment_value'         => $adjValue,
-                        'adjustment_depreciation'  => $adjDepr,
-                        'depr_expense'             => $deprExpense,
-                        'accumulated_depr_end'     => $accEnd,
-                        'ending_balance'           => $ending,
+                        'asset_uuid' => $assetUuid,
+                        'period'     => $period->toDateString(),
+                    ],
+                    [
+                        'opening_balance'         => $opening,
+                        'additions'               => $additions,
+                        'transfers_in'            => $tin,
+                        'transfers_out'           => $tout,
+                        'disposals'               => $disposals,
+                        'adjustment_value'        => $adjValue,
+                        'adjustment_depreciation' => $adjDepr,
+                        'depr_expense'            => $deprExpense,
+                        'accumulated_depr_end'    => $accEnd,
+                        'ending_balance'          => $ending,
                     ]
                 );
             }

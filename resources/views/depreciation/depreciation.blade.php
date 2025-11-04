@@ -466,7 +466,7 @@
                             const d = new Date(iso);
                             return new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
-                                day: '2-digit',
+                                // day: '2-digit',
                                 month: 'long',
                                 year: 'numeric'
                             }).format(d);
