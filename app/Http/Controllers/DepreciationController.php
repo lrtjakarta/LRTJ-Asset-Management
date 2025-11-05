@@ -223,6 +223,7 @@ class DepreciationController extends Controller
                     'p.useful_life_months AS policy_life_months',
                     'p.cutoff_day         AS policy_cutoff_day'
                 )
+                ->where('assets.kode_status', '!=', 'DIS')
                 ->get();
 
             foreach ($assets as $row) {
@@ -277,6 +278,9 @@ class DepreciationController extends Controller
 
             $policies = AssetDeprPolicy::with('asset')
                 ->where('is_active', true)
+                ->whereHas('asset', function ($q) {
+                    $q->where('kode_status', '!=', 'DIS');
+                })
                 ->get();
 
             foreach ($policies as $policy) {
