@@ -730,7 +730,7 @@ class AssetsController extends Controller
 
             'no_po_perjanjian_spk'     => 'documents.no_po_perjanjian_spk',
             'nota_referensi'           => 'documents.nota_referensi',
-            'no_document'              => 'documents.no_document',
+            // 'no_document'              => 'documents.no_document',
         ];
 
         $colTargets = [];
