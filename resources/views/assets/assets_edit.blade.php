@@ -169,7 +169,7 @@
                                         <div class="col-md-4">
                                             <label class="form-label required">Status</label>
                                             <select name="kode_status" id="sel-status" class="form-select"
-                                                disabled></select>
+                                                ></select>
                                         </div>
                                     </div>
 

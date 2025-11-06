@@ -371,7 +371,7 @@ class AssetsController extends Controller
             $asset->fill([
                 'description'      => $v->description,
                 // 'kode_asset_class' => $v->kode_asset_class,
-                // 'kode_status'      => $v->kode_status,
+                'kode_status'      => $v->kode_status,
                 'kode_location'    => $v->kode_location,
                 'kode_sumber'      => $v->kode_sumber,
             ])->save();
