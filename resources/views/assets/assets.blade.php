@@ -253,10 +253,10 @@
                     data: 'nota_referensi',
                     name: 'd.nota_referensi'
                 },
-                {
-                    data: 'no_document',
-                    name: 'd.no_document'
-                },
+                // {
+                //     data: 'no_document',
+                //     name: 'd.no_document'
+                // },
                 // {
                 //     data: 'kode_sumber_label'
                 // },
@@ -407,7 +407,7 @@
                                             <th>Useful Life (Year)</th>
                                             <th class="min-w-200px">No PO/Perjanjian/SPK</th>
                                             <th class="min-w-200px">Note Reference</th>
-                                            <th class="min-w-200px">No Document</th>
+                                            {{-- <th class="min-w-200px">No Document</th> --}}
                                             {{-- <th class="min-w-120px">Sumber</th> --}}
                                             <th class="min-w-150px">Updated</th>
                                             {{-- <th class="text-center min-w-120px">Actions</th> --}}
