@@ -161,7 +161,7 @@ class TransferController extends Controller
                 ->first();
 
             if ($last) {
-                $lastSeq = (int) substr($last->disposal_code, -4);
+                $lastSeq = (int) substr($last->transfer_code, -4);
                 $seq     = $lastSeq + 1;
             } else {
                 $seq = 1;
