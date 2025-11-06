@@ -458,8 +458,8 @@
                                     <!--begin:Menu item-->
                                     <div class="menu-item">
                                         <!--begin:Menu link-->
-                                        <a class="menu-link {{ request()->segment(3) == 'transfer-requests' ? 'active' : '' }}" 
-                                        href="{{ route('transaction.depreciation.transfer-requests.index') }}">
+                                        <a class="menu-link {{ request()->segment(3) == 'transfer-requests' ? 'active' : '' }}"
+                                            href="{{ route('transaction.depreciation.transfer-requests.index') }}">
                                             <span class="menu-bullet">
                                                 <span class="bullet bullet-dot"></span>
                                             </span>
@@ -473,22 +473,40 @@
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            <div class="menu-item">
+                            {{-- <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'stock-opname' ? 'active' : '' }}"
-                                    href="{{ route('transaction.stockopname.index') }}">
+                                    href="#">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
                                     <span class="menu-title">Stock Opname</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div>
+                            </div> --}}
                             <!--end:Menu item-->
                         </div>
                         <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
+
+                    <!--begin:Menu item-->
+                    <div class="menu-item">
+                        <!--begin:Menu link-->
+                        <a class="menu-link  {{ request()->segment(1) == 'stock-opname' ? 'active' : '' }}" 
+                            href="{{ route('stockopname.index') }}">
+                            <span class="menu-icon">
+                                <i class="ki-duotone ki-notepad-edit fs-2">
+                                    <span class="path1"></span>
+                                    <span class="path2"></span>
+                                </i>
+                            </span>
+                            <span class="menu-title">Stock Opname</span>
+                        </a>
+                        <!--end:Menu link-->
+                    </div>
+                    <!--end:Menu item-->
+
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
