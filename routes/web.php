@@ -142,7 +142,7 @@ Route::middleware('ldap.session')->group(function () {
 
 
     // TRANSFER ROUTE
-    Route::prefix('transfer')->name('transfer.')->group(function () {
+    Route::prefix('movement')->name('transfer.')->group(function () {
         // DATATABLE
         Route::get('/datatable/{asset}', [TransferController::class, 'datatable'])->name('data');
         Route::get('/datatable', [TransferController::class, 'datatable_all'])->name('data.all');
@@ -208,13 +208,13 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
 
         // VALUE MOVEMENT
-        Route::post('/movement/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
-        Route::post('/movement/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
-        Route::get('/movement/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
-        Route::post('/movement/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
-        Route::post('/movement/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
-        Route::post('/movement/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
-        Route::get('/movement/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
+        Route::post('/transfer/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
+        Route::post('/transfer/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
+        Route::get('/transfer/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
+        Route::post('/transfer/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
+        Route::post('/transfer/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
+        Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
+        Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
 
         // TRANSFER REQUESTS
         Route::prefix('transfer-requests')->name('transfer-requests.')->group(function () {
@@ -236,7 +236,7 @@ Route::middleware('ldap.session')->group(function () {
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
-        Route::get('/transfer', [TransferController::class, 'index'])->name('transfer.index');
+        Route::get('/movement', [TransferController::class, 'index'])->name('transfer.index');
         Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
         Route::get('/stock-opname', [StockOpnameController::class, 'index'])->name('stockopname.index');

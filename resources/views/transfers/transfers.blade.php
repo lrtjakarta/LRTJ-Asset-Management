@@ -4,7 +4,7 @@
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
         <div id="kt_app_toolbar_container" class="app-container container-fluid d-flex flex-stack">
             <div class="page-title d-flex flex-column">
-                <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Transfers</h1>
+                <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Movement</h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">
                         Transaction
@@ -12,7 +12,7 @@
                     <li class="breadcrumb-item">
                         <span class="bullet bg-gray-500 w-5px h-2px"></span>
                     </li>
-                    <li class="breadcrumb-item text-muted">Transfers</li>
+                    <li class="breadcrumb-item text-muted">Movement</li>
                 </ul>
             </div>
         </div>
@@ -24,7 +24,7 @@
             <div class="card">
                 <div class="card-header border-0 pt-5">
                     <h3 class="card-title align-items-start flex-column">
-                        <span class="card-label fw-bold fs-3 mb-1">Transfers Data</span>
+                        <span class="card-label fw-bold fs-3 mb-1">Movement Data</span>
                     </h3>
                     <div class="card-toolbar">
 
@@ -46,7 +46,7 @@
                         id="tbl-transfers-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-200px">Transfer Code</th>
+                                <th class="min-w-200px">Movement Code</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-200px">Before</th>
@@ -76,7 +76,7 @@
                     <input type="hidden" name="asset_uuid" id="tf-asset-uuid">
                     <input type="hidden" id="tf-edit-id" value="">
                     <div class="modal-header">
-                        <h5 class="modal-title">New Transfer</h5>
+                        <h5 class="modal-title">New Movement</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -515,7 +515,7 @@
                     .done(() => {
                         $('#modal-transfer').modal('hide');
                         Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Transfer updated.' :
-                            'Transfer created.', 'success');
+                            'Movement created.', 'success');
                         $('#tf-asset').prop('disabled', false);
                         $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
 

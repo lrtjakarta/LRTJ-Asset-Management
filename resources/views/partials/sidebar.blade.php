@@ -381,12 +381,12 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'transfer' ? 'active' : '' }}"
+                                <a class="menu-link {{ request()->segment(2) == 'movement' ? 'active' : '' }}"
                                     href="{{ route('transaction.transfer.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
-                                    <span class="menu-title">Transfers</span>
+                                    <span class="menu-title">Movement</span>
                                 </a>
                                 <!--end:Menu link-->
                             </div>
