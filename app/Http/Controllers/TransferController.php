@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Storage;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Carbon\Carbon;
 
 class TransferController extends Controller
 {
@@ -94,7 +95,7 @@ class TransferController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['file','actions'])
+            ->rawColumns(['file', 'actions'])
             ->toJson();
     }
     public function store(Request $request)
@@ -152,7 +153,21 @@ class TransferController extends Controller
             $totalRow,
             $request
         ) {
-            $code = sprintf('TRF-%s-%d', str_replace(['-', ' '], '', $asset->asset_code), $totalRow + 1);
+
+            $now    = Carbon::now();
+            $prefix = 'MOV' . $now->format('ym');
+            $last = Transfer::where('transfer_code', 'like', $prefix . '%')
+                ->orderBy('transfer_code', 'desc')
+                ->first();
+
+            if ($last) {
+                $lastSeq = (int) substr($last->disposal_code, -4);
+                $seq     = $lastSeq + 1;
+            } else {
+                $seq = 1;
+            }
+            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
             [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $code, null);
 
 

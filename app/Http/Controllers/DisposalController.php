@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Assets;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Yajra\DataTables\Facades\DataTables;
+use Carbon\Carbon;
 
 class DisposalController extends Controller
 {
@@ -27,32 +29,57 @@ class DisposalController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'asset_uuid'  => ['required', 'uuid', 'exists:assets,uuid'],
-            'note'        => ['nullable', 'string', 'max:1000'],
+            'asset_uuid'    => ['required', 'uuid', 'exists:assets,uuid'],
+            'note'          => ['nullable', 'string', 'max:1000'],
             'target_status' => ['nullable', 'string'],
-            'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
+            'file'          => [
+                'nullable',
+                'file',
+                'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt',
+                'max:20480',
+            ],
         ]);
 
         $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
         abort_if($uid === '', 401, 'No session UID.');
 
-        $asset = Assets::select('uuid', 'asset_code', 'kode_status')->findOrFail($data['asset_uuid']);
+        $asset = Assets::select('uuid', 'asset_code', 'kode_status')
+            ->findOrFail($data['asset_uuid']);
 
         $target = $data['target_status'] ?? 'DIS';
 
-        $ok = MasterStatus::where('kode', $target)->where(function ($q) {
-            $q->where('type', 'Asset')->orWhereNull('type');
-        })->exists();
+        $ok = MasterStatus::where('kode', $target)
+            ->where(function ($q) {
+                $q->where('type', 'Asset')->orWhereNull('type');
+            })
+            ->exists();
+
         abort_unless($ok, 422, 'Target disposal status not valid.');
 
-        $seq = Disposal::where('asset_uuid', $asset->uuid)->count() + 1;
-        $code = 'DSP-' . str_replace(['-', ' '], '', $asset->asset_code) . '-' . $seq;
+        $now    = Carbon::now();
+        $prefix = 'DSP' . $now->format('ym');
+
+        $last = Disposal::where('disposal_code', 'like', $prefix . '%')
+            ->orderBy('disposal_code', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastSeq = (int) substr($last->disposal_code, -4);
+            $seq     = $lastSeq + 1;
+        } else {
+            $seq = 1;
+        }
+
+        $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
         $uuid = (string) Str::uuid();
-        $path = null;
 
-        [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $code, null);
-        
+        [$path, $orig, $mime, $size] = $this->saveUpload(
+            $request->file('file'),
+            $asset,
+            $code,
+            null
+        );
 
         $row = Disposal::create([
             'uuid'            => $uuid,
@@ -68,8 +95,12 @@ class DisposalController extends Controller
             'file_size'       => $size,
             'before_status'   => $asset->kode_status,
         ]);
-        
-        return response()->json(['ok' => true, 'id' => $row->uuid, 'code' => $row->disposal_code]);
+
+        return response()->json([
+            'ok'   => true,
+            'id'   => $row->uuid,
+            'code' => $row->disposal_code,
+        ]);
     }
 
     public function show(string $uuid)
