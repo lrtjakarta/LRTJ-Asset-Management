@@ -8,6 +8,7 @@ use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterUserCode;
 use App\Models\Transfer;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -305,7 +306,20 @@ class StockOpnameController extends Controller
             $totalRow,
             $request
         ) {
-            $code = sprintf('TRF-%s-%d', str_replace(['-', ' '], '', $asset->asset_code), $totalRow + 1);
+            $now    = Carbon::now();
+            $prefix = 'OPN' . $now->format('ym');
+            $last = Transfer::where('transfer_code', 'like', $prefix . '%')
+                ->orderBy('transfer_code', 'desc')
+                ->first();
+
+            if ($last) {
+                $lastSeq = (int) substr($last->transfer_code, -4);
+                $seq     = $lastSeq + 1;
+            } else {
+                $seq = 1;
+            }
+            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
             [$path, $orig, $mime, $size] = $this->saveUploadTf($request->file('file'), $asset, $code, null);
 
 
@@ -434,9 +448,22 @@ class StockOpnameController extends Controller
             $q->where('type', 'Asset')->orWhereNull('type');
         })->exists();
         abort_unless($ok, 422, 'Target disposal status not valid.');
+        
+        $now    = Carbon::now();
+        $prefix = 'DSP' . $now->format('ym');
 
-        $seq = Disposal::where('asset_uuid', $asset->uuid)->count() + 1;
-        $code = 'DSP-' . str_replace(['-', ' '], '', $asset->asset_code) . '-' . $seq;
+        $last = Disposal::where('disposal_code', 'like', $prefix . '%')
+            ->orderBy('disposal_code', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastSeq = (int) substr($last->disposal_code, -4);
+            $seq     = $lastSeq + 1;
+        } else {
+            $seq = 1;
+        }
+
+        $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
         $uuid = (string) Str::uuid();
         $path = null;
