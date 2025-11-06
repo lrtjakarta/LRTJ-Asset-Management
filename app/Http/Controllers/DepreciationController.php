@@ -1020,6 +1020,22 @@ class DepreciationController extends Controller
             $path = $r->file('attachment')->store('depr_transfer_attachments', 'public');
         }
 
+        $now    = Carbon::now();
+        $prefix = 'TRF' . $now->format('ym');
+
+        $last = AssetDeprTransferRequest::where('transfer_code', 'like', $prefix . '%')
+            ->orderBy('transfer_code', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastSeq = (int) substr($last->transfer_code, -4);
+            $seq     = $lastSeq + 1;
+        } else {
+            $seq = 1;
+        }
+
+        $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
 
         $req = AssetDeprTransferRequest::create([
             'from_asset_uuid' => $data['from_asset_uuid'],
@@ -1032,6 +1048,7 @@ class DepreciationController extends Controller
             'kode_status'     => self::STATUS_APR,
             'requested_by'    => $uid,
             'group_uuid'      => Str::uuid(),
+            'transfer_code'   => $code,
         ]);
 
         return response()->json([

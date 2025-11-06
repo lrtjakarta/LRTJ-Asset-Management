@@ -9,3 +9,10 @@ ALTER TABLE IF EXISTS public.return_history
 
 ALTER TABLE IF EXISTS public.assets_value_history
     ALTER COLUMN acq_code SET STORAGE EXTENDED;
+
+
+    ALTER TABLE IF EXISTS public.assets_depr_transfer_requests
+    ADD COLUMN transfer_code character varying COLLATE pg_catalog."default";
+
+ALTER TABLE IF EXISTS public.assets_depr_transfer_requests
+    ALTER COLUMN transfer_code SET STORAGE EXTENDED;

@@ -46,6 +46,7 @@
                     class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
                     <thead class="table-light">
                         <tr>
+                            <th class="min-w-150px">Transfer Code</th>
                             <th class="min-w-150px">From Asset</th>
                             <th class="min-w-150px">To Asset</th>
                             <th class="min-w-150px">Type</th>
@@ -203,6 +204,10 @@
                     [4, 'desc']
                 ], // actual_date
                 columns: [
+                    {
+                        data: 'transfer_code',
+                        name: 'transfer_code'
+                    },
                     // From asset
                     {
                         data: 'from_code',

@@ -135,7 +135,7 @@ class TrashController extends Controller
                 'table'      => 'assets_depr_transfer_requests',
                 'model'      => AssetDeprTransferRequest::class,
                 'pk'         => 'uuid',
-                'label_col'  => 'uuid',
+                'label_col'  => 'transfer_code',
             ],
         ];
     }

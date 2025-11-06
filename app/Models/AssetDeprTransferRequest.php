@@ -33,6 +33,7 @@ class AssetDeprTransferRequest extends Model
         'approved_by',
         'approved_at',
         'group_uuid',
+        'transfer_code'
     ];
 
     protected $casts = [
