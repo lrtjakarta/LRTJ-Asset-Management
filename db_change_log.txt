@@ -1,0 +1,11 @@
+ALTER TABLE IF EXISTS public.return_history
+    ADD COLUMN return_code character varying(64) COLLATE pg_catalog."default" NOT NULL;
+
+ALTER TABLE IF EXISTS public.return_history
+    ALTER COLUMN return_code SET STORAGE EXTENDED;
+
+    ALTER TABLE IF EXISTS public.assets_value_history
+    ADD COLUMN acq_code character varying(64) COLLATE pg_catalog."default" NOT NULL;
+
+ALTER TABLE IF EXISTS public.assets_value_history
+    ALTER COLUMN acq_code SET STORAGE EXTENDED;

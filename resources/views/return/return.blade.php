@@ -37,7 +37,8 @@
                         id="tbl-returns-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-200px">Code</th>
+                                <th class="min-w-150px">Return Code</th>
+                                <th class="min-w-200px">MOV/DSP Code</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-300px">Details</th>
@@ -138,6 +139,9 @@
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 columns: [{
+                        data: 'return_code',
+                        name: 'return_history.return_code'
+                    },{
                         data: 'source_code',
                         name: 'return_history.source_code'
                     },

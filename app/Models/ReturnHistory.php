@@ -23,6 +23,7 @@ class ReturnHistory extends Model
         'source_code',
         'note',
         'pic_request_uid',
+        'return_code'
     ];
 
     protected $casts = [

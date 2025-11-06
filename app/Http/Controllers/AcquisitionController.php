@@ -92,6 +92,20 @@ class AcquisitionController extends Controller
                 ]));
             }
 
+            $now    = Carbon::now();
+            $prefix = 'ACQ' . $now->format('ym');
+            $last = AssetsValueHistory::where('acq_code', 'like', $prefix . '%')
+                ->orderBy('acq_code', 'desc')
+                ->first();
+
+            if ($last) {
+                $lastSeq = (int) substr($last->acq_code, -4);
+                $seq     = $lastSeq + 1;
+            } else {
+                $seq = 1;
+            }
+            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
             AssetsValueHistory::create([
                 'uuid'            => (string) Str::uuid(),
                 'asset_uuid'      => $assetUuid,
@@ -108,6 +122,7 @@ class AcquisitionController extends Controller
                 'after_payload'   => $values,
                 'pic_request_uid' => $uid,
                 'note'            => $data['note'] ?? null,
+                'acq_code' => $code,
             ]);
 
             DB::commit();
@@ -123,7 +138,7 @@ class AcquisitionController extends Controller
         $q = DB::table('assets_value_history as h')
             ->where('h.asset_uuid', $assetUuid)
             ->orderByDesc('h.created_at')
-            ->select('h.before_payload', 'h.after_payload', 'h.note', 'h.pic_request_uid', 'h.created_at');
+            ->select('h.before_payload', 'h.after_payload', 'h.note', 'h.pic_request_uid', 'h.created_at', 'h.acq_code');
 
         $money = fn($v) => is_null($v) ? '—' : number_format((float)$v, 2);
         $num   = fn($v) => is_null($v) ? '—' : rtrim(rtrim(number_format((float)$v, 4, '.', ''), '0'), '.');
@@ -176,6 +191,7 @@ class AcquisitionController extends Controller
             ->addColumn('note', fn($r) => $r->note)
             ->addColumn('pic_request_uid', fn($r) => $r->pic_request_uid)
             ->addColumn('created_at', fn($r) => $r->created_at)
+            ->addColumn('acq_code', fn($r) => $r->acq_code)
             ->rawColumns(['detail'])
             ->toJson();
     }

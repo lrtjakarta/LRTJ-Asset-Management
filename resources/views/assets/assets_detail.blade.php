@@ -390,6 +390,7 @@
                                 id="tbl-returns">
                                 <thead>
                                     <tr class="table-light">
+                                        <th class="min-w-180px">Return Code</th>
                                         <th class="min-w-180px">MOV/DSP Code</th>
                                         <th class="min-w-220px">Type</th>
                                         <th class="min-w-300px">Details</th>
@@ -427,6 +428,7 @@
                                 id="tbl-acq">
                                 <thead>
                                     <tr class="table-light">
+                                        <th class="min-w-160px">Acquisition Code</th>
                                         <th class="min-w-380px">Details</th>
                                         <th class="min-w-220px">Note</th>
                                         <th class="min-w-160px">Requester</th>
@@ -1397,6 +1399,9 @@
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 columns: [{
+                        data: 'return_code',
+                        name: 'return_history.return_code'
+                    },{
                         data: 'source_code',
                         name: 'return_history.source_code'
                     },
@@ -1671,7 +1676,11 @@
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
-                columns: [{
+                columns: [
+                    {
+                        data: 'acq_code',
+                        name: 'acq_code'
+                    },{
                         data: 'detail',
                         name: 'detail',
                         orderable: false,

@@ -7,6 +7,7 @@ use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterUserCode;
 use App\Models\ReturnHistory;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -222,6 +223,20 @@ class ReturnController extends Controller
                     'updated_at'  => now(),
                 ]);
             }
+            
+            $now    = Carbon::now();
+            $prefix = 'RET' . $now->format('ym');
+            $last = ReturnHistory::where('return_code', 'like', $prefix . '%')
+                ->orderBy('return_code', 'desc')
+                ->first();
+
+            if ($last) {
+                $lastSeq = (int) substr($last->return_code, -4);
+                $seq     = $lastSeq + 1;
+            } else {
+                $seq = 1;
+            }
+            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
             DB::table('return_history')->insert([
                 'uuid'            => (string) Str::uuid(),
@@ -233,6 +248,7 @@ class ReturnController extends Controller
                 'pic_request_uid' => $uid,
                 'created_at'      => now(),
                 'updated_at'      => now(),
+                'return_code'     => $code,
             ]);
         });
 

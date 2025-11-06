@@ -15,7 +15,7 @@ class AssetsValueHistory extends Model
 
     protected $fillable = [
         'uuid','asset_uuid','before_payload','after_payload',
-        'pic_request_uid','note'
+        'pic_request_uid','note', 'acq_code'
     ];
 
     protected $casts = [
