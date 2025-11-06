@@ -127,7 +127,7 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label required">Transfer To</label>
+                                <label class="form-label required">Move To</label>
                                 <select id="tf-target" class="form-select" required></select>
                                 <input type="hidden" name="after[value]" id="tf-target-hidden">
                                 <div class="form-text" id="tf-target-help">Pick the new value.</div>

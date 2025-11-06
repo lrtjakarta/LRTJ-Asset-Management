@@ -20,7 +20,7 @@
             </div>
 
             <div class="d-flex align-items-center gap-2 gap-lg-3">
-                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Transfer</a>
+                <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Movement</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary {{ $asset->kode_status == 'DIS' ? 'disabled' : '' }} " id="btnOpenDisposal">Disposal</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenReturn">Return</a>
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenAcq">Acquisition</a>
@@ -335,7 +335,7 @@
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link active fw-bold" id="tab-transfer-link" data-bs-toggle="tab"
                                     href="#tab_transfer" role="tab" aria-controls="tab_transfer"
-                                    aria-selected="true">Transfer</a>
+                                    aria-selected="true">Movement</a>
                             </li>
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-return-link" data-bs-toggle="tab" href="#tab_return"
@@ -376,7 +376,7 @@
                                         <th class="min-w-100px">Requester</th>
                                         <th class="min-w-100px">Approver</th>
                                         <th class="min-w-250px">Note</th>
-                                        <th class="min-w-100px">Status Transfer</th>
+                                        <th class="min-w-100px">Status Movement</th>
                                         <th class="min-w-200px">File</th>
                                         <th class="min-w-200px">Updated</th>
                                         <th class="min-w-200px">Action</th>
@@ -390,7 +390,7 @@
                                 id="tbl-returns">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-180px">Code</th>
+                                        <th class="min-w-180px">MOV/DSP Code</th>
                                         <th class="min-w-220px">Type</th>
                                         <th class="min-w-300px">Details</th>
                                         <th class="min-w-220px">Note</th>
@@ -470,7 +470,7 @@
                     <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
 
                     <div class="modal-header">
-                        <h5 class="modal-title" id="modalTransferLabel">Request Transfer — {{ $asset->asset_code }}</h5>
+                        <h5 class="modal-title" id="modalTransferLabel">Request Movement — {{ $asset->asset_code }}</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
 
@@ -485,11 +485,11 @@
                                     <option value="status">Status</option>
                                     <option value="location">Location</option>
                                 </select>
-                                <div class="form-text">Select Transfer Type</div>
+                                <div class="form-text">Select Movement Type</div>
                             </div>
 
                             <div class="col-md-8">
-                                <label class="form-label required">Transfer To</label>
+                                <label class="form-label required">Move To</label>
                                 <select id="tf-target" class="form-select" required></select>
                                 <input type="hidden" name="after[value]" id="tf-target-hidden">
                                 <div class="form-text" id="tf-target-help">Select the new target.</div>
