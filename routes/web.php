@@ -7,6 +7,7 @@ use App\Http\Controllers\AuthLdapController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepreciationController;
 use App\Http\Controllers\DisposalController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\StockOpnameController;
@@ -234,7 +235,6 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/assets/search', [DepreciationController::class, 'assetSearch'])->name('assets.search');
     });
 
-
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
         Route::get('/movement', [TransferController::class, 'index'])->name('transfer.index');
@@ -242,6 +242,17 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
         Route::get('/depreciation', [DepreciationController::class, 'index'])->name('depreciation.index');
         Route::get('/depreciation/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('depreciation.transfer-requests.index');
+    });
+    
+    // EXPORT ROUTE
+    Route::prefix('export')->name('export.')->group(function () {
+        Route::get('/master-asset-class', [ExportController::class, 'master_asset_class_export'])->name('master_asset_class');
+        Route::get('/master-transaction', [ExportController::class, 'master_transaction_export'])->name('master_transaction');
+        Route::get('/master-location', [ExportController::class, 'master_location_export'])->name('master_location');
+        Route::get('/master-uom', [ExportController::class, 'master_uom_export'])->name('master_uom');
+        Route::get('/master-status', [ExportController::class, 'master_status_export'])->name('master_status');
+        Route::get('/master-user-code', [ExportController::class, 'master_user_code_export'])->name('master_user_code');
+        Route::get('/master-sumber', [ExportController::class, 'master_sumber_export'])->name('master_sumber');
     });
 
     // TRASH ROUTE

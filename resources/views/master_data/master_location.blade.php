@@ -73,13 +73,17 @@
                 ]
             });
 
+            $(document).on('click', '#btn-export-excel', function() {
+                window.location = "{{ route('export.master_location') }}";
+            });
+
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterLocation');
                 $('#formMasterLocation')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
             $(document).on('click', '.btn-edit', function() {
-                        $('#formMasterLocation')[0].reset(); 
+                $('#formMasterLocation')[0].reset();
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.location.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -119,7 +123,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        $('#formMasterLocation')[0].reset(); 
+                        $('#formMasterLocation')[0].reset();
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {
@@ -229,6 +233,9 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Master Location Data</span>
                                 </h3>
                                 <div class="card-toolbar">
+                                    <button type="button" class="btn btn-sm btn-danger me-2" id="btn-export-excel">
+                                        Export Excel
+                                    </button>
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
                                         class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>

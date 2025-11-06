@@ -77,6 +77,9 @@
                 ]
             });
 
+            $(document).on('click', '#btn-export-excel', function() {
+                window.location = "{{ route('export.master_user_code') }}";
+            });
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterUserCode');
                 $('#formMasterUserCode')[0].reset();
@@ -239,6 +242,9 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Master User Code Data</span>
                                 </h3>
                                 <div class="card-toolbar">
+                                    <button type="button" class="btn btn-sm btn-danger me-2" id="btn-export-excel">
+                                        Export Excel
+                                    </button>
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
                                         class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
