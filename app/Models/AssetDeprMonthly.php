@@ -17,7 +17,7 @@ class AssetDeprMonthly extends Model
     protected $fillable = [
         'asset_uuid','period',
         'opening_balance','additions','transfers_in','transfers_out','disposals','adjustment_value',
-        'adjustment_depreciation','depr_expense','accumulated_depr_end','ending_balance',
+        'adjustment_depreciation','depr_expense','accumulated_depr_end','ending_balance', 'depr_code'
     ];
 
     protected $casts = [

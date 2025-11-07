@@ -78,6 +78,8 @@
                         <tr>
                             <th class="min-w-200px">Asset Code</th>
                             <th class="min-w-200px">Asset Name</th>
+                            <th class="min-w-150px">Depreciation Code</th>
+                            <th class="min-w-150px">Asset Status</th>
                             <th class="min-w-200px">Tanggal Masuk</th>
                             <th class="min-w-200px">Depreciation Date</th>
                             <th class="min-w-200px">Awal</th>
@@ -440,6 +442,14 @@
                     {
                         data: 'asset_name',
                         name: 'asset_name'
+                    },
+                    {
+                        data: 'depr_code',
+                        name: 'depr_code'
+                    },
+                    {
+                        data: 'asset_status_label',
+                        name: 'asset_status_label'
                     },
                     {
                         data: 'cap_date',

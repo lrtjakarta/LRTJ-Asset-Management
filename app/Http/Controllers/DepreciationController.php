@@ -9,7 +9,8 @@ use App\Models\{
     AssetDeprMovement,
     AssetDeprMonthly,
     AssetDeprYearly,
-    AssetDeprTransferRequest
+    AssetDeprTransferRequest,
+    MasterStatus
 };
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -62,7 +63,7 @@ class DepreciationController extends Controller
         $prevYear   = $periodYear - 1;
 
         $q = AssetDeprMonthly::query()
-            ->with('asset:uuid,asset_code,description')
+            ->with('asset:uuid,asset_code,description,kode_status')
             ->leftJoin('assets_value as av', 'av.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
             ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
             ->leftJoin('assets_depr_yearly as y', function ($j) use ($prevYear) {
@@ -84,6 +85,7 @@ class DepreciationController extends Controller
                 'assets_depr_ledger_monthly.depr_expense',
                 'assets_depr_ledger_monthly.accumulated_depr_end',
                 'assets_depr_ledger_monthly.ending_balance',
+                'assets_depr_ledger_monthly.depr_code',
                 'av.capitalization_date as cap_date',
 
                 'av.total as total_value',
@@ -164,6 +166,20 @@ class DepreciationController extends Controller
             ->addColumn('asset_code', fn($row) => $row->asset?->asset_code)
             ->addColumn('asset_name', fn($row) => $row->asset?->description)
             ->addColumn('asset_uuid', fn($row) => $row->asset_uuid)
+            ->addColumn('asset_kode_status', fn($row) => $row->asset?->kode_status)
+            ->addColumn('asset_status_label', function ($row) {
+                static $statusMap = null;
+
+                if ($statusMap === null) {
+                    $statusMap = MasterStatus::pluck('name', 'kode')->toArray();
+                }
+
+                $kode = $row->asset?->kode_status;
+                if (!$kode) return null;
+
+                $name = $statusMap[$kode] ?? null;
+                return $name ? "{$kode} - {$name}" : $kode;
+            })
             ->toJson();
     }
 
@@ -283,6 +299,7 @@ class DepreciationController extends Controller
                 })
                 ->get();
 
+            $counter_code = 1;
             foreach ($policies as $policy) {
                 $assetUuid = $policy->asset_uuid;
 
@@ -362,6 +379,10 @@ class DepreciationController extends Controller
                     + $adjDepr;
 
                 $accEnd = $accPrev + $deprExpense + $adjDepr;
+                $now    = Carbon::now();
+                $prefix = 'DEP' . $now->format('ym');
+
+                $code = $prefix . str_pad($counter_code++, 4, '0', STR_PAD_LEFT);
 
                 AssetDeprMonthly::updateOrCreate(
                     [
@@ -379,6 +400,7 @@ class DepreciationController extends Controller
                         'depr_expense'            => $deprExpense,
                         'accumulated_depr_end'    => $accEnd,
                         'ending_balance'          => $ending,
+                        'depr_code'               => $code,
                     ]
                 );
             }

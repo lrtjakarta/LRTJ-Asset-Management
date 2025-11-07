@@ -15,3 +15,15 @@ ADD COLUMN transfer_code character varying COLLATE pg_catalog."default";
 
 ALTER TABLE IF EXISTS public.assets_depr_transfer_requests
 ALTER COLUMN transfer_code SET STORAGE EXTENDED;
+
+ALTER TABLE IF EXISTS public.assets
+ADD COLUMN upload_code character varying COLLATE pg_catalog."default";
+
+ALTER TABLE IF EXISTS public.assets
+ALTER COLUMN upload_code SET STORAGE EXTENDED;
+
+ALTER TABLE IF EXISTS public.assets_depr_ledger_monthly
+ADD COLUMN depr_code character varying COLLATE pg_catalog."default";
+
+ALTER TABLE IF EXISTS public.assets_depr_ledger_monthly
+ALTER COLUMN depr_code SET STORAGE EXTENDED;

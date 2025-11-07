@@ -113,6 +113,7 @@ class AssetsController extends Controller
                 'a.asset_number_parent',
                 'a.asset_number_child',
                 'a.description',
+                'a.upload_code',
                 'i.asset_number_maximo',
                 'i.asset_number_dynamic_365',
                 'i.asset_number_internal',
@@ -227,6 +228,22 @@ class AssetsController extends Controller
         }
 
         $asset = DB::transaction(function () use ($v, $group, $parent, $child, $code, $uuid, $vatRate) {
+            $now    = Carbon::now();
+            $prefix = 'UPL' . $now->format('ym');
+
+            $last = Assets::where('upload_code', 'like', $prefix . '%')
+                ->orderBy('upload_code', 'desc')
+                ->first();
+
+            if ($last) {
+                $lastSeq = (int) substr($last->upload_code, -4);
+                $seq     = $lastSeq + 1;
+            } else {
+                $seq = 1;
+            }
+
+            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
             $asset = Assets::create([
                 'uuid'                => $uuid,
                 'kode_group_category' => $group,
@@ -238,6 +255,7 @@ class AssetsController extends Controller
                 'kode_status'         => $v->kode_status,
                 'kode_location'       => $v->kode_location,
                 'kode_sumber'         => $v->kode_sumber,
+                'upload_code'         => $code
             ]);
 
             AssetsClassification::create([
