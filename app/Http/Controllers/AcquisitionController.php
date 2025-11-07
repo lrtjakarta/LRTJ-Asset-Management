@@ -7,9 +7,98 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Yajra\DataTables\Facades\DataTables;
 
 class AcquisitionController extends Controller
 {
+    public function index()
+    {
+        return view('acquisition.acquisition');
+    }
+
+    public function dtGlobal(Request $request)
+    {
+        $q = DB::table('assets_value_history as h')
+            ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
+            ->select(
+                'h.acq_code',
+                'h.asset_uuid',
+                'h.before_payload',
+                'h.after_payload',
+                'h.note',
+                'h.pic_request_uid',
+                'h.created_at',
+                'a.asset_code',
+                'a.description as asset_name',
+            )
+            ->orderByDesc('h.created_at');
+
+        return DataTables::of($q)
+            ->addColumn('asset_label', fn($r) => "{$r->asset_code} - {$r->asset_name}")
+
+            ->addColumn('quantity', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                $val    = data_get($after, 'quantity', data_get($before, 'quantity', 0));
+                return (float) $val;
+            })
+            ->addColumn('kode_uom', function ($r) {
+                static $uomMap = null;
+
+                if ($uomMap === null) {
+                    $uomMap = DB::table('master_uom')
+                        ->whereNull('deleted_at')
+                        ->pluck('name', 'kode')
+                        ->toArray();
+                }
+
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                $kode   = data_get($after, 'kode_uom', data_get($before, 'kode_uom'));
+
+                if (!$kode) {
+                    return null;
+                }
+
+                $name = $uomMap[$kode] ?? null;
+                return $name ? "{$kode} - {$name}" : $kode;
+            })
+            ->addColumn('price', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                $val    = data_get($after, 'price', data_get($before, 'price', 0));
+                return (float) $val;
+            })
+            ->addColumn('vat_in', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                $val    = data_get($after, 'vat_in', data_get($before, 'vat_in', 0));
+                return (float) $val;
+            })
+            ->addColumn('total', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                $val    = data_get($after, 'total', data_get($before, 'total', 0));
+                return (float) $val;
+            })
+            ->addColumn('actual_date', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                return data_get($after, 'actual_date', data_get($before, 'actual_date'));
+            })
+            ->addColumn('capitalization_date', function ($r) {
+                $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+                $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+                return data_get($after, 'capitalization_date', data_get($before, 'capitalization_date'));
+            })
+            ->addColumn('created_at_fmt', function ($r) {
+                return Carbon::parse($r->created_at)
+                    ->timezone('Asia/Jakarta')
+                    ->format('d M Y H:i');
+            })
+            ->toJson();
+    }
+
     private function parseDate(?string $v): ?string
     {
         if (!$v) return null;
@@ -26,6 +115,22 @@ class AcquisitionController extends Controller
         } catch (\Throwable $e) {
             return null;
         }
+    }
+    public function storeGlobal(Request $request)
+    {
+        $data = $request->validate([
+            'asset_uuid'          => ['required', 'uuid', 'exists:assets,uuid'],
+            'quantity'            => ['required', 'numeric', 'min:0'],
+            'kode_uom'            => ['required', 'string', 'max:50'],
+            'price'               => ['required', 'numeric', 'min:0'],
+            'is_pajak'            => ['nullable', 'boolean'],
+            'useful_life_month'   => ['nullable', 'numeric', 'min:0'],
+            'actual_date'         => ['nullable', 'string'],
+            'capitalization_date' => ['nullable', 'string'],
+            'note'                => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        return $this->store($data['asset_uuid'], $request);
     }
     public function store(string $assetUuid, Request $request)
     {
@@ -46,7 +151,7 @@ class AcquisitionController extends Controller
             ->exists();
         abort_unless($existsUom, 422, 'Invalid UOM.');
 
-        $rate = (float) env('NILAI_PAJAK', 12)/100;
+        $rate = (float) env('NILAI_PAJAK', 12) / 100;
 
         $qty       = (float) $data['quantity'];
         $price     = (float) $data['price'];
@@ -132,6 +237,7 @@ class AcquisitionController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
+
 
     public function dataByAsset(string $assetUuid, Request $request)
     {

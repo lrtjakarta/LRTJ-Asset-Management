@@ -187,6 +187,8 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('{asset}/latest', [AcquisitionController::class, 'latest'])->name('latest');
         Route::get('{asset}/data',   [AcquisitionController::class, 'dataByAsset'])->name('data');
         Route::post('{asset}',       [AcquisitionController::class, 'store'])->name('store');
+        Route::get('/data',          [AcquisitionController::class, 'dtGlobal'])->name('dt');
+        Route::post('/global/save', [AcquisitionController::class, 'storeGlobal'])->name('global.save');
     });
 
     // STOCK OPNAME ROUTE
@@ -227,8 +229,7 @@ Route::middleware('ldap.session')->group(function () {
             Route::post('/{uuid}/approve', [DepreciationController::class, 'approveTransferRequest'])->name('approve');
             Route::post('/{uuid}/reject',  [DepreciationController::class, 'rejectTransferRequest'])->name('reject');
             Route::delete('/{uuid}',       [DepreciationController::class, 'destroyTransferRequest'])->name('destroy');
-            Route::get('/{uuid}/attachment', [DepreciationController::class, 'downloadTransferRequestAttachment'])
-                ->name('attachment');
+            Route::get('/{uuid}/attachment', [DepreciationController::class, 'downloadTransferRequestAttachment'])->name('attachment');
         });
 
         // AJAX SELECT 2
@@ -241,9 +242,10 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
         Route::get('/depreciation', [DepreciationController::class, 'index'])->name('depreciation.index');
+        Route::get('/acquisition',        [AcquisitionController::class, 'index'])->name('acquisition.index');
         Route::get('/depreciation/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('depreciation.transfer-requests.index');
     });
-    
+
     // EXPORT ROUTE
     Route::prefix('export')->name('export.')->group(function () {
         Route::get('/master-asset-class', [ExportController::class, 'master_asset_class_export'])->name('master_asset_class');

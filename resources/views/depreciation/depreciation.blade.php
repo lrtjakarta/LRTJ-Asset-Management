@@ -376,19 +376,14 @@
                     placeholder: 'Search asset code/name…',
                     allowClear: true,
                     ajax: {
-                        url: "{{ route('depreciation.assets.search') }}",
+                        url: "{{ route('assets.options') }}",
                         dataType: 'json',
                         delay: 250,
                         data: params => ({
-                            q: params.term
+                            q: params.term || '',
+                            page: params.page || 1
                         }),
-                        processResults: data => ({
-                            results: (data?.data || data || []).map(it => ({
-                                id: it.uuid || it.asset_uuid,
-                                text: (it.asset_code ? it.asset_code : '') +
-                                    (it.description ? ' - ' + it.description : '')
-                            }))
-                        })
+                        processResults: data => data
                     }
                 }).on('select2:select', function(e) {
                     if (this.id === 'tr-from-asset') {

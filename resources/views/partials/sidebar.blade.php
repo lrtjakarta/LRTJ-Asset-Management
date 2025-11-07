@@ -418,17 +418,17 @@
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
+                            <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'depreciation' ? 'active' : '' }}"
-                                    href="{{ route('transaction.depreciation.index') }}">
+                                <a class="menu-link {{ request()->segment(2) == 'acquisition' ? 'active' : '' }}"
+                                    href="{{ route('transaction.acquisition.index') }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
-                                    <span class="menu-title">Depreciation</span>
+                                    <span class="menu-title">Acquisition</span>
                                 </a>
                                 <!--end:Menu link-->
-                            </div> --}}
+                            </div>
                             <div data-kt-menu-trigger="click"
                                 class="menu-item here {{ request()->segment(2) == 'depreciation' ? 'show' : '' }} menu-accordion">
                                 <!--begin:Menu link-->
