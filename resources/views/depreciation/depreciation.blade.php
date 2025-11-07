@@ -65,8 +65,13 @@
                     </form>
 
                     {{-- Transfer Value --}}
-                    <button type="button" id="btn-open-transfer" class="btn btn-primary btn-sm">
+                    <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
                         Transfer Value
+                    </button>
+
+                    {{-- Adjustment Depreciation --}}
+                    <button type="button" id="btn-open-adj-depr" class="btn btn-danger btn-sm">
+                        Adjustment Depreciation
                     </button>
                 </div>
             </div>
@@ -124,7 +129,7 @@
                                         1. Partials/Full (Gross only)
                                     </label>
 
-                                    {{-- 2. Acquisition Fix (placeholder for case 2) --}}
+                                    {{-- 2. Acquisition Fix --}}
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-acq-fix"
                                         value="acq_fix">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-acq-fix">
@@ -252,6 +257,62 @@
             </div>
         </div>
     </div>
+
+    {{-- Adjustment Depreciation Modal --}}
+    <div class="modal fade" id="modal-adj-depr" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Adjustment Depreciation</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form id="form-adj-depr" autocomplete="off">
+                    @csrf
+                    <div class="modal-body py-4">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <label class="form-label required">Asset</label>
+                                <select id="adj-asset" class="form-select" style="width:100%"></select>
+                                <input type="hidden" id="adj-asset-uuid" name="asset_uuid">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">Amount</label>
+                                <input type="number" step="0.01" class="form-control" id="adj-amount"
+                                    name="amount" placeholder="e.g. -1500000 or 1500000">
+                                <small class="text-muted d-block mt-1">
+                                    Positive value = increase NBV, negative value = decrease NBV.
+                                </small>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">Actual Date</label>
+                                <input type="date" class="form-control" id="adj-date" name="actual_date"
+                                    value="{{ Carbon::now()->toDateString() }}">
+                            </div>
+
+                            {{-- <div class="col-md-6">
+                                <label class="form-label">Note (Optional)</label>
+                                <textarea class="form-control" id="adj-note" name="note" placeholder="Optional note"></textarea>
+                            </div> --}}
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="btn-submit-adj" class="btn btn-primary">
+                            <span class="indicator-label">Save Adjustment</span>
+                            <span class="indicator-progress">
+                                Saving… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -263,6 +324,7 @@
             const $btnYear = $('#btn-build-year');
             const $formYear = $('#form-build-year');
             const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
+            const $modalAdj = new bootstrap.Modal(document.getElementById('modal-adj-depr'));
 
             const money = v => Intl.NumberFormat().format(Number(v ?? 0));
             const money2 = v => new Intl.NumberFormat(undefined, {
@@ -298,13 +360,21 @@
                 syncTypeUI();
             });
 
-            // select2 init
+            // Open Adjustment Depreciation modal
+            $('#btn-open-adj-depr').on('click', () => {
+                $('#form-adj-depr')[0].reset();
+                $('#adj-asset-uuid').val('');
+                $('#adj-asset').val(null).trigger('change');
+                $('#adj-date').val("{{ Carbon::now()->toDateString() }}");
+                $modalAdj.show();
+            });
+
+            // select2 init (transfer modal)
             const initAssetSelect = ($el) => {
                 $el.select2({
                     dropdownParent: $('#modal-transfer'),
                     placeholder: 'Search asset code/name…',
                     allowClear: true,
-                    // minimumInputLength: 1,
                     ajax: {
                         url: "{{ route('depreciation.assets.search') }}",
                         dataType: 'json',
@@ -340,6 +410,29 @@
             };
             initAssetSelect($('#tr-from-asset'));
             initAssetSelect($('#tr-to-asset'));
+
+            $('#adj-asset').select2({
+                dropdownParent: $('#modal-adj-depr'),
+                placeholder: 'Search asset code/name…',
+                allowClear: true,
+                ajax: {
+                    url: "{{ route('depreciation.assets.search') }}",
+                    dataType: 'json',
+                    delay: 250,
+                    data: params => ({
+                        q: params.term
+                    }),
+                    processResults: data => ({
+                        results: (data?.data || data || []).map(it => ({
+                            id: it.uuid || it.asset_uuid,
+                            text: (it.asset_code ? it.asset_code : '') +
+                                (it.description ? ' - ' + it.description : '')
+                        }))
+                    })
+                }
+            }).on('select2:select select2:clear', function() {
+                $('#adj-asset-uuid').val($(this).val() || '');
+            });
 
             function fetchAssetSnapshot1(assetUuid) {
                 if (!assetUuid) {
@@ -476,7 +569,6 @@
                             const d = new Date(iso);
                             return new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
-                                // day: '2-digit',
                                 month: 'long',
                                 year: 'numeric'
                             }).format(d);
@@ -630,7 +722,7 @@
                 } else if (t === 'carry_over_gross_accum') {
                     $('#tr-cap-help').text('');
                     refreshCarryPreview();
-                } else { // acq_fix or others
+                } else {
                     $('#tr-cap-help').text('');
                     $('#tr-carry-help').text('');
                     $('#tr-preview').addClass('d-none').empty();
@@ -757,6 +849,80 @@
                     toastr?.error(msg);
                 } finally {
                     setBusyTransfer(false);
+                }
+            });
+
+            // ===== Adjustment Depreciation submit =====
+            const $btnAdj = $('#btn-submit-adj');
+            const setBusyAdj = (b) => {
+                if (b) $btnAdj.attr('data-kt-indicator', 'on').prop('disabled', true);
+                else $btnAdj.removeAttr('data-kt-indicator').prop('disabled', false);
+            };
+
+            $('#form-adj-depr').on('submit', async function(e) {
+                e.preventDefault();
+
+                const assetUuid = $('#adj-asset-uuid').val();
+                const amount = Number($('#adj-amount').val() || 0);
+                const date = $('#adj-date').val();
+                const note = $('#adj-note').val() || '';
+
+                if (!assetUuid) {
+                    toastr?.error('Please pick an asset');
+                    return;
+                }
+                if (!date) {
+                    toastr?.error('Actual Date is required');
+                    return;
+                }
+                if (!amount || amount === 0) {
+                    toastr?.error('Amount must be non-zero (positive or negative)');
+                    return;
+                }
+
+                try {
+                    setBusyAdj(true);
+                    await $.ajax({
+                        url: "{{ route('depreciation.mv.adj.depr') }}",
+                        type: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                        },
+                        data: {
+                            asset_uuid: assetUuid,
+                            amount: amount,
+                            actual_date: date,
+                            note: note
+                        }
+                    });
+
+                    try {
+                        await $.ajax({
+                            url: "{{ route('depreciation.run.month') }}",
+                            type: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                            },
+                            data: {
+                                period: date
+                            }
+                        });
+                    } catch (e2) {
+                        console.error('runMonth after adjustment failed', e2);
+                        toastr?.warning(
+                            'Adjustment saved, but monthly recompute failed. Please press "Process Current Month".'
+                        );
+                    }
+
+                    toastr?.success('Adjustment depreciation saved');
+                    tbl.ajax.reload(null, false);
+                    $modalAdj.hide();
+                } catch (err) {
+                    console.error(err);
+                    const msg = err?.responseJSON?.message || 'Failed to save adjustment';
+                    toastr?.error(msg);
+                } finally {
+                    setBusyAdj(false);
                 }
             });
 

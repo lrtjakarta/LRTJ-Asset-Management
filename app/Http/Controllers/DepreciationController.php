@@ -527,7 +527,7 @@ class DepreciationController extends Controller
     {
         $data = $r->validate([
             'asset_uuid'  => ['required', 'uuid'],
-            'amount'      => ['required', 'numeric'],
+            'amount'      => ['required', 'numeric', 'not_in:0'], // allow + / -, disallow 0
             'actual_date' => ['required', 'date'],
             'note'        => ['nullable', 'string', 'max:300'],
         ]);
@@ -538,7 +538,7 @@ class DepreciationController extends Controller
             'asset_uuid'        => $data['asset_uuid'],
             'period'            => $period,
             'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-            'amount'            => abs($data['amount']),
+            'amount'            => (float) $data['amount'],
             'depr_start_period' => $period,
             'source_type'       => 'manual',
             'note'              => $data['note'] ?? null,
@@ -546,7 +546,6 @@ class DepreciationController extends Controller
 
         return response()->json(['ok' => true, 'message' => 'Depreciation adjustment recorded']);
     }
-
     private function writeMovementWithCutoff(array $data, string $category)
     {
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
