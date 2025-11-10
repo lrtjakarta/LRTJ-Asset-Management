@@ -46,7 +46,7 @@
                         id="tbl-disposals-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-200px">Disposal Code</th>
+                                <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Note</th>
                                 <th class="min-w-200px">Requester</th>

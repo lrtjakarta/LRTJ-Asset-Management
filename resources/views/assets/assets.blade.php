@@ -559,7 +559,7 @@
                                             <th class="min-w-150px">Parent</th>
                                             <th>Child</th>
                                             <th class="min-w-250px">Description</th>
-                                            <th class="min-w-150px">Asset Upload Code</th>
+                                            <th class="min-w-150px">Asset Upload Number</th>
                                             <th class="min-w-150px">Asset Number Maximo</th>
                                             <th class="min-w-150px">Asset Number D365</th>
                                             <th class="min-w-150px">Asset Number Internal</th>

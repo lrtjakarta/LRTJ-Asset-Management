@@ -37,7 +37,7 @@
                         id="tbl-returns-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-150px">Return Code</th>
+                                <th class="min-w-150px">Transaction Number</th>
                                 <th class="min-w-200px">MOV/DSP Code</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Type</th>

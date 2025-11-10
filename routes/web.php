@@ -202,6 +202,7 @@ Route::middleware('ldap.session')->group(function () {
 
     // DEPRECIATION ROUTE
     Route::prefix('depreciation')->name('depreciation.')->group(function () {
+        Route::get('/', [DepreciationController::class, 'index'])->name('index');
         // DATATABLE
         Route::get('/monthly',   [DepreciationController::class, 'dtMonthly'])->name('dt.monthly');
         Route::get('/yearly',    [DepreciationController::class, 'dtYearly'])->name('dt.yearly');
@@ -241,9 +242,8 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/movement', [TransferController::class, 'index'])->name('transfer.index');
         Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
         Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
-        Route::get('/depreciation', [DepreciationController::class, 'index'])->name('depreciation.index');
         Route::get('/acquisition',        [AcquisitionController::class, 'index'])->name('acquisition.index');
-        Route::get('/depreciation/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('depreciation.transfer-requests.index');
+        Route::get('/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('transfer-requests.index');
     });
 
     // EXPORT ROUTE

@@ -46,7 +46,7 @@
                         id="tbl-transfers-all">
                         <thead>
                             <tr class="table-light">
-                                <th class="min-w-200px">Movement Code</th>
+                                <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-200px">Before</th>

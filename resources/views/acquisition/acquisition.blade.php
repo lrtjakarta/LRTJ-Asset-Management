@@ -143,7 +143,6 @@
         </div>
     </div>
 @endsection
-
 @push('scripts')
     <script>
         (function() {
@@ -157,6 +156,7 @@
                 if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
                 else $btnSave.removeAttr('data-kt-indicator').prop('disabled', false);
             };
+
             var tbl = $('#tbl-acq-global').DataTable({
                 processing: true,
                 serverSide: true,
@@ -170,12 +170,12 @@
                 ajax: {
                     url: "{{ route('acquisition.dt') }}",
                     data: d => {
-                        // If later you add filters, set them here
+                        // filters here later
                     }
                 },
                 order: [
                     [11, 'desc']
-                ], // created_at
+                ],
                 columns: [{
                         data: 'acq_code',
                         name: 'h.acq_code'
@@ -192,7 +192,7 @@
                     },
                     {
                         data: 'quantity',
-                        name: 'quantity',
+                        name: 'quantity'
                     },
                     {
                         data: 'kode_uom',
@@ -200,11 +200,11 @@
                     },
                     {
                         data: 'price',
-                        render: money,
+                        render: money
                     },
                     {
                         data: 'vat_in',
-                        render: money,
+                        render: money
                     },
                     {
                         data: 'total',
@@ -254,10 +254,9 @@
                 loadLatest(assetUuid);
             }).on('select2:clear', function() {
                 $('#acq-asset-uuid').val('');
-                resetFormValues();
+                clearFormValues();
             });
 
-            // ===== Select2: UOM =====
             $('#acq-uom').select2({
                 dropdownParent: $('#modal-acq-global'),
                 placeholder: 'Choose UOM…',
@@ -313,6 +312,7 @@
                         clearFormValues();
                     });
             }
+
             $('#btn-open-acq').on('click', function() {
                 $form[0].reset();
                 $('#acq-asset-uuid').val('');
@@ -328,7 +328,11 @@
 
                 const assetUuid = $('#acq-asset-uuid').val();
                 if (!assetUuid) {
-                    toastr?.error('Please choose an asset.');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Asset required',
+                        text: 'Please choose an asset first.'
+                    });
                     return;
                 }
 
@@ -341,7 +345,11 @@
                         'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                     }
                 }).done(res => {
-                    toastr?.success(res?.message || 'Acquisition saved.');
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved',
+                        text: res?.message || 'Acquisition saved.'
+                    });
                     tbl.ajax.reload(null, false);
                     $modal.hide();
                 }).fail(xhr => {
@@ -351,7 +359,12 @@
                         const firstKey = Object.keys(errs)[0];
                         if (firstKey && errs[firstKey][0]) msg = errs[firstKey][0];
                     }
-                    toastr?.error(msg);
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: msg
+                    });
                 }).always(() => setBusy(false));
             });
         })();

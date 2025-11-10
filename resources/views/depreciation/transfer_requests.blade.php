@@ -1,3 +1,11 @@
+@php
+    use Carbon\Carbon;
+    $currentMonth = Carbon::now()->startOfMonth()->toDateString();
+    $currentMonthText = Carbon::now()->isoFormat('MMMM YYYY');
+    $prevYearLabel = Carbon::now()->year - 1;
+    $currentYear = Carbon::parse($currentMonth)->year;
+@endphp
+
 @extends('layouts.app')
 
 @section('title', 'Depreciation Transfer Requests')
@@ -14,14 +22,6 @@
                     <li class="breadcrumb-item">
                         <span class="bullet bg-gray-500 w-5px h-2px"></span>
                     </li>
-                    <li class="breadcrumb-item text-muted">
-                        <a href="{{ route('transaction.depreciation.index') }}" class="text-muted text-hover-primary">
-                            Depreciation
-                        </a>
-                    </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
                     <li class="breadcrumb-item text-muted">Transfer Requests</li>
                 </ul>
             </div>
@@ -33,11 +33,15 @@
             <div class="card-header align-items-center justify-content-between">
                 <div class="d-flex flex-column">
                     <h3 class="card-title mb-1">
-                        <span class="fw-semibold">Transfer Requests</span>
+                        <span class="fw-semibold">Transfer Requests Data</span>
                     </h3>
-                    <span class="text-muted fs-7">
-                        Requests created from Depreciation
-                    </span>
+                </div>
+                <div class="card-toolbar">
+                    {{-- Transfer Value --}}
+                    <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
+                        <i class="ki-duotone ki-plus fs-2"></i>
+                        Add New
+                    </button>
                 </div>
             </div>
 
@@ -46,7 +50,7 @@
                     class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
                     <thead class="table-light">
                         <tr>
-                            <th class="min-w-150px">Transfer Code</th>
+                            <th class="min-w-150px">Transaction Number</th>
                             <th class="min-w-150px">From Asset</th>
                             <th class="min-w-150px">To Asset</th>
                             <th class="min-w-150px">Type</th>
@@ -147,8 +151,160 @@
             </div>
         </div>
     </div>
-@endsection
 
+    {{-- Transfer Value Modal --}}
+    <div class="modal fade" id="modal-transfer" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Transfer Value</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form id="form-transfer" autocomplete="off" enctype="multipart/form-data">
+                    @csrf
+                    <div class="modal-body py-4">
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <label class="form-label"><b>Transfer Type :</b></label>
+                                <div class="btn-group" role="group" aria-label="Transfer type"
+                                    style="border: solid .5px black; width:100%;">
+                                    {{-- 1. tf-val (existing case 1) --}}
+                                    <input type="radio" class="btn-check" name="tr-type" id="tr-type-tf-val"
+                                        value="tf-val" checked>
+                                    <label class="btn btn-outline-danger btn-sm" for="tr-type-tf-val">
+                                        1. Partials/Full (Gross only)
+                                    </label>
+
+                                    {{-- 2. Acquisition Fix --}}
+                                    <input type="radio" class="btn-check" name="tr-type" id="tr-type-acq-fix"
+                                        value="acq_fix">
+                                    <label class="btn btn-outline-danger btn-sm" for="tr-type-acq-fix">
+                                        2. Acquisition Fix
+                                    </label>
+
+                                    {{-- 3. Carry-Over (Gross + Accum) --}}
+                                    <input type="radio" class="btn-check" name="tr-type" id="tr-type-carry"
+                                        value="carry_over_gross_accum">
+                                    <label class="btn btn-outline-danger btn-sm" for="tr-type-carry">
+                                        3. Carry-Over (Gross + Accum)
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">From Asset</label>
+                                <select id="tr-from-asset" class="form-select" style="width:100%"></select>
+                                <input type="hidden" id="tr-from-uuid" name="from_asset_uuid">
+                                <div id="tf-asset-snapshot-1" class="mt-4 d-none">
+                                    <div class="p-3 border rounded bg-light">
+                                        <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                        <div class="row gy-2">
+                                            <div class="col-6">
+                                                <div class="text-muted">Owner</div>
+                                                <div id="snap-owner-1" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">User</div>
+                                                <div id="snap-user-1" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-6">
+                                                <div class="text-muted">Maintenance</div>
+                                                <div id="snap-maintenance-1" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">Status</div>
+                                                <div id="snap-status-1" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-12">
+                                                <div class="text-muted">Location</div>
+                                                <div id="snap-location-1" class="fw-semibold"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required">To Asset</label>
+                                <select id="tr-to-asset" class="form-select" style="width:100%"></select>
+                                <input type="hidden" id="tr-to-uuid" name="to_asset_uuid">
+
+                                <div id="tf-asset-snapshot-2" class="mt-4 d-none">
+                                    <div class="p-3 border rounded bg-light">
+                                        <div class="fw-semibold mb-2">Current Asset Info</div>
+
+                                        <div class="row gy-2">
+                                            <div class="col-6">
+                                                <div class="text-muted">Owner</div>
+                                                <div id="snap-owner-2" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">User</div>
+                                                <div id="snap-user-2" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-6">
+                                                <div class="text-muted">Maintenance</div>
+                                                <div id="snap-maintenance-2" class="fw-semibold"></div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="text-muted">Status</div>
+                                                <div id="snap-status-2" class="fw-semibold"></div>
+                                            </div>
+
+                                            <div class="col-12">
+                                                <div class="text-muted">Location</div>
+                                                <div id="snap-location-2" class="fw-semibold"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">Amount</label>
+                                <input type="number" step="0.01" min="0.01" class="form-control" id="tr-amount"
+                                    name="amount" placeholder="e.g. 15000000">
+                                <small id="tr-cap-help" class="text-muted d-block mt-1"></small>
+                                <small id="tr-carry-help" class="text-warning d-block mt-1"></small>
+                                <div id="tr-preview" class="alert d-none py-2 px-3 mt-2 small"></div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label required">Actual Date</label>
+                                <input type="date" class="form-control" id="tr-date" name="actual_date"
+                                    value="{{ Carbon::now()->toDateString() }}">
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (Optional)</label>
+                                <input type="file" class="form-control" id="tr-attachment" name="attachment">
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label">Note (Optional)</label>
+                                <textarea class="form-control" id="tr-note" name="note" placeholder="Optional note"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="btn-submit-transfer" class="btn btn-primary">
+                            <span class="indicator-label">Submit Transfer</span>
+                            <span class="indicator-progress">
+                                Saving… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endsection
 @push('scripts')
     <script>
         (function() {
@@ -167,6 +323,58 @@
             const $modalEdit = new bootstrap.Modal(document.getElementById('modal-edit-transfer-request'));
             const $formEdit = $('#form-edit-transfer-request');
             const $btnUpdate = $('#btn-update-transfer-request');
+            const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
+            const PERIOD = "{{ $currentMonth }}";
+
+            // Open Transfer modal
+            $('#btn-open-transfer').on('click', () => {
+                $('#form-transfer')[0].reset();
+                $('#tr-from-uuid, #tr-to-uuid').val('');
+                $('#tr-from-asset, #tr-to-asset').val(null).trigger('change');
+                $('#tr-type-tf-val').prop('checked', true);
+                $('#tr-cap-help').text('');
+                $('#tr-carry-help').text('');
+                $('#tr-preview').addClass('d-none').empty();
+                $modal.show();
+                syncTypeUI();
+            });
+
+            // select2 init (transfer modal)
+            const initAssetSelect = ($el) => {
+                $el.select2({
+                    dropdownParent: $('#modal-transfer'),
+                    placeholder: 'Search asset code/name…',
+                    allowClear: true,
+                    ajax: {
+                        url: "{{ route('assets.options') }}",
+                        dataType: 'json',
+                        delay: 250,
+                        data: params => ({
+                            q: params.term || '',
+                            page: params.page || 1
+                        }),
+                        processResults: data => data
+                    }
+                }).on('select2:select', function(e) {
+                    if (this.id === 'tr-from-asset') {
+                        const assetUuid = e.params.data.id;
+                        fetchAssetSnapshot1(assetUuid);
+                    }
+                    if (this.id === 'tr-to-asset') {
+                        const assetUuid = e.params.data.id;
+                        fetchAssetSnapshot2(assetUuid);
+                    }
+                }).on('select2:clear', function() {
+                    if (this.id === 'tr-from-asset') {
+                        clearSnapshot1();
+                    }
+                    if (this.id === 'tr-to-asset') {
+                        clearSnapshot2();
+                    }
+                });
+            };
+            initAssetSelect($('#tr-from-asset'));
+            initAssetSelect($('#tr-to-asset'));
 
             const setBusyUpdate = (b) => {
                 if (b) $btnUpdate.attr('data-kt-indicator', 'on').prop('disabled', true);
@@ -203,8 +411,7 @@
                 order: [
                     [4, 'desc']
                 ], // actual_date
-                columns: [
-                    {
+                columns: [{
                         data: 'transfer_code',
                         name: 'transfer_code'
                     },
@@ -377,6 +584,74 @@
                 ]
             });
 
+
+            function fetchAssetSnapshot1(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot1();
+                    return;
+                }
+                $.getJSON('{{ route('assets.brief', ':id') }}'.replace(':id', assetUuid))
+                    .done(renderSnapshot1)
+                    .fail(() => clearSnapshot1());
+            }
+
+            function renderSnapshot1(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner-1').text(safe(d.owner_label));
+                $('#snap-user-1').text(safe(d.user_label));
+                $('#snap-maintenance-1').text(safe(d.maintenance_label));
+                $('#snap-status-1').text(safe(d.status_label));
+                $('#snap-location-1').text(safe(d.location_label));
+                $('#tf-asset-snapshot-1').removeClass('d-none');
+            }
+
+            function clearSnapshot1() {
+                $('#snap-owner-1,#snap-user-1,#snap-maintenance-1,#snap-status-1,#snap-location-1').text('');
+                $('#tf-asset-snapshot-1').addClass('d-none');
+            }
+
+            function fetchAssetSnapshot2(assetUuid) {
+                if (!assetUuid) {
+                    clearSnapshot2();
+                    return;
+                }
+                $.getJSON('{{ route('assets.brief', ':id') }}'.replace(':id', assetUuid))
+                    .done(renderSnapshot2)
+                    .fail(() => clearSnapshot2());
+            }
+
+            function renderSnapshot2(d) {
+                const safe = (v) => v || '';
+                $('#snap-owner-2').text(safe(d.owner_label));
+                $('#snap-user-2').text(safe(d.user_label));
+                $('#snap-maintenance-2').text(safe(d.maintenance_label));
+                $('#snap-status-2').text(safe(d.status_label));
+                $('#snap-location-2').text(safe(d.location_label));
+                $('#tf-asset-snapshot-2').removeClass('d-none');
+            }
+
+            function clearSnapshot2() {
+                $('#snap-owner-2,#snap-user-2,#snap-maintenance-2,#snap-status-2,#snap-location-2').text('');
+                $('#tf-asset-snapshot-2').addClass('d-none');
+            }
+
+            $('#tr-from-asset').on('select2:select select2:clear', () => {
+                $('#tr-from-uuid').val($('#tr-from-asset').val() || '');
+                if (getTransferType() === 'tf-val') refreshTransferCap();
+                else refreshCarryPreview();
+            });
+            $('#tr-to-asset').on('select2:select select2:clear', function() {
+                $('#tr-to-uuid').val($(this).val() || '');
+            });
+            $('#tr-date').on('change', () => {
+                if (getTransferType() === 'tf-val') refreshTransferCap();
+                else refreshCarryPreview();
+            });
+            $('#tr-amount').on('keyup change', () => {
+                if (getTransferType() === 'carry_over_gross_accum') refreshCarryPreview();
+            });
+
+
             // ===== Row actions =====
 
             $('#tbl-transfer-requests').on('click', '.btn-approve', function() {
@@ -524,15 +799,27 @@
                 const date = $('#edit-actual-date').val();
 
                 if (!uuid) {
-                    toastr?.error('Missing request ID.');
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Missing request ID.'
+                    });
                     return;
                 }
                 if (!(amt > 0)) {
-                    toastr?.error('Amount must be greater than 0');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Amount must be greater than 0'
+                    });
                     return;
                 }
                 if (!date) {
-                    toastr?.error('Actual Date is required');
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Actual Date is required'
+                    });
                     return;
                 }
 
@@ -542,19 +829,223 @@
                 setBusyUpdate(true);
 
                 $.ajax({
-                    url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                }).done(res => {
-                    Swal.fire('Updated', '', 'success');
+                        url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                    }).done(res => {
+                        Swal.fire('Updated', '', 'success');
+                        tbl.ajax.reload(null, false);
+                        $modalEdit.hide();
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
+                    .always(() => {
+                        setBusyUpdate(false);
+                    });
+            });
+
+
+            // ===== Transfer helpers =====
+            async function refreshTransferCap() {
+                const fromUUID = $('#tr-from-uuid').val();
+                const date = $('#tr-date').val();
+                if (!fromUUID || !date) {
+                    $('#tr-cap-help').text('');
+                    $('#tr-amount').data('capRemaining', 0);
+                    return;
+                }
+
+                try {
+                    const res = await $.get("{{ route('depreciation.mv.transfer.limit') }}", {
+                        from_asset_uuid: fromUUID,
+                        actual_date: date
+                    });
+                    const cap = res || {};
+                    const lastP = cap.last_closed_period ? new Date(cap.last_closed_period).toISOString().slice(0,
+                        10) : '-';
+                    $('#tr-cap-help').text(
+                        `Max: ${fmt2(cap.remaining)} (Begin: ${fmt2(cap.begin_total)} − Last NBV ${lastP}: ${fmt2(cap.last_nbv)} − This month OUT: ${fmt2(cap.already_out)})`
+                    );
+                    $('#tr-amount').data('capRemaining', Number(cap.remaining || 0));
+                } catch {
+                    $('#tr-cap-help').text('Max not available');
+                    $('#tr-amount').data('capRemaining', 0);
+                }
+            }
+
+            const getTransferType = () => $('input[name="tr-type"]:checked').val();
+
+            function syncTypeUI() {
+                const t = getTransferType();
+                if (t === 'tf-val') {
+                    $('#tr-carry-help').text('');
+                    $('#tr-preview').addClass('d-none').empty();
+                    refreshTransferCap();
+                } else if (t === 'carry_over_gross_accum') {
+                    $('#tr-cap-help').text('');
+                    refreshCarryPreview();
+                } else {
+                    $('#tr-cap-help').text('');
+                    $('#tr-carry-help').text('');
+                    $('#tr-preview').addClass('d-none').empty();
+                }
+            }
+            $('input[name="tr-type"]').on('change', syncTypeUI);
+
+            async function refreshCarryPreview() {
+                const fromUUID = $('#tr-from-uuid').val();
+                const date = $('#tr-date').val();
+                const amount = Number($('#tr-amount').val() || 0);
+
+                $('#tr-carry-help').text('');
+                $('#tr-preview').addClass('d-none').empty();
+                $('#tr-amount').data('capGross', null);
+
+                if (!fromUUID || !date || !(amount > 0)) return;
+
+                try {
+                    const res = await $.get("{{ route('depreciation.mv.carryover.preview') }}", {
+                        from_asset_uuid: fromUUID,
+                        actual_date: date,
+                        amount: amount
+                    });
+                    const d = res || {};
+                    const lc = d.last_closed_period ? new Date(d.last_closed_period).toISOString().slice(0, 10) :
+                        '-';
+
+                    $('#tr-preview').removeClass('d-none').html(
+                        `Total Gross A: <b>${fmt2(d.total_gross)}</b> · Accum as of <b>${lc}</b>: <b>${fmt2(d.accum_as_of_last)}</b><br>
+                 Accum to carry: <b>${fmt2(d.acc_move)}</b> · NBV that moves: <b>${fmt2(d.nbv_move)}</b><br>
+                 Gross remaining cap: <b>${fmt2(d.cap_remaining)}</b>`
+                    );
+                    $('#tr-amount').data('capGross', Number(d.cap_remaining || 0));
+
+                    if (amount > Number(d.cap_remaining || 0)) {
+                        $('#tr-carry-help').text(
+                            'Amount exceeds max carry-over (gross remaining). Please reduce the amount.');
+                    } else {
+                        $('#tr-carry-help').text('');
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+
+            const $btnSave = $('#btn-submit-transfer');
+            const setBusyTransfer = (b) => {
+                if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
+                else $btnSave.removeAttr('data-kt-indicator').prop('disabled', false);
+            };
+
+            $('#form-transfer').on('submit', async function(e) {
+                e.preventDefault();
+
+                const fromUUID = $('#tr-from-uuid').val();
+                const toUUID = $('#tr-to-uuid').val();
+                const amount = Number($('#tr-amount').val() || 0);
+                const date = $('#tr-date').val();
+                const type = getTransferType();
+
+                if (!fromUUID || !toUUID) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Please pick both assets'
+                    });
+                    return;
+                }
+                if (fromUUID === toUUID) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'From/To asset cannot be the same'
+                    });
+                    return;
+                }
+                if (!(amount > 0)) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Amount must be greater than 0'
+                    });
+                    return;
+                }
+                if (!date) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Actual Date is required'
+                    });
+                    return;
+                }
+
+                if (type === 'tf-val') {
+                    const capRem = Number($('#tr-amount').data('capRemaining') || 0);
+                    if (capRem && amount > capRem) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Validation error',
+                            text: 'Amount exceeds max allowed for that month.'
+                        });
+                        return;
+                    }
+                } else if (type === 'carry_over_gross_accum') {
+                    const capGross = Number($('#tr-amount').data('capGross') || 0);
+                    if (capGross && amount > capGross) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Validation error',
+                            text: 'Amount exceeds max carry-over (gross remaining).'
+                        });
+                        return;
+                    }
+                }
+
+                const fd = new FormData();
+                fd.append('transfer_type', type);
+                fd.append('from_asset_uuid', fromUUID);
+                fd.append('to_asset_uuid', toUUID);
+                fd.append('amount', amount);
+                fd.append('actual_date', date);
+                fd.append('note', $('#tr-note').val() || '');
+                const fileInput = document.getElementById('tr-attachment');
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    fd.append('attachment', fileInput.files[0]);
+                }
+
+                try {
+                    setBusyTransfer(true);
+                    await $.ajax({
+                        url: "{{ route('depreciation.transfer-requests.store') }}",
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false,
+                        headers: {
+                            'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                        }
+                    });
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved',
+                        text: 'Transfer request saved. Waiting for approval.'
+                    });
+                    $('#tbl-monthly').DataTable().ajax.reload(null, false);
+                    $modal.hide();
                     tbl.ajax.reload(null, false);
-                    $modalEdit.hide();
-                }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
-                .always(() => {
-                    setBusyUpdate(false);
-                });
+                } catch (err) {
+                    console.error(err);
+                    const msg = err?.responseJSON?.message || 'Failed to save transfer request';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: msg
+                    });
+                } finally {
+                    setBusyTransfer(false);
+                }
             });
 
         })();
