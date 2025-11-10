@@ -157,7 +157,7 @@
                 if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
                 else $btnSave.removeAttr('data-kt-indicator').prop('disabled', false);
             };
-            $('#tbl-acq-global').DataTable({
+            var tbl = $('#tbl-acq-global').DataTable({
                 processing: true,
                 serverSide: true,
                 searchDelay: 400,
