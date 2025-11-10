@@ -68,6 +68,7 @@
                     <h3 class="card-title align-items-start flex-column">
                         <span class="card-label fw-bold fs-3 mb-1">Stock Opname Data</span>
                     </h3>
+                    @canAction('STOCK_OPN','C')
                     <div class="card-toolbar">
                         <div class="d-flex align-items-center gap-3">
                             <a href="#" id="btnOpenTf" class="btn btn-sm btn-danger">
@@ -78,6 +79,7 @@
                             </a>
                         </div>
                     </div>
+                    @endcanAction
                 </div>
                 <div class="card-body">
                     <table class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
@@ -616,7 +618,7 @@
             const DIS = {
                 create: '{{ route('stockopname.disposal.store') }}',
                 // create: '{{ route('disposal.store') }}', 
-                assets: '{{ route('assets.options') }}', 
+                assets: '{{ route('assets.options') }}',
             };
 
             $.ajaxSetup({

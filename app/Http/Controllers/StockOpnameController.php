@@ -18,12 +18,33 @@ use Illuminate\Validation\Rule;
 
 class StockOpnameController extends Controller
 {
+    protected function canReadStockOpname(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('STOCK_OPN', 'R');
+    }
+
+    protected function canCreateStockOpname(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('STOCK_OPN', 'C');
+    }
     public function index()
     {
+        abort_unless($this->canReadStockOpname(), 403);
         return view('stock_opname.stock_opname');
     }
     public function datatable(Request $request)
     {
+        if (!$this->canReadStockOpname()) {
+            $draw = (int) $request->input('draw', 1);
+            return response()->json([
+                'draw'            => $draw,
+                'recordsTotal'    => 0,
+                'recordsFiltered' => 0,
+                'data'            => [],
+            ]);
+        }
         $draw   = (int) $request->input('draw', 1);
         $start  = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -171,6 +192,9 @@ class StockOpnameController extends Controller
     }
     public function dataByAsset(string $uuid, Request $request)
     {
+        if (!$this->canReadStockOpname()) {
+            return response()->json(['data' => []]);
+        }
         $qT = DB::table('assets_transfers as t')
             ->selectRaw("
         t.uuid,
@@ -186,7 +210,7 @@ class StockOpnameController extends Controller
         t.file_name,
         t.file_path,
         t.updated_at
-    ")
+        ")
             ->whereNull('t.deleted_at')
             ->where('t.kode_status', 'ACC')
             ->where('t.asset_uuid', $uuid);
@@ -244,6 +268,7 @@ class StockOpnameController extends Controller
 
     public function store_transfer(Request $request)
     {
+        abort_unless($this->canCreateStockOpname(), 403);
         $data = $request->validate([
             'asset_uuid'   => ['required', 'uuid', 'exists:assets,uuid'],
             'type'         => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
@@ -427,6 +452,7 @@ class StockOpnameController extends Controller
     }
     public function store_disposal(Request $request)
     {
+        abort_unless($this->canCreateStockOpname(), 403);
         $data = $request->validate([
             'asset_uuid'    => ['required', 'uuid', 'exists:assets,uuid'],
             'note'          => ['nullable', 'string', 'max:1000'],

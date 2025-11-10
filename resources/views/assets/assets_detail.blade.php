@@ -373,11 +373,13 @@
                                     aria-selected="false">Disposal</a>
                             </li>
                             @endcanAction
+                            @canAction('STOCK_OPN','R')
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-so-link" data-bs-toggle="tab"
                                     href="#tab_stock_opname" role="tab" aria-controls="tab_stock_opname"
                                     aria-selected="false">Stock Opname</a>
                             </li>
+                            @endcanAction
                         </ul>
                     </div>
                 </div>
@@ -468,6 +470,7 @@
                             </table>
                         </div>
                         @endcanAction
+                        @canAction('STOCK_OPN','R')
                         <div class="tab-pane fade" id="tab_stock_opname" role="tabpanel" aria-labelledby="tab-so-link">
                             <table
                                 class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
@@ -487,6 +490,7 @@
                                 </thead>
                             </table>
                         </div>
+                        @endcanAction
                     </div>
                 </div>
             </div>

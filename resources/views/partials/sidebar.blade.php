@@ -376,7 +376,7 @@
                         <!--end:Menu item-->
                     @endif
 
-
+                    @canAction('STOCK_OPN','R')
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
@@ -393,6 +393,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
 
                     <!--begin:Menu item-->
                     <div class="menu-item">
