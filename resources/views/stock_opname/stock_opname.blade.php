@@ -33,7 +33,6 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Transfer Type</label>
-
                             <select id="f-tf-type" class="form-select">
                                 <option value="">All</option>
                                 <option value="owner">Owner</option>
@@ -57,8 +56,8 @@
                                 placeholder="e.g. A1101000002-00 / Laptop Dell">
                         </div>
                         <div class="col-md-4">
-                            <button id="btnFilter" class="btn btn-danger">Apply Filter</button>
-                            <button id="btnReset" class="btn btn-light ms-2">Reset</button>
+                            <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                            <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
                         </div>
                     </div>
                 </div>
@@ -86,7 +85,7 @@
                         <thead>
                             <tr class="table-light">
                                 <th class="min-w-200px">Asset</th>
-                                <th class="min-w-200px">Code</th>
+                                <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Source</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-400px">Detail</th>
