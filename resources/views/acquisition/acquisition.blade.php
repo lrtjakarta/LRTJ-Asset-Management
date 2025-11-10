@@ -28,11 +28,13 @@
                         <span class="fw-semibold">Acquisition Data</span>
                     </h3>
                 </div>
+                @canAction('ACQUISITION','C')
                 <div class="d-flex align-items-center gap-2 gap-lg-3">
                     <button id="btn-open-acq" class="btn btn-sm btn-danger">
                         <i class="ki-duotone ki-plus fs-2"></i>Create or Update
                     </button>
                 </div>
+                @endcanAction
             </div>
 
             <div class="card-body">

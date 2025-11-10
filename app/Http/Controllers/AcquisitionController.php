@@ -18,6 +18,9 @@ class AcquisitionController extends Controller
 
     public function dtGlobal(Request $request)
     {
+        if (!$this->canReadAcquisition()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = DB::table('assets_value_history as h')
             ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
             ->select(
@@ -118,6 +121,7 @@ class AcquisitionController extends Controller
     }
     public function storeGlobal(Request $request)
     {
+        abort_unless($request->user()?->hasAction('ACQUISITION', 'C'), 403);
         $data = $request->validate([
             'asset_uuid'          => ['required', 'uuid', 'exists:assets,uuid'],
             'quantity'            => ['required', 'numeric', 'min:0'],
@@ -241,6 +245,11 @@ class AcquisitionController extends Controller
 
     public function dataByAsset(string $assetUuid, Request $request)
     {
+        
+        if (!$this->canReadAcquisition()) {
+            return DataTables::of(collect())->toJson();
+        }
+
         $q = DB::table('assets_value_history as h')
             ->where('h.asset_uuid', $assetUuid)
             ->orderByDesc('h.created_at')
@@ -310,5 +319,14 @@ class AcquisitionController extends Controller
             'exists' => (bool)$v,
             'value'  => $v,
         ]);
+    }
+    protected function canReadAcquisition(): bool
+    {
+        $user = auth()->user();
+
+        if (!$user) {
+            return false;
+        }
+        return $user->hasAction('ACQUISITION', 'R');
     }
 }

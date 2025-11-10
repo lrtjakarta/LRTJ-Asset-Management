@@ -230,6 +230,7 @@ class AssetsController extends Controller
         BuildGroupCategoryCode $groupBuilder,
         AssetNumberingService $num
     ) {
+        abort_unless($request->user()?->hasAction('ASSETS', 'C'), 403);
         $v = (object) $request->validated();
         $mode = $v->mode;
         $uuid   = (string) Str::uuid();
@@ -372,6 +373,7 @@ class AssetsController extends Controller
         AssetChildSequencer $sequencer,
         string $uuid
     ) {
+        abort_unless($request->user()?->hasAction('ASSETS', 'U'), 403);
         $v = (object) $request->validated();
         $asset = Assets::with(['classification'])->findOrFail($uuid);
 
@@ -504,6 +506,7 @@ class AssetsController extends Controller
 
     public function destroy(string $uuid)
     {
+        abort_unless(auth()->user()?->hasAction('ASSETS', 'D'), 403);
         $it = Assets::where('uuid', $uuid)->firstOrFail();
         $it->delete();
         return redirect()->route('assets.index')->with('success', 'Asset Deleted.');
@@ -694,6 +697,7 @@ class AssetsController extends Controller
     }
     public function upload_excel(Request $request)
     {
+        abort_unless($request->user()?->hasAction('ASSETS', 'C'), 403);
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
         ]);

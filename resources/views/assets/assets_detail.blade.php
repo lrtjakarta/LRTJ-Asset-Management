@@ -20,17 +20,31 @@
             </div>
 
             <div class="d-flex align-items-center gap-2 gap-lg-3">
+                @canAction('MOVEMENT','C')
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenTransfer">Movement</a>
-                <a href="#" class="btn btn-sm fw-bold btn-secondary {{ $asset->kode_status == 'DIS' ? 'disabled' : '' }} " id="btnOpenDisposal">Disposal</a>
+                @endcanAction
+                @canAction('DISPOSAL','C')
+                <a href="#"
+                    class="btn btn-sm fw-bold btn-secondary {{ $asset->kode_status == 'DIS' ? 'disabled' : '' }} "
+                    id="btnOpenDisposal">Disposal</a>
+                @endcanAction
+                @canAction('RETURN','C')
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenReturn">Return</a>
+                @endcanAction
+                @canAction('ACQUISITION','C')
                 <a href="#" class="btn btn-sm fw-bold btn-secondary" id="btnOpenAcq">Acquisition</a>
+                @endcanAction
+                @canAction('ASSETS','U')
                 <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
+                @endcanAction
+                @canAction('ASSETS','D')
                 <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
                     class="d-inline">
                     @csrf
                     @method('DELETE')
                     <button type="button" id="btnDeleteAsset" class="btn btn-sm fw-bold btn-danger">Delete</button>
                 </form>
+                @endcanAction
             </div>
         </div>
     </div>
@@ -332,25 +346,33 @@
                     </div>
                     <div class="card-toolbar">
                         <ul class="nav nav-tabs nav-bold nav-tabs-line" id="historyTabs" role="tablist">
+                            @canAction('ACQUISITION','R')
                             <li class="nav-item" role="presentation">
-                                <a class="nav-link active fw-bold" id="tab-transfer-link" data-bs-toggle="tab"
+                                <a class="nav-link active fw-bold" id="tab-acq-link" data-bs-toggle="tab"
+                                    href="#tab_acquisition" role="tab" aria-controls="tab_acquisition"
+                                    aria-selected="false">Acquisition</a>
+                            </li>
+                            @endcanAction
+                            @canAction('MOVEMENT','R')
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link fw-bold" id="tab-transfer-link" data-bs-toggle="tab"
                                     href="#tab_transfer" role="tab" aria-controls="tab_transfer"
                                     aria-selected="true">Movement</a>
                             </li>
+                            @endcanAction
+                            @canAction('RETURN','R')
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-return-link" data-bs-toggle="tab" href="#tab_return"
                                     role="tab" aria-controls="tab_return" aria-selected="false">Return</a>
                             </li>
+                            @endcanAction
+                            @canAction('DISPOSAL','R')
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-disposal-link" data-bs-toggle="tab"
                                     href="#tab_disposal" role="tab" aria-controls="tab_disposal"
                                     aria-selected="false">Disposal</a>
                             </li>
-                            <li class="nav-item" role="presentation">
-                                <a class="nav-link fw-bold" id="tab-acq-link" data-bs-toggle="tab"
-                                    href="#tab_acquisition" role="tab" aria-controls="tab_acquisition"
-                                    aria-selected="false">Acquisition</a>
-                            </li>
+                            @endcanAction
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link fw-bold" id="tab-so-link" data-bs-toggle="tab"
                                     href="#tab_stock_opname" role="tab" aria-controls="tab_stock_opname"
@@ -362,14 +384,33 @@
 
                 <div class="card-body">
                     <div class="tab-content" id="historyTabsContent">
-                        <div class="tab-pane fade show active" id="tab_transfer" role="tabpanel"
+                        @canAction('ACQUISITION','R')
+                        <div class="tab-pane fade show active" id="tab_acquisition" role="tabpanel"
+                            aria-labelledby="tab-acq-link">
+                            <table
+                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
+                                id="tbl-acq">
+                                <thead>
+                                    <tr class="table-light">
+                                        <th class="min-w-160px">Transfer Number</th>
+                                        <th class="min-w-380px">Details</th>
+                                        <th class="min-w-220px">Note</th>
+                                        <th class="min-w-160px">Requester</th>
+                                        <th class="min-w-180px">Created</th>
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
+                        @endcanAction
+                        @canAction('MOVEMENT','R')
+                        <div class="tab-pane fade" id="tab_transfer" role="tabpanel"
                             aria-labelledby="tab-transfer-link">
                             <table
                                 class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
                                 id="tbl-transfers">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-200px">Code</th>
+                                        <th class="min-w-200px">Transfer Number</th>
                                         <th class="min-w-100px">Type</th>
                                         <th class="min-w-150px">Before</th>
                                         <th class="min-w-150px">After</th>
@@ -384,13 +425,15 @@
                                 </thead>
                             </table>
                         </div>
+                        @endcanAction
+                        @canAction('RETURN','R')
                         <div class="tab-pane fade" id="tab_return" role="tabpanel" aria-labelledby="tab-return-link">
                             <table
                                 class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
                                 id="tbl-returns">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-180px">Return Code</th>
+                                        <th class="min-w-180px">Transfer Number</th>
                                         <th class="min-w-180px">MOV/DSP Code</th>
                                         <th class="min-w-220px">Type</th>
                                         <th class="min-w-300px">Details</th>
@@ -402,6 +445,8 @@
                                 </thead>
                             </table>
                         </div>
+                        @endcanAction
+                        @canAction('DISPOSAL','R')
                         <div class="tab-pane fade" id="tab_disposal" role="tabpanel"
                             aria-labelledby="tab-disposal-link">
                             <table
@@ -409,7 +454,7 @@
                                 id="tbl-disposal">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-200px">Code</th>
+                                        <th class="min-w-200px">Transfer Number</th>
                                         <th class="min-w-100px">Type</th>
                                         <th class="min-w-100px">Requester</th>
                                         <th class="min-w-100px">Approver</th>
@@ -422,28 +467,14 @@
                                 </thead>
                             </table>
                         </div>
-                        <div class="tab-pane fade" id="tab_acquisition" role="tabpanel" aria-labelledby="tab-acq-link">
-                            <table
-                                class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
-                                id="tbl-acq">
-                                <thead>
-                                    <tr class="table-light">
-                                        <th class="min-w-160px">Acquisition Code</th>
-                                        <th class="min-w-380px">Details</th>
-                                        <th class="min-w-220px">Note</th>
-                                        <th class="min-w-160px">Requester</th>
-                                        <th class="min-w-180px">Created</th>
-                                    </tr>
-                                </thead>
-                            </table>
-                        </div>
+                        @endcanAction
                         <div class="tab-pane fade" id="tab_stock_opname" role="tabpanel" aria-labelledby="tab-so-link">
                             <table
                                 class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"
                                 id="tbl-so">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-170px">Code</th>
+                                        <th class="min-w-170px">Transfer Number</th>
                                         <th class="min-w-120px">Source</th>
                                         <th class="min-w-140px">Type</th>
                                         <th class="min-w-300px">Detail</th>
@@ -882,25 +913,10 @@
                         }
                     },
                     {
-                        data: null,
+                        data: 'actions',
+                        name: 'actions',
                         orderable: false,
-                        searchable: false,
-                        render: function(row) {
-                            const pending = row.kode_status === 'APR';
-                            let html = `<div class="btn-group btn-group-sm">`;
-                            if (pending) {
-                                html +=
-                                    `<button class="btn btn-light-primary btn-tf-edit" data-id="${row.uuid}">Edit</button>`;
-                                html +=
-                                    `<button class="btn btn-light-success btn-tf-approve" data-id="${row.uuid}">Accept</button>`;
-                                html +=
-                                    `<button class="btn btn-light-warning btn-tf-reject" data-id="${row.uuid}">Reject</button>`;
-                            }
-                            html +=
-                                `<button class="btn btn-light-danger btn-tf-delete" data-id="${row.uuid}">Delete</button>`;
-                            html += `</div>`;
-                            return html;
-                        }
+                        searchable: false
                     }
                 ]
             });
@@ -1255,26 +1271,11 @@
                         }
                     },
                     {
-                        data: null,
+                        data: 'actions',
+                        name: 'actions',
                         orderable: false,
-                        searchable: false,
-                        render: (row) => {
-                            const pending = row.kode_status === 'APR';
-                            let html = `<div class="btn-group btn-group-sm">`;
-                            if (pending) {
-                                html +=
-                                    `<button class="btn btn-light-primary btn-ds-edit" data-id="${row.uuid}">Edit</button>`;
-                                html +=
-                                    `<button class="btn btn-light-success btn-ds-approve" data-id="${row.uuid}">Accept</button>`;
-                                html +=
-                                    `<button class="btn btn-light-warning btn-ds-reject" data-id="${row.uuid}">Reject</button>`;
-                            }
-                            html +=
-                                `<button class="btn btn-light-danger btn-ds-delete" data-id="${row.uuid}">Delete</button>`;
-                            html += `</div>`;
-                            return html;
-                        }
-                    },
+                        searchable: false
+                    }
                 ]
             });
 
@@ -1401,7 +1402,7 @@
                 columns: [{
                         data: 'return_code',
                         name: 'return_history.return_code'
-                    },{
+                    }, {
                         data: 'source_code',
                         name: 'return_history.source_code'
                     },
@@ -1676,11 +1677,10 @@
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
-                columns: [
-                    {
+                columns: [{
                         data: 'acq_code',
                         name: 'acq_code'
-                    },{
+                    }, {
                         data: 'detail',
                         name: 'detail',
                         orderable: false,

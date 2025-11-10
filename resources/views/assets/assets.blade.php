@@ -535,9 +535,11 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Assets Data</span>
                                 </h3>
                                 <div class="card-toolbar">
+                                    @canAction('ASSETS','C')
                                     <a href="{{ route('assets.create') }}" class="btn btn-sm btn-danger me-2">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New
                                     </a>
+                                    @endcanAction
                                     <button class="btn btn-sm btn-danger" data-card="fullscreen" title="Fullscreen">
                                         <i class="ki-duotone ki-exit-right-corner fs-2">
                                             <span class="path1"></span>

@@ -26,13 +26,6 @@
                     <h3 class="card-title align-items-start flex-column">
                         <span class="card-label fw-bold fs-3 mb-1">Users Data</span>
                     </h3>
-                    <div class="card-toolbar">
-                        <div class="d-flex align-items-center position-relative my-1">
-                            <i class="ki-duotone ki-magnifier fs-2 position-absolute ms-4"></i>
-                            <input type="text" id="users-search" class="form-control form-control-solid w-250px ps-12"
-                                placeholder="Search user..." />
-                        </div>
-                    </div>
                 </div>
 
                 <div class="card-body py-3">
@@ -160,6 +153,10 @@
                     url: USERS_DATATABLE_URL,
                     type: 'GET',
                 },
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                searching: true,
                 columns: [{
                         data: 'username',
                         name: 'username'

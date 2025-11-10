@@ -66,8 +66,11 @@
                                         <li>You must use the template from this website</li>
                                         <li>Never change template's header</li>
                                         <li>Data in template serve as example. Please erase it before you upload it</li>
-                                        <li>System check Asset Number Parent and Child (Combination). If exists it will become update function based on what changed in cells. If cell is empty then the former data stay as it is (not changed to null)</li>
-                                        <li>If Parent and Child (Combination) doesn't exists it will inserted as new data</li>
+                                        <li>System check Asset Number Parent and Child (Combination). If exists it will
+                                            become update function based on what changed in cells. If cell is empty then the
+                                            former data stay as it is (not changed to null)</li>
+                                        <li>If Parent and Child (Combination) doesn't exists it will inserted as new data
+                                        </li>
                                         <li>Accepted files: <strong>.xlsx, .xls, .csv</strong> (max 20 MB)</li>
                                         <li>Codes must exist in master tables (Status, Location, User Code, etc.)</li>
                                         <li>Dates use <em>YYYY-MM-DD</em></li>
@@ -75,20 +78,24 @@
                                 </div>
 
                                 <hr class="my-5">
-                        
+
+                                @canAction('ASSETS','R')
                                 <a href="{{ route('assets.download.template') }}" class="btn btn-light-danger"><i
                                         class="ki-duotone ki-down-square fs-2">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i> Download Template
                                 </a>
-                                &nbsp;        
+                                @endcanAction
+                                &nbsp; 
+                                @canAction('ASSETS','C')
                                 <button type="submit" class="btn btn-danger">
                                     <i class="ki-duotone ki-up-square fs-2">
                                         <span class="path1"></span>
                                         <span class="path2"></span>
                                     </i> Upload
                                 </button>
+                                @endcanAction
                             </div>
                         </form>
 

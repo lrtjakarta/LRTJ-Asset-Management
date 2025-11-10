@@ -26,11 +26,13 @@
                     <h3 class="card-title align-items-start flex-column">
                         <span class="card-label fw-bold fs-3 mb-1">Return History</span>
                     </h3>
+                    @canAction('RETURN','C')
                     <div class="card-toolbar">
                         <a href="#" id="btnOpenCreate" class="btn btn-sm btn-danger">
                             <i class="ki-duotone ki-plus fs-2"></i>Add New
                         </a>
                     </div>
+                    @endcanAction
                 </div>
                 <div class="card-body">
                     <table class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded"

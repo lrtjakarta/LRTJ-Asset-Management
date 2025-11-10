@@ -16,6 +16,11 @@ use Carbon\Carbon;
 
 class DisposalController extends Controller
 {
+    protected function canReadDisposal(): bool
+    {
+        $user = auth()->user();
+        return $user && $user->hasAction('DISPOSAL', 'R');
+    }
 
     public function index()
     {
@@ -28,6 +33,7 @@ class DisposalController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'C'), 403);
         $data = $request->validate([
             'asset_uuid'    => ['required', 'uuid', 'exists:assets,uuid'],
             'note'          => ['nullable', 'string', 'max:1000'],
@@ -119,6 +125,7 @@ class DisposalController extends Controller
 
     public function update(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'U'), 403);
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Only pending requests can be edited.');
 
@@ -168,6 +175,7 @@ class DisposalController extends Controller
 
     public function approve(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'APR'), 403);
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
@@ -190,6 +198,7 @@ class DisposalController extends Controller
 
     public function reject(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'APR'), 403);
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
@@ -204,8 +213,9 @@ class DisposalController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    public function destroy(string $uuid)
+    public function destroy(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'D'), 403);
         $d = Disposal::findOrFail($uuid);
         $d->delete();
         return response()->json(['ok' => true]);
@@ -213,10 +223,17 @@ class DisposalController extends Controller
 
     public function datatable(Request $r, string $assetUuid)
     {
+        if (!$this->canReadDisposal()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = Disposal::query()
             ->where('asset_uuid', $assetUuid)
             ->with(['status', 'target'])
             ->orderByDesc('created_at');
+        $user = $r->user();
+        $canEdit   = $user && $user->hasAction('DISPOSAL', 'U');
+        $canDelete = $user && $user->hasAction('DISPOSAL', 'D');
+        $canApr    = $user && $user->hasAction('DISPOSAL', 'APR');
 
         return DataTables::of($q)
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
@@ -229,15 +246,21 @@ class DisposalController extends Controller
 
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
             })
-            ->addColumn('actions', function ($t) {
+            ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
                 $pending = $t->kode_status === 'APR';
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($pending) {
-                    $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
-                    $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
-                    $btns .= '<button class="btn btn-light-warning btn-ds-reject" data-id="' . $t->uuid . '">Reject</button>';
+                    if ($canEdit) {
+                        $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
+                    }
+                    if ($canApr) {
+                        $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
+                        $btns .= '<button class="btn btn-light-warning btn-ds-reject" data-id="' . $t->uuid . '">Reject</button>';
+                    }
                 }
-                $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                }
                 $btns .= '</div>';
                 return $btns;
             })
@@ -247,6 +270,9 @@ class DisposalController extends Controller
 
     public function datatable_all(Request $request)
     {
+        if (!$this->canReadDisposal()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = Disposal::query()
             ->with(['status', 'target', 'asset'])
             ->orderByDesc('created_at');
@@ -254,6 +280,11 @@ class DisposalController extends Controller
         if ($request->filled('workflow')) {
             $q->where('kode_status', $request->string('workflow'));
         }
+
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('DISPOSAL', 'U');
+        $canDelete = $user && $user->hasAction('DISPOSAL', 'D');
+        $canApr    = $user && $user->hasAction('DISPOSAL', 'APR');
 
         return DataTables::of($q)
             ->addColumn('asset_label', fn($t) => $t->asset ? $t->asset->asset_code : $t->asset_uuid)
@@ -268,15 +299,21 @@ class DisposalController extends Controller
 
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
             })
-            ->addColumn('actions', function ($t) {
+            ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
                 $pending = $t->kode_status === 'APR';
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($pending) {
-                    $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
-                    $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
-                    $btns .= '<button class="btn btn-light-warning btn-ds-reject" data-id="' . $t->uuid . '">Reject</button>';
+                    if ($canEdit) {
+                        $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
+                    }
+                    if ($canApr) {
+                        $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
+                        $btns .= '<button class="btn btn-light-warning btn-ds-reject" data-id="' . $t->uuid . '">Reject</button>';
+                    }
                 }
-                $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                }
                 $btns .= '</div>';
                 return $btns;
             })

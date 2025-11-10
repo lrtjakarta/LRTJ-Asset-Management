@@ -36,6 +36,7 @@
                         <span class="fw-semibold">Transfer Requests Data</span>
                     </h3>
                 </div>
+                @canAction('TRANSFER','C')
                 <div class="card-toolbar">
                     {{-- Transfer Value --}}
                     <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
@@ -43,6 +44,7 @@
                         Add New
                     </button>
                 </div>
+                @endcanAction
             </div>
 
             <div class="card-body">
@@ -61,7 +63,7 @@
                             <th class="min-w-150px">Approved By</th>
                             <th class="min-w-150px">Attachment</th>
                             <th class="min-w-200px">Note</th>
-                            <th class="min-w-200px text-center">Actions</th>
+                            <th class="min-w-200px ">Actions</th>
                         </tr>
                     </thead>
                 </table>
@@ -393,7 +395,11 @@
                 if (t === 'carry_over_gross_accum') return '3. Carry-Over (Gross + Accum)';
                 return '1. Partials/Full (Gross only)';
             };
-
+            const TR_PERMS = {
+                edit: @json(auth()->user()?->hasAction('TRANSFER', 'U') ?? false),
+                approve: @json(auth()->user()?->hasAction('TRANSFER', 'APR') ?? false),
+                delete: @json(auth()->user()?->hasAction('TRANSFER', 'D') ?? false),
+            };
             const tbl = $('#tbl-transfer-requests').DataTable({
                 processing: true,
                 serverSide: true,
@@ -552,12 +558,11 @@
                             return v ? $('<div/>').text(v).html() : '<span class="text-muted">-</span>';
                         }
                     },
-                    // Actions
                     {
                         data: null,
                         orderable: false,
                         searchable: false,
-                        className: 'text-center',
+                        className: '',
                         render: function(row) {
                             const id = row.uuid;
                             const status = (row.kode_status || '').toUpperCase();
@@ -573,9 +578,20 @@
                                 `<button type="button" class="btn btn-light-danger btn-delete" data-id="${id}">Delete</button>`;
 
                             if (status === 'APR') {
-                                buttons = btnEdit + btnApprove + btnReject + btnDelete;
-                            } else {
-                                buttons = btnDelete;
+                                if (TR_PERMS.edit) {
+                                    buttons += btnEdit;
+                                }
+                                if (TR_PERMS.approve) {
+                                    buttons += btnApprove + btnReject;
+                                }
+                            }
+
+                            if (TR_PERMS.delete) {
+                                buttons += btnDelete;
+                            }
+
+                            if (!buttons) {
+                                return '';
                             }
 
                             return '<div class="btn-group btn-group-sm">' + buttons + '</div>';

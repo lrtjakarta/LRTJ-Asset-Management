@@ -15,12 +15,35 @@ use Yajra\DataTables\Facades\DataTables;
 
 class ReturnController extends Controller
 {
+    private function canReadReturn(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('RETURN', 'R');
+    }
+
+    private function canCreateReturn(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('RETURN', 'C');
+    }
+
+    private function canDeleteReturn(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('RETURN', 'D');
+    }
     public function index()
     {
         return view('return.return');
     }
     public function options(Request $request)
     {
+        if (!$this->canCreateReturn()) {
+            return response()->json([
+                'results'    => [],
+                'pagination' => ['more' => false],
+            ]);
+        }
         $q         = trim((string) $request->get('q', ''));
         $limit     = max(10, (int) $request->get('limit', 100));
         $assetUuid = (string) $request->get('asset_uuid', '');
@@ -116,6 +139,7 @@ class ReturnController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless($this->canCreateReturn(), 403, 'You are not allowed to create return.');
         $data = $request->validate([
             'source' => ['required', 'string'],
             'note'   => ['nullable', 'string', 'max:1000'],
@@ -255,10 +279,16 @@ class ReturnController extends Controller
     }
     public function datatable_by_asset(Request $request, string $assetUuid)
     {
+        if (!$this->canReadReturn()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = ReturnHistory::query()
             ->where('asset_uuid', $assetUuid)
             ->with(['source'])
             ->orderByDesc('created_at');
+
+        $user = $request->user();
+        $canDelete = $user && $user->hasAction('RETURN', 'D');
 
         $resolve = function (?string $type, ?string $code): string {
             if (!$code) return '(empty)';
@@ -297,10 +327,14 @@ class ReturnController extends Controller
                 }
                 return '';
             })
-            ->addColumn('actions', function (ReturnHistory $r) {
-                return '<div class="btn-group btn-group-sm">
+            ->addColumn('actions', function (ReturnHistory $r)  use ($canDelete) {
+                if ($canDelete) {
+                    return '<div class="btn-group btn-group-sm">
                         <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
                     </div>';
+                } else {
+                    return '-';
+                }
             })
             ->rawColumns(['source_detail', 'actions'])
             ->toJson();
@@ -308,6 +342,9 @@ class ReturnController extends Controller
 
     public function datatable_all(Request $request)
     {
+        if (!$this->canReadReturn()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = ReturnHistory::query()
             ->from('return_history')
             ->with(['source'])
@@ -318,6 +355,8 @@ class ReturnController extends Controller
                 'a.asset_code',
                 'a.description as asset_desc',
             ]);
+        $user = $request->user();
+        $canDelete = $user && $user->hasAction('RETURN', 'D');
 
         $resolve = function (?string $type, ?string $code): string {
             if (!$code) return '(empty)';
@@ -356,10 +395,14 @@ class ReturnController extends Controller
                 }
                 return '';
             })
-            ->addColumn('actions', function (ReturnHistory $r) {
-                return '<div class="btn-group btn-group-sm">
+            ->addColumn('actions', function (ReturnHistory $r) use ($canDelete) {
+                if ($canDelete) {
+                    return '<div class="btn-group btn-group-sm">
                         <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
                     </div>';
+                } else {
+                    return '-';
+                }
             })
             ->rawColumns(['source_detail', 'actions'])
             ->toJson();
@@ -368,6 +411,7 @@ class ReturnController extends Controller
     /** Soft delete */
     public function destroy(string $uuid)
     {
+        abort_unless($this->canDeleteReturn(), 403, 'You are not allowed to delete return history.');
         $tf = ReturnHistory::where('uuid', $uuid)->firstOrFail();
         $tf->delete();
 

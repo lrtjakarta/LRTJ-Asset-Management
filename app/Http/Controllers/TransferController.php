@@ -21,6 +21,11 @@ use Carbon\Carbon;
 
 class TransferController extends Controller
 {
+    protected function canReadMovement(): bool
+    {
+        $user = auth()->user();
+        return $user && $user->hasAction('MOVEMENT', 'R');
+    }
     public function index()
     {
         $workflows = MasterStatus::query()
@@ -32,6 +37,15 @@ class TransferController extends Controller
     }
     public function datatable_all(Request $request)
     {
+        if (!$this->canReadMovement()) {
+            return DataTables::of(collect())->toJson();
+        }
+
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
+        $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
+        $canApr    = $user && $user->hasAction('MOVEMENT', 'APR');
+
         $q = Transfer::query()
             ->from('assets_transfers')
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
@@ -54,10 +68,20 @@ class TransferController extends Controller
                 return $code . $desc;
             })
             ->addColumn('workflow_label', function ($r) {
-                return $r->status ? ($r->kode_status . ' - ' . $r->status->name) : ($r->kode_status ?? '');
+                return $r->status
+                    ? ($r->kode_status . ' - ' . $r->status->name)
+                    : ($r->kode_status ?? '');
             })
-            ->addColumn('before_show', fn($r) => $this->resolveLabel($r->type, data_get($r->before, 'value')))
-            ->addColumn('after_show',  fn($r) => $this->resolveLabel($r->type, data_get($r->after,  'value')))
+            ->addColumn(
+                'before_show',
+                fn($r) =>
+                $this->resolveLabel($r->type, data_get($r->before, 'value'))
+            )
+            ->addColumn(
+                'after_show',
+                fn($r) =>
+                $this->resolveLabel($r->type, data_get($r->after, 'value'))
+            )
 
             ->filterColumn('asset_label', function ($builder, $keyword) {
                 $kw = '%' . mb_strtolower($keyword) . '%';
@@ -74,24 +98,37 @@ class TransferController extends Controller
                 $kw = '%' . mb_strtolower($keyword) . '%';
                 $builder->whereRaw('LOWER(CAST(assets_transfers.after AS TEXT)) LIKE ?', [$kw]);
             })
+
             ->addColumn('file', function ($r) {
                 if (!$r->file_path) return '';
 
                 $url  = url('storage/' . ltrim($r->file_path, '/'));
                 $name = $r->file_name ?: 'Attachment';
 
-                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' .
+                    e($name) . '</a>';
             })
-            ->addColumn('actions', function ($r) {
+
+            ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
                 $pending = $r->kode_status === 'APR';
-                $id = e($r->uuid);
+                $id      = e($r->uuid);
+
                 $btns = '<div class="btn-group btn-group-sm">';
+
                 if ($pending) {
-                    $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
-                    $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
-                    $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
+                    if ($canEdit) {
+                        $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
+                    }
+                    if ($canApr) {
+                        $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
+                        $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
+                    }
                 }
-                $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                }
+
                 $btns .= '</div>';
                 return $btns;
             })
@@ -100,6 +137,7 @@ class TransferController extends Controller
     }
     public function store(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'C'), 403);
         $data = $request->validate([
             'asset_uuid'   => ['required', 'uuid', 'exists:assets,uuid'],
             'type'         => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
@@ -108,7 +146,7 @@ class TransferController extends Controller
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
-        
+
         $currentUid = auth()->user()?->username;
         abort_if(!$currentUid, 401, 'No session UID.');
 
@@ -200,8 +238,9 @@ class TransferController extends Controller
         ]);
     }
 
-    public function show(string $uuid)
+    public function show(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
         $transfer = Transfer::where('uuid', $uuid)->firstOrFail();
 
         $asset = Assets::select('uuid', 'asset_code', 'description')->find($transfer->asset_uuid);
@@ -223,6 +262,7 @@ class TransferController extends Controller
     }
     public function update(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'U'), 403);
         $data = $request->validate([
             'asset_uuid'  => ['required', 'uuid', 'exists:assets,uuid'],
             'type'        => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
@@ -270,8 +310,9 @@ class TransferController extends Controller
     }
 
     /** Soft delete */
-    public function destroy(string $uuid)
+    public function destroy(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'D'), 403);
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         $tf->delete();
 
@@ -280,6 +321,7 @@ class TransferController extends Controller
 
     public function approve(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
         $uid = auth()->user()?->username;
         abort_if(!$uid, 401, 'No session UID.');
         DB::transaction(function () use ($uuid, $uid) {
@@ -319,6 +361,7 @@ class TransferController extends Controller
 
     public function reject(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
         $uid = auth()->user()?->username;
         abort_if(!$uid, 401, 'No session UID.');
 
@@ -342,6 +385,15 @@ class TransferController extends Controller
     }
     public function datatable(Request $request, string $assetUuid)
     {
+        if (!$this->canReadMovement()) {
+            return DataTables::of(collect())->toJson();
+        }
+
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
+        $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
+        $canApr    = $user && $user->hasAction('MOVEMENT', 'APR');
+
         $q = Transfer::query()
             ->where('asset_uuid', $assetUuid)
             ->with('status')
@@ -368,7 +420,30 @@ class TransferController extends Controller
 
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
             })
-            ->rawColumns(['file'])
+            ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
+                $pending = $r->kode_status === 'APR';
+                $id      = e($r->uuid);
+
+                $btns = '<div class="btn-group btn-group-sm">';
+
+                if ($pending) {
+                    if ($canEdit) {
+                        $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
+                    }
+                    if ($canApr) {
+                        $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
+                        $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
+                    }
+                }
+
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                }
+
+                $btns .= '</div>';
+                return $btns;
+            })
+            ->rawColumns(['file', 'actions'])
             ->toJson();
     }
 

@@ -23,12 +23,6 @@
                 </ul>
             </div>
 
-            <div class="d-flex align-items-center gap-2">
-                <a href="{{ route('settings.roles.index') }}" class="btn btn-light">
-                    <i class="ki-duotone ki-arrow-left fs-2"></i>
-                    Back
-                </a>
-            </div>
         </div>
     </div>
 

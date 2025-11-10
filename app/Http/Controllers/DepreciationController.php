@@ -974,11 +974,15 @@ class DepreciationController extends Controller
 
     public function transferRequestsIndex()
     {
+        abort_unless($this->canReadTransferRequests(), 403);
         return view('depreciation.transfer_requests');
     }
 
     public function dtTransferRequests(Request $r)
     {
+        if (!$this->canReadTransferRequests()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = AssetDeprTransferRequest::query()
             ->with(['fromAsset:uuid,asset_code,description', 'toAsset:uuid,asset_code,description']);
 
@@ -1013,6 +1017,7 @@ class DepreciationController extends Controller
 
     public function storeTransferRequest(Request $r)
     {
+        abort_unless($this->canCreateTransferRequests(), 403);
         $data = $r->validate([
             'transfer_type'   => ['nullable', 'in:tf-val,' . self::TRANSFER_TYPE_CARRY_OVER . ',' . self::TRANSFER_TYPE_ACQ_FIX],
             'from_asset_uuid' => ['required', 'uuid'],
@@ -1081,6 +1086,7 @@ class DepreciationController extends Controller
 
     public function approveTransferRequest(Request $r, string $uuid)
     {
+        abort_unless($this->canApproveTransferRequests(), 403);
         $req = AssetDeprTransferRequest::where('uuid', $uuid)
             ->where('kode_status', self::STATUS_APR)
             ->firstOrFail();
@@ -1119,6 +1125,7 @@ class DepreciationController extends Controller
 
     public function rejectTransferRequest(Request $r, string $uuid)
     {
+        abort_unless($this->canApproveTransferRequests(), 403);
         $data = $r->validate([
             'status_note' => ['nullable', 'string', 'max:500'],
         ]);
@@ -1146,6 +1153,7 @@ class DepreciationController extends Controller
 
     public function destroyTransferRequest(string $uuid)
     {
+        abort_unless($this->canDeleteTransferRequests(), 403);
         $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
 
         if ($req->kode_status !== self::STATUS_APR) {
@@ -1164,6 +1172,7 @@ class DepreciationController extends Controller
     }
     public function downloadTransferRequestAttachment(string $uuid)
     {
+        abort_unless($this->canReadTransferRequests(), 403);
         $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
 
         if (!$req->attachment_path || !Storage::disk('public')->exists($req->attachment_path)) {
@@ -1177,6 +1186,7 @@ class DepreciationController extends Controller
     }
     public function updateTransferRequest(Request $r, string $uuid)
     {
+        abort_unless($this->canUpdateTransferRequests(), 403);
         $req = AssetDeprTransferRequest::where('uuid', $uuid)->firstOrFail();
 
         if ($req->kode_status !== self::STATUS_APR) {
@@ -1228,5 +1238,34 @@ class DepreciationController extends Controller
             'ok'      => true,
             'message' => 'Transfer request updated.',
         ]);
+    }
+    protected function canReadTransferRequests(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('TRANSFER', 'R');
+    }
+
+    protected function canCreateTransferRequests(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('TRANSFER', 'C');
+    }
+
+    protected function canUpdateTransferRequests(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('TRANSFER', 'U');
+    }
+
+    protected function canApproveTransferRequests(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('TRANSFER', 'APR');
+    }
+
+    protected function canDeleteTransferRequests(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('TRANSFER', 'D');
     }
 }

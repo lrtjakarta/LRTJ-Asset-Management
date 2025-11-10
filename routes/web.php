@@ -111,75 +111,130 @@ Route::middleware('ldap.session')->group(function () {
 
     // ASSETS ROUTE    
     Route::prefix('assets')->name('assets.')->group(function () {
-        // FRONTEND
-        Route::get('/', [AssetsController::class, 'index'])->name('index');
-        Route::get('/detail/{uuid}', [AssetsController::class, 'detail'])->name('detail');
-        Route::get('/edit/{uuid}', [AssetsController::class, 'edit'])->name('edit');
-        //DATATABLE
-        Route::get('/datatable', [AssetsController::class, 'datatable'])->name('datatable');
-        // AJAX SELECTED OPTION
-        Route::get('/select-asset-parent', [AssetsController::class, 'select_asset_parent'])->name('parent.options');
-        Route::get('/asset-parent-meta/{uuid}/', [AssetsController::class, 'asset_parent_meta'])->name('parent.meta');
-        Route::get('/select-assets', [AssetsController::class, 'select_assets'])->name('options');
-        //FUNCTION
-        Route::get('/create',     [AssetsController::class, 'create'])->name('create');
-        Route::put('/update/{uuid}',     [AssetsController::class, 'update'])->name('update');
-        Route::post('/save', [AssetsController::class, 'store'])->name('store');
-        Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
-        Route::get('/brief/{uuid}', [AssetsController::class, 'brief'])->name('brief');
-        Route::get('/bulk-upload', [AssetsController::class, 'bulk_upload'])->name('upload.bulk');
-        Route::get('/download-template', [AssetsController::class, 'download_template'])->name('download.template');
-        Route::post('/upload-excel', [AssetsController::class, 'upload_excel'])->name('upload.excel');
+        Route::middleware('role.action:ASSETS,R')->group(function () {
+            // FRONTEND
+            Route::get('/',                [AssetsController::class, 'index'])->name('index');
+            Route::get('/detail/{uuid}',   [AssetsController::class, 'detail'])->name('detail');
+            Route::get('/brief/{uuid}',    [AssetsController::class, 'brief'])->name('brief');
+
+            // DATATABLE
+            Route::get('/datatable',       [AssetsController::class, 'datatable'])->name('datatable');
+
+            // AJAX SELECT OPTIONS
+            Route::get('/select-asset-parent',        [AssetsController::class, 'select_asset_parent'])->name('parent.options');
+            Route::get('/asset-parent-meta/{uuid}',   [AssetsController::class, 'asset_parent_meta'])->name('parent.meta');
+            Route::get('/select-assets',              [AssetsController::class, 'select_assets'])->name('options');
+
+            Route::get('/download-template', [AssetsController::class, 'download_template'])->name('download.template');
+        });
+
+        Route::middleware('role.action:ASSETS,C')->group(function () {
+            Route::get('/create',          [AssetsController::class, 'create'])->name('create');
+            Route::post('/save',           [AssetsController::class, 'store'])->name('store');
+
+            Route::get('/bulk-upload',     [AssetsController::class, 'bulk_upload'])->name('upload.bulk');
+            Route::post('/upload-excel',   [AssetsController::class, 'upload_excel'])->name('upload.excel');
+        });
+
+        Route::middleware('role.action:ASSETS,U')->group(function () {
+            Route::get('/edit/{uuid}',     [AssetsController::class, 'edit'])->name('edit');
+            Route::put('/update/{uuid}',   [AssetsController::class, 'update'])->name('update');
+        });
+
+        Route::middleware('role.action:ASSETS,D')->group(function () {
+            Route::delete('/delete/{uuid}', [AssetsController::class, 'destroy'])->name('destroy');
+        });
     });
 
-
-    // TRANSFER ROUTE
+    // MOVEMENT ROUTE
     Route::prefix('movement')->name('transfer.')->group(function () {
-        // DATATABLE
         Route::get('/datatable/{asset}', [TransferController::class, 'datatable'])->name('data');
-        Route::get('/datatable', [TransferController::class, 'datatable_all'])->name('data.all');
-        // FUNCTION
-        Route::post('/create', [TransferController::class, 'store'])->name('store');
-        Route::put('/update/{uuid}', [TransferController::class, 'update'])->name('update');
-        Route::delete('/delete/{uuid}', [TransferController::class, 'destroy'])->name('destroy');
-        Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
-        Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
-        // JSON FOR EDIT
-        Route::get('/show/{uuid}', [TransferController::class, 'show'])->name('show');
+        Route::get('/datatable',        [TransferController::class, 'datatable_all'])->name('data.all');
+
+        Route::middleware('role.action:MOVEMENT,R')->group(function () {
+            Route::get('/show/{uuid}', [TransferController::class, 'show'])->name('show');
+        });
+
+        Route::middleware('role.action:MOVEMENT,C')->group(function () {
+            Route::post('/create', [TransferController::class, 'store'])->name('store');
+        });
+
+        Route::middleware('role.action:MOVEMENT,U')->group(function () {
+            Route::put('/update/{uuid}', [TransferController::class, 'update'])->name('update');
+        });
+
+        Route::middleware('role.action:MOVEMENT,D')->group(function () {
+            Route::delete('/delete/{uuid}', [TransferController::class, 'destroy'])->name('destroy');
+        });
+
+        Route::middleware('role.action:MOVEMENT,APR')->group(function () {
+            Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
+            Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
+        });
     });
 
     // DISPOSAL ROUTE
     Route::prefix('disposal')->name('disposal.')->group(function () {
-        // DATATABLE
-        Route::get('/datatable/{asset}', [DisposalController::class, 'datatable'])->name('data');
-        Route::get('/datatable', [DisposalController::class, 'datatable_all'])->name('data.all');
-        // FUNCTION
-        Route::post('/create', [DisposalController::class, 'store'])->name('store');
-        Route::put('/update/{uuid}', [DisposalController::class, 'update'])->name('update');
-        Route::delete('/delete/{uuid}', [DisposalController::class, 'destroy'])->name('destroy');
-        Route::post('/approve/{uuid}', [DisposalController::class, 'approve'])->name('approve');
-        Route::post('/reject/{uuid}', [DisposalController::class, 'reject'])->name('reject');
-        // JSON FOR EDIT
-        Route::get('/show/{uuid}', [DisposalController::class, 'show'])->name('show');
+        Route::middleware('role.action:DISPOSAL,R')->group(function () {
+            Route::get('/datatable/{asset}', [DisposalController::class, 'datatable'])->name('data');
+            Route::get('/datatable',        [DisposalController::class, 'datatable_all'])->name('data.all');
+            Route::get('/show/{uuid}',      [DisposalController::class, 'show'])->name('show');
+        });
+
+        Route::post('/create', [DisposalController::class, 'store'])
+            ->name('store')
+            ->middleware('role.action:DISPOSAL,C');
+
+        Route::put('/update/{uuid}', [DisposalController::class, 'update'])
+            ->name('update')
+            ->middleware('role.action:DISPOSAL,U');
+
+        Route::delete('/delete/{uuid}', [DisposalController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('role.action:DISPOSAL,D');
+
+        Route::post('/approve/{uuid}', [DisposalController::class, 'approve'])
+            ->name('approve')
+            ->middleware('role.action:DISPOSAL,APR');
+
+        Route::post('/reject/{uuid}', [DisposalController::class, 'reject'])
+            ->name('reject')
+            ->middleware('role.action:DISPOSAL,APR');
     });
 
     // RETURN ROUTE
     Route::prefix('return')->name('return.')->group(function () {
-        Route::get('/options', [ReturnController::class, 'options'])->name('options');
-        Route::post('/', [ReturnController::class, 'store'])->name('store');
+        Route::middleware('role.action:RETURN,R')->group(function () {
+            Route::get('/{asset}/data', [ReturnController::class, 'datatable_by_asset'])->name('data.asset');
+            Route::get('/data',        [ReturnController::class, 'datatable_all'])->name('data');
+        });
 
-        Route::get('/{asset}/data', [ReturnController::class, 'datatable_by_asset'])->name('data.asset');
-        Route::get('/data', [ReturnController::class, 'datatable_all'])->name('data');
-        Route::delete('/{uuid}', [ReturnController::class, 'destroy'])->name('destroy');
+        Route::get('/options', [ReturnController::class, 'options'])
+            ->name('options')
+            ->middleware('role.action:RETURN,C');
+
+        Route::post('/', [ReturnController::class, 'store'])
+            ->name('store')
+            ->middleware('role.action:RETURN,C');
+
+        Route::delete('/{uuid}', [ReturnController::class, 'destroy'])
+            ->name('destroy')
+            ->middleware('role.action:RETURN,D');
     });
 
     // ACQUISITION ROUTE
     Route::prefix('acquisition')->name('acquisition.')->group(function () {
-        Route::get('{asset}/latest', [AcquisitionController::class, 'latest'])->name('latest');
         Route::get('{asset}/data',   [AcquisitionController::class, 'dataByAsset'])->name('data');
-        Route::post('{asset}',       [AcquisitionController::class, 'store'])->name('store');
-        Route::get('/data',          [AcquisitionController::class, 'dtGlobal'])->name('dt');
-        Route::post('/global/save', [AcquisitionController::class, 'storeGlobal'])->name('global.save');
+
+        Route::middleware('role.action:ACQUISITION,R')->group(function () {
+            Route::get('{asset}/latest', [AcquisitionController::class, 'latest'])->name('latest');
+            Route::get('/data',          [AcquisitionController::class, 'dtGlobal'])->name('dt');
+        });
+
+        Route::middleware('role.action:ACQUISITION,C,U')->group(function () {
+            Route::post('{asset}',       [AcquisitionController::class, 'store'])->name('store');
+            Route::post('/global/save',  [AcquisitionController::class, 'storeGlobal'])->name('global.save');
+        });
     });
 
     // STOCK OPNAME ROUTE
@@ -211,17 +266,30 @@ Route::middleware('ldap.session')->group(function () {
         Route::post('/transfer/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
         Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
         Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
-
+        
         // TRANSFER REQUESTS
         Route::prefix('transfer-requests')->name('transfer-requests.')->group(function () {
-            Route::get('/',        [DepreciationController::class, 'transferRequestsIndex'])->name('index');
-            Route::get('/dt',      [DepreciationController::class, 'dtTransferRequests'])->name('dt');
-            Route::post('/',       [DepreciationController::class, 'storeTransferRequest'])->name('store');
-            Route::put('/{uuid}',  [DepreciationController::class, 'updateTransferRequest'])->name('update');
-            Route::post('/{uuid}/approve', [DepreciationController::class, 'approveTransferRequest'])->name('approve');
-            Route::post('/{uuid}/reject',  [DepreciationController::class, 'rejectTransferRequest'])->name('reject');
-            Route::delete('/{uuid}',       [DepreciationController::class, 'destroyTransferRequest'])->name('destroy');
-            Route::get('/{uuid}/attachment', [DepreciationController::class, 'downloadTransferRequestAttachment'])->name('attachment');
+            Route::middleware('role.action:TRANSFER,R')->group(function () {
+                Route::get('/',   [DepreciationController::class, 'transferRequestsIndex'])->name('index');
+                Route::get('/dt', [DepreciationController::class, 'dtTransferRequests'])->name('dt');
+                Route::get('/{uuid}/attachment', [DepreciationController::class, 'downloadTransferRequestAttachment'])
+                    ->name('attachment');
+            });
+            Route::middleware('role.action:TRANSFER,C')->group(function () {
+                Route::post('/', [DepreciationController::class, 'storeTransferRequest'])->name('store');
+            });
+            Route::middleware('role.action:TRANSFER,U')->group(function () {
+                Route::put('/{uuid}', [DepreciationController::class, 'updateTransferRequest'])->name('update');
+            });
+            Route::middleware('role.action:TRANSFER,APR')->group(function () {
+                Route::post('/{uuid}/approve', [DepreciationController::class, 'approveTransferRequest'])
+                    ->name('approve');
+                Route::post('/{uuid}/reject', [DepreciationController::class, 'rejectTransferRequest'])
+                    ->name('reject');
+            });
+            Route::middleware('role.action:TRANSFER,D')->group(function () {
+                Route::delete('/{uuid}', [DepreciationController::class, 'destroyTransferRequest'])->name('destroy');
+            });
         });
 
         // AJAX SELECT 2
@@ -230,11 +298,21 @@ Route::middleware('ldap.session')->group(function () {
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
     Route::prefix('transaction')->name('transaction.')->group(function () {
-        Route::get('/movement', [TransferController::class, 'index'])->name('transfer.index');
-        Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
-        Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
-        Route::get('/acquisition',        [AcquisitionController::class, 'index'])->name('acquisition.index');
-        Route::get('/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('transfer-requests.index');
+        Route::middleware('role.action:MOVEMENT,R')->group(function () {
+            Route::get('/movement', [TransferController::class, 'index'])->name('transfer.index');
+        });
+        Route::middleware('role.action:DISPOSAL,R')->group(function () {
+            Route::get('/disposal', [DisposalController::class, 'index'])->name('disposal.index');
+        });
+        Route::middleware('role.action:RETURN,R')->group(function () {
+            Route::get('/return', [ReturnController::class, 'index'])->name('return.index');
+        });
+        Route::middleware('role.action:ACQUISITION,R')->group(function () {
+            Route::get('/acquisition',        [AcquisitionController::class, 'index'])->name('acquisition.index');
+        });
+        Route::middleware('role.action:TRANSFER,R')->group(function () {
+            Route::get('/transfer-requests', [DepreciationController::class, 'transferRequestsIndex'])->name('transfer-requests.index');
+        });
     });
 
     // EXPORT ROUTE
@@ -257,7 +335,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::delete('/{type}/{id}/force', [TrashController::class, 'force'])->name('force');
     });
 
-    Route::prefix('settings')->name('settings.')->group(function () {
+    Route::prefix('user-management')->name('settings.')->group(function () {
         Route::get('/roles', [MasterRoleController::class, 'index'])
             ->name('roles.index')
             ->middleware('role.action:USER_MGMT,R');

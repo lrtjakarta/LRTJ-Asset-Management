@@ -73,71 +73,6 @@
                             </div>
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-asset-type' ? 'active' : '' }}" 
-                                    href="{{ route('master.asset_type') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Asset Type</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div> --}}
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-category' ? 'active' : '' }}" 
-                                    href="{{ route('master.category') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Category</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div> --}}
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-category-2' ? 'active' : '' }}"
-                                    href="{{ route('master.category_2') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Category 2</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div> --}}
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-sub-category' ? 'active' : '' }}"
-                                    href="{{ route('master.sub_category') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Sub Category</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div> --}}
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            {{-- <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'master-group-category' ? 'active' : '' }}"
-                                    href="{{ route('master.group_category') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Group Category</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div> --}}
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-location' ? 'active' : '' }}"
@@ -223,7 +158,7 @@
                     @canAction('USER_MGMT','R')
                     <!--begin:Menu item-->
                     <div data-kt-menu-trigger="click"
-                        class="menu-item  {{ request()->segment(1) == 'settings' ? 'show here' : '' }} menu-accordion">
+                        class="menu-item  {{ request()->segment(1) == 'user-management' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
@@ -232,7 +167,7 @@
                                     <span class="path2"></span>
                                 </i>
                             </span>
-                            <span class="menu-title">User Settings</span>
+                            <span class="menu-title">User Management</span>
                             <span class="menu-arrow"></span>
                         </span>
                         <!--end:Menu link-->
@@ -287,7 +222,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
-
+                    @canAction('ASSETS','R')
                     <!--begin:Menu item-->
                     <div data-kt-menu-trigger="click"
                         class="menu-item {{ request()->segment(1) == 'assets' ? 'show here' : '' }} menu-accordion">
@@ -318,7 +253,7 @@
                                 <!--end:Menu link-->
                             </div>
                             <!--end:Menu item-->
-
+                            @canAction('ASSETS','C')
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
@@ -332,10 +267,12 @@
                                 <!--end:Menu link-->
                             </div>
                             <!--end:Menu item-->
+                            @endcanAction
                         </div>
                         <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
 
                     <!--begin:Menu item-->
                     <div class="menu-item">
@@ -354,110 +291,91 @@
                     </div>
                     <!--end:Menu item-->
 
-                    <!--begin:Menu item-->
-                    {{-- <div class="menu-item">
-                        <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->segment(1) == 'assets' ? 'active' : '' }}"
-                            href="{{ route('assets.index') }}">
-                            
-                            <span class="menu-icon">
-                                <i class="ki-duotone ki-abstract-26 fs-2">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
-                            </span>
-                            <span class="menu-title">Assets</span>
-                        </a>
-                        <!--end:Menu link-->
-                    </div> --}}
-                    <!--end:Menu item-->
+                    @php
+                        $u = auth()->user();
 
-                    <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click"
-                        class="menu-item {{ request()->segment(1) == 'transaction' ? 'show here' : '' }} menu-accordion">
-                        <!--begin:Menu link-->
-                        <span class="menu-link">
-                            <span class="menu-icon">
-                                <i class="ki-duotone ki-arrow-right-left fs-2">
-                                    <span class="path1"></span>
-                                    <span class="path2"></span>
-                                </i>
+                        $canAcq = $u && $u->hasAction('ACQUISITION', 'R');
+                        $canMov = $u && $u->hasAction('MOVEMENT', 'R');
+                        $canDisp = $u && $u->hasAction('DISPOSAL', 'R');
+                        $canRet = $u && $u->hasAction('RETURN', 'R');
+                        $canTfReq = $u && $u->hasAction('TRANSFER', 'R');
+
+                        $showTransaction = $canAcq || $canMov || $canDisp || $canRet || $canTfReq;
+                    @endphp
+
+                    @if ($showTransaction)
+                        <!--begin:Menu item-->
+                        <div data-kt-menu-trigger="click"
+                            class="menu-item {{ request()->segment(1) == 'transaction' ? 'show here' : '' }} menu-accordion">
+                            <!--begin:Menu link-->
+                            <span class="menu-link">
+                                <span class="menu-icon">
+                                    <i class="ki-duotone ki-arrow-right-left fs-2">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                    </i>
+                                </span>
+                                <span class="menu-title">Transaction</span>
+                                <span class="menu-arrow"></span>
                             </span>
-                            <span class="menu-title">Transaction</span>
-                            <span class="menu-arrow"></span>
-                        </span>
-                        <!--end:Menu link-->
-                        <!--begin:Menu sub-->
-                        <div class="menu-sub menu-sub-accordion">
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'acquisition' ? 'active' : '' }}"
-                                    href="{{ route('transaction.acquisition.index') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Acquisition</span>
-                                </a>
-                                <!--end:Menu link-->
+                            <!--end:Menu link-->
+
+                            <div class="menu-sub menu-sub-accordion">
+                                @canAction('ACQUISITION','R')
+                                <div class="menu-item">
+                                    <a class="menu-link {{ request()->segment(2) == 'acquisition' ? 'active' : '' }}"
+                                        href="{{ route('transaction.acquisition.index') }}">
+                                        <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                        <span class="menu-title">Acquisition</span>
+                                    </a>
+                                </div>
+                                @endcanAction
+
+                                @canAction('TRANSFER','R')
+                                <div class="menu-item">
+                                    <a class="menu-link {{ request()->segment(2) == 'transfer-requests' ? 'active' : '' }}"
+                                        href="{{ route('transaction.transfer-requests.index') }}">
+                                        <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                        <span class="menu-title">Transfer Request</span>
+                                    </a>
+                                </div>
+                                @endcanAction
+
+                                @canAction('MOVEMENT','R')
+                                <div class="menu-item">
+                                    <a class="menu-link {{ request()->segment(2) == 'movement' ? 'active' : '' }}"
+                                        href="{{ route('transaction.transfer.index') }}">
+                                        <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                        <span class="menu-title">Movement</span>
+                                    </a>
+                                </div>
+                                @endcanAction
+
+                                @canAction('DISPOSAL','R')
+                                <div class="menu-item">
+                                    <a class="menu-link {{ request()->segment(2) == 'disposal' ? 'active' : '' }}"
+                                        href="{{ route('transaction.disposal.index') }}">
+                                        <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                        <span class="menu-title">Disposal</span>
+                                    </a>
+                                </div>
+                                @endcanAction
+
+                                @canAction('RETURN','R')
+                                <div class="menu-item">
+                                    <a class="menu-link {{ request()->segment(2) == 'return' ? 'active' : '' }}"
+                                        href="{{ route('transaction.return.index') }}">
+                                        <span class="menu-bullet"><span class="bullet bullet-dot"></span></span>
+                                        <span class="menu-title">Return</span>
+                                    </a>
+                                </div>
+                                @endcanAction
+
                             </div>
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'transfer-requests' ? 'active' : '' }}"
-                                    href="{{ route('transaction.transfer-requests.index') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Transfer Request</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'movement' ? 'active' : '' }}"
-                                    href="{{ route('transaction.transfer.index') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Movement</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'disposal' ? 'active' : '' }}"
-                                    href="{{ route('transaction.disposal.index') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Disposal</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link {{ request()->segment(2) == 'return' ? 'active' : '' }}"
-                                    href="{{ route('transaction.return.index') }}">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Return</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
                         </div>
-                        <!--end:Menu sub-->
-                    </div>
-                    <!--end:Menu item-->
+                        <!--end:Menu item-->
+                    @endif
+
 
                     <!--begin:Menu item-->
                     <div class="menu-item">
