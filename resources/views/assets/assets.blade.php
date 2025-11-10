@@ -130,7 +130,20 @@
         const table = $('#assetsTable').DataTable({
             serverSide: true,
             processing: true,
-            ajax: '{{ route('assets.datatable') }}',
+            ajax: {
+                url: '{{ route('assets.datatable') }}',
+                data: function(d) {
+                    d.asset_class = $('#flt-asset-class').val() || '';
+                    d.transaction = $('#flt-transaction').val() || '';
+                    d.location = $('#flt-location').val() || '';
+                    d.status = $('#flt-status').val() || '';
+                    d.owner = $('#flt-owner').val() || '';
+                    d.user = $('#flt-user').val() || '';
+                    d.maintenance = $('#flt-maintenance').val() || '';
+                    d.sumber = $('#flt-sumber').val() || '';
+                    d.asset_q = $('#flt-asset-q').val() || '';
+                }
+            },
             scrollX: true,
             "dom": "<'row mb-2'" +
                 "<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
@@ -302,6 +315,18 @@
             ]
         });
 
+        $('#btn-apply-filter').on('click', function(e) {
+            e.preventDefault();
+            table.ajax.reload();
+        });
+
+        $('#btn-reset-filter').on('click', function(e) {
+            e.preventDefault();
+            $('.asset-filter').val(null).trigger('change');
+            $('#flt-asset-q').val('');
+            table.ajax.reload();
+        });
+
         async function editAsset(uuid) {
             const res = await fetch(`/assets/${uuid}`, {
                 headers: {
@@ -322,6 +347,89 @@
             });
             if (res.ok) table.ajax.reload(null, false);
         }
+
+        function initMasterSelect2($el, url, placeholder) {
+            $el.select2({
+                width: '100%',
+                allowClear: true,
+                placeholder: placeholder || '— All —',
+                ajax: {
+                    url: url,
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || ''
+                        };
+                    },
+                    processResults: function(data) {
+                        return data;
+                    }
+                }
+            });
+        }
+        initMasterSelect2(
+            $('#flt-asset-class'),
+            "{{ route('master.asset_class.options') }}",
+            'All Asset Class'
+        );
+
+        initMasterSelect2(
+            $('#flt-transaction'),
+            "{{ route('master.transaction.options') }}",
+            'All Company'
+        );
+
+        initMasterSelect2(
+            $('#flt-location'),
+            "{{ route('master.location.options') }}",
+            'All Location'
+        );
+
+        initMasterSelect2(
+            $('#flt-status'),
+            "{{ route('master.status.options') }}",
+            'All Status'
+        );
+
+        initMasterSelect2(
+            $('#flt-sumber'),
+            "{{ route('master.sumber.options') }}",
+            'All Sumber'
+        );
+
+        initMasterSelect2(
+            $('#flt-owner'),
+            "{{ route('master.user_code.options') }}",
+            'All Owner'
+        );
+        initMasterSelect2(
+            $('#flt-user'),
+            "{{ route('master.user_code.options') }}",
+            'All User'
+        );
+        initMasterSelect2(
+            $('#flt-maintenance'),
+            "{{ route('master.user_code.options') }}",
+            'All Maintenance'
+        );
+        $('#btn-export-assets').on('click', function(e) {
+            e.preventDefault();
+
+            const params = $.param({
+                asset_class: $('#flt-asset-class').val() || '',
+                transaction: $('#flt-transaction').val() || '',
+                location: $('#flt-location').val() || '',
+                status: $('#flt-status').val() || '',
+                owner: $('#flt-owner').val() || '',
+                user: $('#flt-user').val() || '',
+                maintenance: $('#flt-maintenance').val() || '',
+                sumber: $('#flt-sumber').val() || '',
+                asset_q: $('#flt-asset-q').val() || ''
+            });
+
+            window.location = "{{ route('export.assets') }}" + '?' + params;
+        });
     </script>
 @endpush
 
@@ -361,6 +469,65 @@
             <div class="row g-5 gx-xl-10 mb-5 mb-xl-10">
                 <div class="col-md-12">
                     <div class="table-responsive">
+                        <div class="card mb-5">
+                            <div class="card-body">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Asset Class</label>
+                                        <select id="flt-asset-class" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Transaction / Company</label>
+                                        <select id="flt-transaction" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Location</label>
+                                        <select id="flt-location" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Status</label>
+                                        <select id="flt-status" class="form-select asset-filter"></select>
+                                    </div>
+                                </div>
+
+                                <div class="row g-3 align-items-end mt-1">
+                                    <div class="col-md-3">
+                                        <label class="form-label">Owner</label>
+                                        <select id="flt-owner" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">User</label>
+                                        <select id="flt-user" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Maintenance</label>
+                                        <select id="flt-maintenance" class="form-select asset-filter"></select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Source (Sumber)</label>
+                                        <select id="flt-sumber" class="form-select asset-filter"></select>
+                                    </div>
+                                </div>
+                                <div class="row g-3 align-items-end mt-1">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Asset (code / description)</label>
+                                        <input type="text" id="flt-asset-q" class="form-control"
+                                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <button id="btn-apply-filter" class="btn btn-sm btn-danger me-2">
+                                    Apply Filter
+                                </button>
+                                <button id="btn-reset-filter" class="btn btn-sm btn-light-danger me-2">
+                                    Reset
+                                </button>
+                                <button id="btn-export-assets" class="btn btn-sm btn-light-danger me-2">
+                                    Export Excel
+                                </button>
+                            </div>
+                        </div>
                         <div class="card mb-5 mb-xl-8">
                             <!--begin::Header-->
                             <div class="card-header border-0 pt-5">
@@ -368,10 +535,9 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Assets Data</span>
                                 </h3>
                                 <div class="card-toolbar">
-                                    <a href="{{ route('assets.create') }}" class="btn btn-sm btn-danger">
+                                    <a href="{{ route('assets.create') }}" class="btn btn-sm btn-danger me-2">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New
                                     </a>
-                                    &nbsp;
                                     <button class="btn btn-sm btn-danger" data-card="fullscreen" title="Fullscreen">
                                         <i class="ki-duotone ki-exit-right-corner fs-2">
                                             <span class="path1"></span>

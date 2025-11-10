@@ -255,6 +255,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-status', [ExportController::class, 'master_status_export'])->name('master_status');
         Route::get('/master-user-code', [ExportController::class, 'master_user_code_export'])->name('master_user_code');
         Route::get('/master-sumber', [ExportController::class, 'master_sumber_export'])->name('master_sumber');
+        Route::get('/assets', [ExportController::class, 'assets_export'])->name('assets');
     });
 
     // TRASH ROUTE

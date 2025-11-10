@@ -148,6 +148,44 @@ class AssetsController extends Controller
                     to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at
                 ")
             );
+        if ($assetClass = $request->input('asset_class')) {
+            $q->where('a.kode_asset_class', $assetClass);
+        }
+
+        // Transaction / Company
+        if ($transaction = $request->input('transaction')) {
+            $q->where('mac.kode_transaction', $transaction);
+        }
+        // Location
+        if ($location = $request->input('location')) {
+            $q->where('a.kode_location', $location);
+        }
+        // Status
+        if ($status = $request->input('status')) {
+            $q->where('a.kode_status', $status);
+        }
+        // Owner
+        if ($owner = $request->input('owner')) {
+            $q->where('g.asset_owner', $owner);
+        }
+        // User
+        if ($user = $request->input('user')) {
+            $q->where('g.asset_user', $user);
+        }
+        // Maintenance
+        if ($maintenance = $request->input('maintenance')) {
+            $q->where('g.asset_maintenance', $maintenance);
+        }
+        // Sumber
+        if ($sumber = $request->input('sumber')) {
+            $q->where('a.kode_sumber', $sumber);
+        }
+        if ($search = trim((string) $request->input('asset_q', ''))) {
+            $q->where(function ($w) use ($search) {
+                $w->where('a.asset_code', 'ilike', "%{$search}%")
+                    ->orWhere('a.description', 'ilike', "%{$search}%");
+            });
+        }
 
         return DataTables::of($q)->make(true);
     }
