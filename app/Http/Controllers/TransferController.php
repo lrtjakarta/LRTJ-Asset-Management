@@ -108,10 +108,9 @@ class TransferController extends Controller
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
-        $currentUid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        if ($currentUid === '') {
-            abort(401, 'No session UID.');
-        }
+        
+        $currentUid = auth()->user()?->username;
+        abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
         $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count();
@@ -281,9 +280,8 @@ class TransferController extends Controller
 
     public function approve(Request $request, string $uuid)
     {
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
-
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
         DB::transaction(function () use ($uuid, $uid) {
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
             abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
@@ -321,8 +319,8 @@ class TransferController extends Controller
 
     public function reject(Request $request, string $uuid)
     {
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be rejected.');

@@ -240,9 +240,11 @@
                                     <button type="button" class="btn btn-sm btn-danger me-2" id="btn-export-excel">
                                         Export Excel
                                     </button>
+                                    @canAction('MASTER_DATA','C')
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
                                         class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
+                                    @endcanAction
                                 </div>
                             </div>
                             <!--end::Header-->

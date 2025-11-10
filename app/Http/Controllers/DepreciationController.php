@@ -1024,8 +1024,8 @@ class DepreciationController extends Controller
         ]);
 
         $type = $data['transfer_type'] ?? 'tf-val';
-        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         if ($type === 'tf-val') {
             $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
@@ -1085,8 +1085,8 @@ class DepreciationController extends Controller
             ->where('kode_status', self::STATUS_APR)
             ->firstOrFail();
 
-        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($req, $uid) {
             $this->applyTransfer([
@@ -1123,8 +1123,8 @@ class DepreciationController extends Controller
             'status_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $uid = (string) data_get($r->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         $req = AssetDeprTransferRequest::where('uuid', $uuid)
             ->where('kode_status', self::STATUS_APR)

@@ -222,9 +222,11 @@
                                     <span class="card-label fw-bold fs-3 mb-1">Master Asset Type Data</span>
                                 </h3>
                                 <div class="card-toolbar">
+                                    @canAction('MASTER_DATA','C')
                                     <button data-bs-toggle="modal" data-bs-target="#kt_modal_add"
-                                        class="btn btn-sm btn-danger">
+                                        class="btn btn-sm btn-danger" id="btn-add">
                                         <i class="ki-duotone ki-plus fs-2"></i>Add New</button>
+                                    @endcanAction
                                 </div>
                             </div>
                             <!--end::Header-->

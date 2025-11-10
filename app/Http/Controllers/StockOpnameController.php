@@ -251,11 +251,8 @@ class StockOpnameController extends Controller
             'note'         => ['nullable', 'string', 'max:1000'],
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
-
-        $currentUid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        if ($currentUid === '') {
-            abort(401, 'No session UID.');
-        }
+        $currentUid = auth()->user()?->username;
+        abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
         $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count();
@@ -436,9 +433,8 @@ class StockOpnameController extends Controller
             'target_status' => ['nullable', 'string'],
             'file'          => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
-
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         $asset = Assets::select('uuid', 'asset_code', 'kode_status')->findOrFail($data['asset_uuid']);
 
@@ -448,7 +444,7 @@ class StockOpnameController extends Controller
             $q->where('type', 'Asset')->orWhereNull('type');
         })->exists();
         abort_unless($ok, 422, 'Target disposal status not valid.');
-        
+
         $now    = Carbon::now();
         $prefix = 'DSP' . $now->format('ym');
 

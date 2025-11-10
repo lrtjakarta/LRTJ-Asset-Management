@@ -175,8 +175,8 @@ class AcquisitionController extends Controller
             'capitalization_date' => $this->parseDate($data['capitalization_date'] ?? null),
         ];
 
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         DB::beginTransaction();
         try {

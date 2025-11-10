@@ -125,9 +125,8 @@ class ReturnController extends Controller
         if (!in_array($sourceType, ['transfer', 'disposal'], true) || !Str::isUuid($sourceId)) {
             abort(422, 'Invalid source selection.');
         }
-
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        if ($uid === '') abort(401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($sourceType, $sourceId, $data, $uid) {
             if ($sourceType === 'transfer') {
@@ -223,7 +222,7 @@ class ReturnController extends Controller
                     'updated_at'  => now(),
                 ]);
             }
-            
+
             $now    = Carbon::now();
             $prefix = 'RET' . $now->format('ym');
             $last = ReturnHistory::where('return_code', 'like', $prefix . '%')

@@ -39,7 +39,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
-
+                    @canAction('MASTER_DATA','R')
                     <!--begin:Menu item-->
                     <div data-kt-menu-trigger="click"
                         class="menu-item {{ request()->segment(1) == 'master-data' ? 'show here' : '' }} menu-accordion">
@@ -219,8 +219,11 @@
                         <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
+                    @canAction('USER_MGMT','R')
                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item  {{ request()->segment(1) == 'settings' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
                         <span class="menu-link">
                             <span class="menu-icon">
@@ -238,7 +241,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a href="{{ route('settings.users.index') }}"
+                                    class="menu-link  {{ request()->segment(2) == 'users' ? 'active' : '' }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -250,7 +254,8 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
+                                <a href="{{ route('settings.roles.index') }}"
+                                    class="menu-link  {{ request()->segment(2) == 'roles' ? 'active' : '' }}">
                                     <span class="menu-bullet">
                                         <span class="bullet bullet-dot"></span>
                                     </span>
@@ -259,22 +264,11 @@
                                 <!--end:Menu link-->
                             </div>
                             <!--end:Menu item-->
-                            <!--begin:Menu item-->
-                            <div class="menu-item">
-                                <!--begin:Menu link-->
-                                <a class="menu-link" href="#">
-                                    <span class="menu-bullet">
-                                        <span class="bullet bullet-dot"></span>
-                                    </span>
-                                    <span class="menu-title">Master Level</span>
-                                </a>
-                                <!--end:Menu link-->
-                            </div>
-                            <!--end:Menu item-->
                         </div>
                         <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
                     <!--begin:Menu item-->
                     <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
                         <!--begin:Menu link-->
@@ -342,7 +336,7 @@
                         <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
-                    
+
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->

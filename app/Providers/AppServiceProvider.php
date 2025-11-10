@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -57,5 +58,10 @@ class AppServiceProvider extends ServiceProvider
             'transfer' => Transfer::class,
             'disposal' => Disposal::class,
         ]);
+
+        Blade::if('canAction', function (string $menuKode, string $action) {
+            $user = auth()->user();
+            return $user && $user->hasAction($menuKode, $action);
+        });
     }
 }

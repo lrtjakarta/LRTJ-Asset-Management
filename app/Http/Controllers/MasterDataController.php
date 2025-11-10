@@ -76,19 +76,42 @@ class MasterDataController
     {
         $q = MasterSumber::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
+
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -97,19 +120,41 @@ class MasterDataController
     {
         $q = MasterTransaction::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -118,19 +163,41 @@ class MasterDataController
     {
         $q = MasterAssetType::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -140,6 +207,9 @@ class MasterDataController
         $q = MasterCategory::query()
             ->select(['uuid', 'kode', 'name', 'kode_asset_type', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('asset_type_label', function ($r) {
                 static $cache = [];
@@ -148,15 +218,38 @@ class MasterDataController
                     ?->kode . ' - ' . optional(MasterAssetType::where('kode', $r->kode_asset_type)->first())->name
                     ?? $r->kode_asset_type;
             })
-            ->addColumn('status_badge', fn($r) =>
-            $r->status
-                ? '<span class="badge badge-light-success">Active</span>'
-                : '<span class="badge badge-light-danger">Inactive</span>')
-            ->addColumn('actions', fn($r) => '
-            <div class="btn-group">
-              <button class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $r->uuid . '">Edit</button>
-              <button class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $r->uuid . '">Delete</button>
-            </div>')
+            ->addColumn('status_badge', function ($row) {
+                return $row->status
+                    ? '<span class="badge badge-light-success">Active</span>'
+                    : '<span class="badge badge-light-danger">Inactive</span>';
+            })
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
+            })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
@@ -165,6 +258,9 @@ class MasterDataController
         $q = MasterCategory2::query()
             ->select(['uuid', 'kode', 'name', 'kode_category', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('category_label', function ($r) {
                 static $cache = [];
@@ -173,15 +269,38 @@ class MasterDataController
                     ?->kode . ' - ' . optional(MasterCategory::where('kode', $r->kode_category)->first())->name
                     ?? $r->kode_category;
             })
-            ->addColumn('status_badge', fn($r) =>
-            $r->status
-                ? '<span class="badge badge-light-success">Active</span>'
-                : '<span class="badge badge-light-danger">Inactive</span>')
-            ->addColumn('actions', fn($r) => '
-            <div class="btn-group">
-              <button class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $r->uuid . '">Edit</button>
-              <button class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $r->uuid . '">Delete</button>
-            </div>')
+            ->addColumn('status_badge', function ($row) {
+                return $row->status
+                    ? '<span class="badge badge-light-success">Active</span>'
+                    : '<span class="badge badge-light-danger">Inactive</span>';
+            })
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
+            })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
@@ -189,19 +308,41 @@ class MasterDataController
     {
         $q = MasterSubCategory::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -210,19 +351,41 @@ class MasterDataController
     {
         $q = MasterLocation::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -252,19 +415,41 @@ class MasterDataController
     {
         $q = MasterUOM::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -273,26 +458,53 @@ class MasterDataController
     {
         $q = MasterStatus::query()->select(['uuid', 'kode', 'name', 'type', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
     public function master_asset_class_data(Request $request)
     {
-        $q = MasterAssetClass::query()->select(['uuid', 'kode', 'kode_transaction', 'name', 'status', 'updated_at']);
+        $q = MasterAssetClass::query()
+            ->select(['uuid', 'kode', 'kode_transaction', 'name', 'status', 'updated_at']);
+
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
 
         return DataTables::of($q)
             ->addColumn('transaction_label', function ($r) {
@@ -307,13 +519,32 @@ class MasterDataController
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -322,19 +553,41 @@ class MasterDataController
     {
         $q = MasterUserCode::query()->select(['uuid', 'kode', 'department', 'description', 'status', 'updated_at']);
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
                     : '<span class="badge badge-light-danger">Inactive</span>';
             })
-            ->addColumn('actions', function ($row) {
-                // data-uuid used by JS to open modal / delete
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-primary btn-edit" data-uuid="' . $row->uuid . '">Edit</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-delete" data-uuid="' . $row->uuid . '">Delete</button>
-                </div>';
+            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+                if (! $canEdit && ! $canDelete) {
+                    return '-';
+                }
+
+                $html = '<div class="btn-group">';
+
+                if ($canEdit) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-primary btn-edit"
+                               data-uuid="' . $row->uuid . '">
+                               Edit
+                          </button>';
+                }
+
+                if ($canDelete) {
+                    $html .= '<button type="button"
+                               class="btn btn-sm btn-light-danger btn-delete"
+                               data-uuid="' . $row->uuid . '">
+                               Delete
+                          </button>';
+                }
+
+                $html .= '</div>';
+
+                return $html;
             })
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
@@ -367,6 +620,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterSumber::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -377,6 +631,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterSumber::create($payload);
 
             return response()->json([
@@ -412,6 +667,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterTransaction::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -422,6 +678,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterTransaction::create($payload);
 
             return response()->json([
@@ -457,6 +714,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterAssetType::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -467,8 +725,8 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterAssetType::create($payload);
-
             return response()->json([
                 'ok' => true,
                 'message' => 'Asset Type created.',
@@ -537,6 +795,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterCategory2::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -547,6 +806,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterCategory2::create($payload);
 
             return response()->json([
@@ -582,6 +842,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterSubCategory::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -592,6 +853,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterSubCategory::create($payload);
 
             return response()->json([
@@ -627,6 +889,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterLocation::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -637,6 +900,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterLocation::create($payload);
 
             return response()->json([
@@ -717,6 +981,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterUOM::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -727,6 +992,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterUOM::create($payload);
 
             return response()->json([
@@ -766,6 +1032,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterStatus::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -776,6 +1043,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterStatus::create($payload);
 
             return response()->json([
@@ -813,6 +1081,7 @@ class MasterDataController
 
         if ($uuid) {
             // update
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             $item = MasterAssetClass::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
@@ -823,6 +1092,7 @@ class MasterDataController
             ]);
         } else {
             // create
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             $item = MasterAssetClass::create($payload);
 
             return response()->json([
@@ -859,6 +1129,7 @@ class MasterDataController
         ];
 
         if ($uuid) {
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
             // update
             $item = MasterUserCode::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
@@ -869,6 +1140,7 @@ class MasterDataController
                 'uuid' => $item->uuid,
             ]);
         } else {
+            abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
             // create
             $item = MasterUserCode::create($payload);
 
@@ -1047,8 +1319,9 @@ class MasterDataController
     }
 
     // SOFT DELETE
-    public function master_sumber_delete(string $uuid)
+    public function master_sumber_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterSumber::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1057,8 +1330,9 @@ class MasterDataController
             'message' => 'Sumber deleted.',
         ]);
     }
-    public function master_transaction_delete(string $uuid)
+    public function master_transaction_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterTransaction::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1067,8 +1341,9 @@ class MasterDataController
             'message' => 'Transaction deleted.',
         ]);
     }
-    public function master_asset_type_delete(string $uuid)
+    public function master_asset_type_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterAssetType::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1077,8 +1352,9 @@ class MasterDataController
             'message' => 'Asset Type deleted.',
         ]);
     }
-    public function master_category_delete(string $uuid)
+    public function master_category_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterCategory::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1087,8 +1363,9 @@ class MasterDataController
             'message' => 'Category deleted.',
         ]);
     }
-    public function master_category_2_delete(string $uuid)
+    public function master_category_2_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterCategory2::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1097,8 +1374,9 @@ class MasterDataController
             'message' => 'Category 2 deleted.',
         ]);
     }
-    public function master_sub_category_delete(string $uuid)
+    public function master_sub_category_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterSubCategory::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1107,8 +1385,9 @@ class MasterDataController
             'message' => 'Sub Category deleted.',
         ]);
     }
-    public function master_location_delete(string $uuid)
+    public function master_location_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterLocation::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1117,7 +1396,7 @@ class MasterDataController
             'message' => 'Location deleted.',
         ]);
     }
-    // public function master_group_category_delete(string $uuid)
+    // public function master_group_category_delete(Request $request, string $uuid)
     // {
     //     $it = MasterGroupCategory::where('uuid', $uuid)->firstOrFail();
     //     $it->delete();
@@ -1127,8 +1406,9 @@ class MasterDataController
     //         'message' => 'Group Category deleted.',
     //     ]);
     // }
-    public function master_uom_delete(string $uuid)
+    public function master_uom_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterUOM::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1137,8 +1417,9 @@ class MasterDataController
             'message' => 'UOM deleted.',
         ]);
     }
-    public function master_status_delete(string $uuid)
+    public function master_status_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterStatus::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1147,8 +1428,9 @@ class MasterDataController
             'message' => 'Status deleted.',
         ]);
     }
-    public function master_asset_class_delete(string $uuid)
+    public function master_asset_class_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterAssetClass::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1157,8 +1439,9 @@ class MasterDataController
             'message' => 'Asset Class deleted.',
         ]);
     }
-    public function master_user_code_delete(string $uuid)
+    public function master_user_code_delete(Request $request, string $uuid)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
         $it = MasterUserCode::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
@@ -1345,7 +1628,7 @@ class MasterDataController
         $transaction = trim((string) $request->get('kode_transaction'));
         $q = MasterAssetClass::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
 
-        if($transaction != ''){
+        if ($transaction != '') {
             $q->where('kode_transaction', $transaction);
         }
 

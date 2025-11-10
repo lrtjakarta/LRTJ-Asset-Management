@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\RateLimiter;
 
 class AuthLdapController extends Controller
 {
@@ -35,27 +37,26 @@ class AuthLdapController extends Controller
 
         RateLimiter::hit($key, 60);
 
-
         // --- STATIC ADMIN SHORT-CIRCUIT ---
         $staticUser = strtolower((string) config('auth.static_admin.username'));
-        $staticPass = (string) config('auth.static_admin.password');
+        $staticPass = (string) config('auth.static_admin.password'));
 
         if (
             $staticUser !== '' && $staticPass !== ''
             && hash_equals($staticUser, $username)
             && hash_equals($staticPass, $password)
         ) {
-
-            $request->session()->put('ldap_user', [
-                'uid'   => $username,
-                'name'  => 'Administrator',
-                'dn'    => 'cn=admin,dc=local',
-                'ou'    => 'local',
-                'auth_via' => 'static',
-            ]);
-            $request->session()->regenerate();
+            $this->syncAndLoginUser(
+                $request,
+                username: $username,
+                name: 'Administrator',
+                email: 'admin@example.com',
+                ou: 'local',
+                isStaticAdmin: true,
+            );
 
             RateLimiter::clear($key);
+
             return redirect()->intended(route('dashboard'))
                 ->with('success', 'Welcome, admin!');
         }
@@ -68,40 +69,14 @@ class AuthLdapController extends Controller
         $timeout = (int) env('LDAP_TIMEOUT', 5);
 
         $userDn = "uid={$username},{$baseDn}";
+
+        // 1) Try direct bind
         if ($this->ldapBind($host, $port, $userDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-            $cn = $attrs['cn'][0] ?? $username;
+            $cn    = $attrs['cn'][0]   ?? $username;
+            $email = $attrs['mail'][0] ?? null;
+
             $ous = [];
-
-            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn )));
-            $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
-            if (!empty($attrs['ou'])) {
-                for ($i = 0; $i < $attrs['ou']['count']; $i++) {
-                    $ous[] = $attrs['ou'][$i];
-                }
-            }
-
-            $request->session()->put('ldap_user', [
-                'dn'   => $userDn,
-                'uid'  => $username,
-                'name' => $cn,
-                'ou'   => $ous[0] ?? null,
-                'ous'  => $ous,
-                'auth_via' => 'ldap',
-            ]);
-            $request->session()->regenerate();
-            RateLimiter::clear($key);
-
-            return redirect()->intended(route('dashboard'));
-        }
-
-        // 2) Fallback: find DN via RO bind, then bind with user password
-        $foundDn = $this->ldapFindUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-        if ($foundDn && $this->ldapBind($host, $port, $foundDn, $password, $timeout)) {
-            $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-            $cn = $attrs['cn'][0] ?? $username;
-            $ous = [];
-
             $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn)));
             $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
             if (!empty($attrs['ou'])) {
@@ -109,32 +84,101 @@ class AuthLdapController extends Controller
                     $ous[] = $attrs['ou'][$i];
                 }
             }
+            $ou = $ous[0] ?? null;
 
-            $request->session()->put('ldap_user', [
-                'dn'   => $foundDn,
-                'uid'  => $username,
-                'name' => $cn,
-                'ou'   => $ous[0] ?? null,
-                'ous'  => $ous,
-                'auth_via' => 'ldap',
-            ]);
-            $request->session()->regenerate();
+            // sync local user & login via Auth
+            $this->syncAndLoginUser(
+                $request,
+                username: $username,
+                name: $cn,
+                email: $email,
+                ou: $ou,
+                isStaticAdmin: false,
+            );
+
             RateLimiter::clear($key);
+
+            return redirect()->intended(route('dashboard'));
+        }
+
+        // 2) Fallback: find DN then bind
+        $foundDn = $this->ldapFindUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+        if ($foundDn && $this->ldapBind($host, $port, $foundDn, $password, $timeout)) {
+            $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+            $cn    = $attrs['cn'][0]   ?? $username;
+            $email = $attrs['mail'][0] ?? null;
+
+            $ous = [];
+            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($foundDn)));
+            $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
+            if (!empty($attrs['ou'])) {
+                for ($i = 0; $i < $attrs['ou']['count']; $i++) {
+                    $ous[] = $attrs['ou'][$i];
+                }
+            }
+            $ou = $ous[0] ?? null;
+
+            $this->syncAndLoginUser(
+                $request,
+                username: $username,
+                name: $cn,
+                email: $email,
+                ou: $ou,
+                isStaticAdmin: false,
+            );
+
+            RateLimiter::clear($key);
+
             return redirect()->route('dashboard');
         }
 
-        return back()->withErrors(['username' => 'Invalid LDAP credentials.'])->onlyInput('username');
+        return back()
+            ->withErrors(['username' => 'Invalid LDAP credentials.'])
+            ->onlyInput('username');
     }
 
     public function logout(Request $request)
     {
-        $request->session()->forget('ldap_user');
+        Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect()->route('ldap.login');
     }
 
-    /* ---------- helpers ---------- */
+    private function syncAndLoginUser(
+        Request $request,
+        string $username,
+        string $name,
+        ?string $email,
+        ?string $ou,
+        bool $isStaticAdmin = false,
+    ): void {
+        // sync to users table
+        $user = User::updateOrCreate(
+            ['username' => $username],
+            [
+                'name'  => $name,
+                'email' => $email,
+                'ou'    => $ou,
+            ]
+        );
+
+        if ($isStaticAdmin) {
+            $user->roles()->syncWithoutDetaching(['SYSADMIN']);
+
+            if (empty($user->role_kode)) {
+                $user->role_kode = 'SYSADMIN';
+            }
+            $user->save();
+        }
+
+        Auth::login($user, remember: true);
+        $request->session()->regenerate();
+    }
+
+
+    /* ---------- LDAP helpers---------- */
 
     private function ldapConnect(string $host, int $port, int $timeout)
     {
@@ -218,13 +262,14 @@ class AuthLdapController extends Controller
         }
         return [];
     }
+
     private function extractOusFromDn(string $dn): array
     {
         if (function_exists('ldap_explode_dn')) {
             $parts = @ldap_explode_dn($dn, 0);
             if (is_array($parts)) {
                 $out = [];
-                for ($i = 0; $i < ($parts['count'] ?? 0); $i++) {
+                for ($i = 0; i < ($parts['count'] ?? 0); $i++) {
                     $p = $parts[$i];
                     if (stripos($p, 'ou=') === 0) {
                         $out[] = substr($p, 3);

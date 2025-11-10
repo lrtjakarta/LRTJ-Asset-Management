@@ -39,9 +39,8 @@ class DisposalController extends Controller
                 'max:20480',
             ],
         ]);
-
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         $asset = Assets::select('uuid', 'asset_code', 'kode_status')
             ->findOrFail($data['asset_uuid']);
@@ -172,8 +171,8 @@ class DisposalController extends Controller
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($d, $uid) {
             $d->update([
@@ -194,8 +193,8 @@ class DisposalController extends Controller
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
+        $uid = auth()->user()?->username;
+        abort_if(!$uid, 401, 'No session UID.');
 
         $d->update([
             'kode_status'     => 'REJ',
