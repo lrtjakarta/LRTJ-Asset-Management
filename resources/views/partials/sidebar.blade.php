@@ -274,6 +274,7 @@
                     <!--end:Menu item-->
                     @endcanAction
 
+                    @canAction('DEPRECIATION','R')
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
@@ -290,6 +291,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
 
                     @php
                         $u = auth()->user();
@@ -411,6 +413,7 @@
                     </div>
                     <!--end:Menu item-->
 
+                    @canAction('TRASH','R')
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
@@ -430,6 +433,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
                 </div>
                 <!--end::Menu-->
             </div>

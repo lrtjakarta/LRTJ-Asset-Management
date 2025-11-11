@@ -28,13 +28,22 @@ class DepreciationController extends Controller
     private const STATUS_ACC = 'ACC';
     private const STATUS_REJ = 'REJ';
 
+    protected function canReadDepr(): bool
+    {
+        $user = auth()->user();
+        return $user && $user->hasAction('DEPRECIATION', 'R');
+    }
+
     public function index()
     {
         return view('depreciation.depreciation');
     }
 
     public function dtPolicies(Request $r)
-    {
+    { 
+        if (!$this->canReadDepr()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = AssetDeprPolicy::query()
             ->with('asset:uuid,asset_code,description')
             ->when(
@@ -55,6 +64,9 @@ class DepreciationController extends Controller
 
     public function dtMonthly(Request $r)
     {
+        if (!$this->canReadDepr()) {
+            return DataTables::of(collect())->toJson();
+        }
         $period = $r->period
             ? Carbon::parse($r->period)->startOfMonth()->toDateString()
             : now()->startOfMonth()->toDateString();
@@ -185,6 +197,9 @@ class DepreciationController extends Controller
 
     public function dtYearly(Request $r)
     {
+        if (!$this->canReadDepr()) {
+            return DataTables::of(collect())->toJson();
+        }
         $q = AssetDeprYearly::query()
             ->with('asset:uuid,asset_code,description')
             ->when(
@@ -209,6 +224,7 @@ class DepreciationController extends Controller
 
     public function runMonth(Request $r)
     {
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
         $r->validate(['period' => ['required', 'date']]);
         $period = Carbon::parse($r->period)->startOfMonth();
 
@@ -409,6 +425,7 @@ class DepreciationController extends Controller
 
     public function buildYear(Request $r)
     {
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
         $r->validate(['year' => ['required', 'integer', 'min:1900', 'max:3000']]);
         $year = (int) $r->year;
 

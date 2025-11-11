@@ -152,6 +152,10 @@ class TrashController extends Controller
             return DataTables::of(collect())->make(true);
         }
 
+        $user = $request->user();
+        $canEdit   = $user && $user->hasAction('TRASH', 'U');
+        $canDelete = $user && $user->hasAction('TRASH', 'D');
+
         $builders = [];
         foreach ($map as $type => $cfg) {
             $tbl   = $cfg['table'];
@@ -172,12 +176,16 @@ class TrashController extends Controller
 
         return DataTables::of($query)
             ->editColumn('deleted_at', fn($r) => $r->deleted_at ? \Carbon\Carbon::parse($r->deleted_at)->format('Y-m-d H:i') : '')
-            ->addColumn('actions', function ($r) {
-                return '
-                <div class="btn-group">
-                  <button type="button" class="btn btn-sm btn-light-success btn-restore" data-type="' . $r->type . '" data-id="' . $r->id . '">Restore</button>
-                  <button type="button" class="btn btn-sm btn-light-danger btn-force" data-type="' . $r->type . '" data-id="' . $r->id . '">Force Delete</button>
-                </div>';
+            ->addColumn('actions', function ($r) use ($canEdit, $canDelete) {
+                $btns = '<div class="btn-group">';
+                if ($canEdit) {
+                    $btns .= '<button type="button" class="btn btn-sm btn-light-success btn-restore" data-type="' . $r->type . '" data-id="' . $r->id . '">Restore</button>';
+                }
+                if ($canDelete) {
+                    $btns .= '<button type="button" class="btn btn-sm btn-light-danger btn-force" data-type="' . $r->type . '" data-id="' . $r->id . '">Force Delete</button>';
+                }
+                $btns .= '</div>';
+                return $btns;
             })
             ->rawColumns(['actions'])
             ->make(true);

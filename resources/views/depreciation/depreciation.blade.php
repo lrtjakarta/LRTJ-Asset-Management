@@ -37,6 +37,7 @@
                     </h3>
                 </div>
 
+                @canAction('DEPRECIATION','C')
                 <div class="card-toolbar">
                     {{-- Process Current Month --}}
                     <form id="form-process-month" method="POST" action="{{ route('depreciation.run.month') }}"
@@ -69,6 +70,7 @@
                         Adjustment Depreciation
                     </button>
                 </div>
+                @endcanAction
             </div>
 
             <div class="card-body">

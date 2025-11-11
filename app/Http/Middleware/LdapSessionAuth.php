@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 class LdapSessionAuth
 {
@@ -15,9 +16,20 @@ class LdapSessionAuth
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->session()->has('ldap_user')) {
-            return redirect()->route('login');
+        if (! Auth::check()) {
+            return redirect()->route('ldap.login');
         }
+
+        if (! $request->session()->has('ldap_user')) {
+            $u = Auth::user();
+            $request->session()->put('ldap_user', [
+                'username' => $u->username ?? null,
+                'name'     => $u->name ?? null,
+                'email'    => $u->email ?? null,
+                'ou'       => $u->ou ?? null,
+            ]);
+        }
+
         return $next($request);
     }
 }

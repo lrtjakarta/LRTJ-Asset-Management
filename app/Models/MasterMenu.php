@@ -18,10 +18,10 @@ class MasterMenu extends Model
         'uuid',
         'kode',
         'name',
-        'route',
-        'url',
-        'parent_uuid',
         'sort_order',
         'status',
+    ];
+    protected $casts = [
+        'actions' => 'array',
     ];
 }

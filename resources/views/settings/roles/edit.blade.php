@@ -1,5 +1,31 @@
 @extends('layouts.app')
+@push('head')
+    <style>
+        .form-check-input,
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #6b7280;
+            border-radius: 4px;
+            background-color: #ffffff;
+            cursor: pointer;
+        }
 
+        .form-check-input:not(:checked),
+        input[type="checkbox"]:not(:checked) {
+            border: 2px solid #9ca3af !important;
+            background-color: #f3f4f6 !important;
+            box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.03);
+        }
+
+        .form-check-input:not(:checked):hover,
+        input[type="checkbox"]:not(:checked):hover {
+            border-color: #6b7280 !important;
+            background-color: #e5e7eb !important;
+        }
+
+    </style>
+@endpush
 @section('content')
     {{-- Toolbar --}}
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
@@ -55,13 +81,13 @@
                                 <input type="text" class="form-control form-control-solid" value="{{ $role->kode }}"
                                     readonly>
                             </div>
-                            <div class="col-md-5">
+                            <div class="col-md-6">
                                 <label class="form-label required">Role Name</label>
                                 <input type="text" name="name"
                                     class="form-control form-control-solid @error('name') is-invalid @enderror"
                                     value="{{ old('name', $role->name) }}" required>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <label class="form-label">Status</label>
                                 <select name="status" class="form-select form-select-solid">
                                     <option value="1" @selected($role->status)>Active</option>
@@ -97,22 +123,29 @@
                                 <tbody>
                                     @foreach ($menus as $menu)
                                         @php
-                                            $allowed = $permissions[$menu->kode] ?? [];
+                                            $granted = $permissions[$menu->kode] ?? [];
+                                            $available = $menuActions[$menu->kode] ?? $actions->pluck('kode')->all();
                                         @endphp
                                         <tr>
                                             <td class="fw-bold">
                                                 {{ $menu->name }}
                                                 <div class="text-muted fs-8">{{ $menu->kode }}</div>
                                             </td>
+
                                             @foreach ($actions as $action)
-                                                <td class="text-center align-middle">
-                                                    <div
-                                                        class="form-check form-check-sm form-check-custom form-check-solid d-flex justify-content-center align-items-center ps-0">
-                                                        <input class="form-check-input" type="checkbox"
-                                                            name="permissions[{{ $menu->kode }}][]"
-                                                            value="{{ $action->kode }}" @checked(in_array($action->kode, $allowed)) />
-                                                    </div>
-                                                </td>
+                                                @if (in_array($action->kode, $available, true))
+                                                    <td class="text-center align-middle">
+                                                        <div
+                                                            class="form-check form-check-sm form-check-custom form-check-solid d-flex justify-content-center align-items-center ps-0">
+                                                            <input class="form-check-input" type="checkbox"
+                                                                name="permissions[{{ $menu->kode }}][]"
+                                                                value="{{ $action->kode }}" @checked(in_array($action->kode, $granted, true)) />
+                                                        </div>
+                                                    </td>
+                                                @else
+                                                    {{-- This menu does NOT support this action -> empty cell --}}
+                                                    <td></td>
+                                                @endif
                                             @endforeach
                                         </tr>
                                     @endforeach

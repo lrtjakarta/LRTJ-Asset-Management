@@ -39,12 +39,12 @@ class AuthLdapController extends Controller
 
         // --- STATIC ADMIN SHORT-CIRCUIT ---
         $staticUser = strtolower((string) config('auth.static_admin.username'));
-        $staticPass = (string) config('auth.static_admin.password'));
+        $staticPass = (string) config('auth.static_admin.password');
 
         if (
-            $staticUser !== '' && $staticPass !== ''
-            && hash_equals($staticUser, $username)
-            && hash_equals($staticPass, $password)
+            $staticUser !== '' && $staticPass !== '' &&
+            hash_equals($staticUser, strtolower($username)) &&
+            hash_equals($staticPass, $password)
         ) {
             $this->syncAndLoginUser(
                 $request,
@@ -61,6 +61,24 @@ class AuthLdapController extends Controller
                 ->with('success', 'Welcome, admin!');
         }
 
+        /**
+         * 1) LOCAL DB LOGIN (users table)
+         *    If you have users with username + hashed password, this will log them in
+         *    WITHOUT touching LDAP.
+         */
+        if (
+            Auth::attempt(
+                ['username' => $username, 'password' => $password],
+                $request->boolean('remember') // if you have "remember me" checkbox
+            )
+        ) {
+            $request->session()->regenerate();
+            RateLimiter::clear($key);
+
+            return redirect()->intended(route('dashboard'));
+        }
+
+        // 2) LDAP CONFIG
         $host    = env('LDAP_HOST', 'ldap.forumsys.com');
         $port    = (int) env('LDAP_PORT', 389);
         $baseDn  = env('LDAP_BASE_DN', 'dc=example,dc=com');
@@ -70,7 +88,7 @@ class AuthLdapController extends Controller
 
         $userDn = "uid={$username},{$baseDn}";
 
-        // 1) Try direct bind
+        // 3) Try direct bind
         if ($this->ldapBind($host, $port, $userDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
             $cn    = $attrs['cn'][0]   ?? $username;
@@ -86,7 +104,7 @@ class AuthLdapController extends Controller
             }
             $ou = $ous[0] ?? null;
 
-            // sync local user & login via Auth
+            // sync local user & login via Auth (session from users table)
             $this->syncAndLoginUser(
                 $request,
                 username: $username,
@@ -101,7 +119,7 @@ class AuthLdapController extends Controller
             return redirect()->intended(route('dashboard'));
         }
 
-        // 2) Fallback: find DN then bind
+        // 4) Fallback: find DN then bind
         $foundDn = $this->ldapFindUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
         if ($foundDn && $this->ldapBind($host, $port, $foundDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
@@ -133,7 +151,7 @@ class AuthLdapController extends Controller
         }
 
         return back()
-            ->withErrors(['username' => 'Invalid LDAP credentials.'])
+            ->withErrors(['username' => 'Invalid credentials.'])
             ->onlyInput('username');
     }
 
@@ -173,10 +191,10 @@ class AuthLdapController extends Controller
             $user->save();
         }
 
+        // session always uses users table
         Auth::login($user, remember: true);
         $request->session()->regenerate();
     }
-
 
     /* ---------- LDAP helpers---------- */
 
@@ -269,7 +287,7 @@ class AuthLdapController extends Controller
             $parts = @ldap_explode_dn($dn, 0);
             if (is_array($parts)) {
                 $out = [];
-                for ($i = 0; i < ($parts['count'] ?? 0); $i++) {
+                for ($i = 0; $i < ($parts['count'] ?? 0); $i++) {   // <-- fixed: $i
                     $p = $parts[$i];
                     if (stripos($p, 'ou=') === 0) {
                         $out[] = substr($p, 3);

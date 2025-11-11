@@ -248,25 +248,25 @@ Route::middleware('ldap.session')->group(function () {
 
     // DEPRECIATION ROUTE
     Route::prefix('depreciation')->name('depreciation.')->group(function () {
-        Route::get('/', [DepreciationController::class, 'index'])->name('index');
-        // DATATABLE
-        Route::get('/monthly',   [DepreciationController::class, 'dtMonthly'])->name('dt.monthly');
-        Route::get('/yearly',    [DepreciationController::class, 'dtYearly'])->name('dt.yearly');
-        Route::get('/policies',  [DepreciationController::class, 'dtPolicies'])->name('dt.policies');
+        Route::middleware('role.action:DEPRECIATION,R')->group(function () {
+            Route::get('/', [DepreciationController::class, 'index'])->name('index');
+            // DATATABLE
+            Route::get('/monthly',   [DepreciationController::class, 'dtMonthly'])->name('dt.monthly');
+            Route::get('/yearly',    [DepreciationController::class, 'dtYearly'])->name('dt.yearly');
+            Route::get('/policies',  [DepreciationController::class, 'dtPolicies'])->name('dt.policies');
+            // AJAX SELECT 2
+            Route::get('/assets/search', [DepreciationController::class, 'assetSearch'])->name('assets.search');
+        });
 
-        // PROCESSING
-        Route::post('/run-month', [DepreciationController::class, 'runMonth'])->name('run.month');
-        Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
+        Route::middleware('role.action:DEPRECIATION,C,U')->group(function () {
+            // PROCESSING
+            Route::post('/run-month', [DepreciationController::class, 'runMonth'])->name('run.month');
+            Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
+            Route::post('/transfer/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
+            Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
+        });
 
-        // VALUE MOVEMENT
-        Route::post('/transfer/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
-        Route::post('/transfer/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
-        Route::get('/transfer/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
-        Route::post('/transfer/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
-        Route::post('/transfer/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
-        Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
-        Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
-        
+
         // TRANSFER REQUESTS
         Route::prefix('transfer-requests')->name('transfer-requests.')->group(function () {
             Route::middleware('role.action:TRANSFER,R')->group(function () {
@@ -277,6 +277,12 @@ Route::middleware('ldap.session')->group(function () {
             });
             Route::middleware('role.action:TRANSFER,C')->group(function () {
                 Route::post('/', [DepreciationController::class, 'storeTransferRequest'])->name('store');
+                // VALUE MOVEMENT
+                Route::post('/transfer/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
+                Route::post('/transfer/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
+                Route::get('/transfer/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
+                Route::post('/transfer/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
+                Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
             });
             Route::middleware('role.action:TRANSFER,U')->group(function () {
                 Route::put('/{uuid}', [DepreciationController::class, 'updateTransferRequest'])->name('update');
@@ -291,9 +297,6 @@ Route::middleware('ldap.session')->group(function () {
                 Route::delete('/{uuid}', [DepreciationController::class, 'destroyTransferRequest'])->name('destroy');
             });
         });
-
-        // AJAX SELECT 2
-        Route::get('/assets/search', [DepreciationController::class, 'assetSearch'])->name('assets.search');
     });
 
     // FRONTEND TRANSACTION TO TRIGGER MENU OPEN AND ACTIVE AT SIDEBAR
@@ -329,10 +332,16 @@ Route::middleware('ldap.session')->group(function () {
 
     // TRASH ROUTE
     Route::prefix('trash')->name('trash.')->group(function () {
-        Route::get('/',              [TrashController::class, 'index'])->name('index');
-        Route::get('/datatable',     [TrashController::class, 'data'])->name('data');
-        Route::post('/{type}/{id}/restore', [TrashController::class, 'restore'])->name('restore');
-        Route::delete('/{type}/{id}/force', [TrashController::class, 'force'])->name('force');
+        Route::middleware('role.action:TRASH,R')->group(function () {
+            Route::get('/',              [TrashController::class, 'index'])->name('index');
+            Route::get('/datatable',     [TrashController::class, 'data'])->name('data');
+        });
+        Route::middleware('role.action:TRASH,U')->group(function () {
+            Route::post('/{type}/{id}/restore', [TrashController::class, 'restore'])->name('restore');
+        });
+        Route::middleware('role.action:TRASH,D')->group(function () {
+            Route::delete('/{type}/{id}/force', [TrashController::class, 'force'])->name('force');
+        });
     });
 
     Route::prefix('user-management')->name('settings.')->group(function () {

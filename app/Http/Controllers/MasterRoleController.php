@@ -39,14 +39,12 @@ class MasterRoleController extends Controller
         return redirect()->route('settings.roles.index')
             ->with('success', 'Role created.');
     }
-    
+
     public function edit(string $uuid)
     {
         $role = MasterRole::where('uuid', $uuid)->firstOrFail();
 
-        $actions = MasterAction::where('status', true)
-            // ->orderBy('kode')
-            ->get();
+        $actions = MasterAction::where('status', true)->get();
 
         $menus = MasterMenu::where('status', true)
             ->orderBy('sort_order')
@@ -59,11 +57,23 @@ class MasterRoleController extends Controller
             $permissions[$rm->menu_kode] = $rm->actions ?: [];
         }
 
+        $menuActions = [];
+        $allActionCodes = $actions->pluck('kode')->all();
+
+        foreach ($menus as $menu) {
+            if (is_array($menu->actions) && count($menu->actions)) {
+                $menuActions[$menu->kode] = $menu->actions;
+            } else {
+                $menuActions[$menu->kode] = $allActionCodes;
+            }
+        }
+
         return view('settings.roles.edit', [
             'role'         => $role,
             'actions'      => $actions,
             'menus'        => $menus,
             'permissions'  => $permissions,
+            'menuActions'  => $menuActions,
         ]);
     }
 
