@@ -330,6 +330,9 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/assets', [ExportController::class, 'assets_export'])->name('assets');
         Route::get('/stock-opname', [ExportController::class, 'stock_opname_export'])->name('stockopname');
         Route::get('/movement', [ExportController::class, 'movement_export'])->name('movement');
+        Route::get('/disposal', [ExportController::class, 'disposal_export'])->name('disposal');
+        Route::get('/return', [ExportController::class, 'return_export'])->name('return');
+        Route::get('/acquisition', [ExportController::class, 'acquisition_export'])->name('acquisition');
     });
 
     // TRASH ROUTE

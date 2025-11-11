@@ -394,7 +394,7 @@
                                 id="tbl-acq">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-160px">Transfer Number</th>
+                                        <th class="min-w-160px">Transaction Number</th>
                                         <th class="min-w-380px">Details</th>
                                         <th class="min-w-220px">Note</th>
                                         <th class="min-w-160px">Requester</th>
@@ -412,7 +412,7 @@
                                 id="tbl-transfers">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-200px">Transfer Number</th>
+                                        <th class="min-w-200px">Transaction Number</th>
                                         <th class="min-w-100px">Type</th>
                                         <th class="min-w-150px">Before</th>
                                         <th class="min-w-150px">After</th>
@@ -435,7 +435,7 @@
                                 id="tbl-returns">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-180px">Transfer Number</th>
+                                        <th class="min-w-180px">Transaction Number</th>
                                         <th class="min-w-180px">MOV/DSP Code</th>
                                         <th class="min-w-220px">Type</th>
                                         <th class="min-w-300px">Details</th>
@@ -456,7 +456,7 @@
                                 id="tbl-disposal">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-200px">Transfer Number</th>
+                                        <th class="min-w-200px">Transaction Number</th>
                                         <th class="min-w-100px">Type</th>
                                         <th class="min-w-100px">Requester</th>
                                         <th class="min-w-100px">Approver</th>
@@ -477,7 +477,7 @@
                                 id="tbl-so">
                                 <thead>
                                     <tr class="table-light">
-                                        <th class="min-w-170px">Transfer Number</th>
+                                        <th class="min-w-170px">Transaction Number</th>
                                         <th class="min-w-120px">Source</th>
                                         <th class="min-w-140px">Type</th>
                                         <th class="min-w-300px">Detail</th>

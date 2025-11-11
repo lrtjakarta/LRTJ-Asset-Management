@@ -12,6 +12,7 @@ use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
 use App\Models\MasterUOM;
 use App\Models\MasterUserCode;
+use App\Models\ReturnHistory;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
@@ -736,6 +737,419 @@ class ExportController
         }
 
         $fileName = 'movement_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+    public function disposal_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
+
+        $status      = trim((string) $request->input('status', ''));
+        $requester   = trim((string) $request->input('requester', ''));
+        $updatedFrom = $request->input('updated_from');
+        $updatedTo   = $request->input('updated_to');
+        $createdFrom = $request->input('created_from');
+        $createdTo   = $request->input('created_to');
+        $assetQ      = trim((string) $request->input('asset_q', ''));
+
+        $q = DB::table('assets_disposals as d')
+            ->leftJoin('assets as a', 'a.uuid', '=', 'd.asset_uuid')
+            ->select(
+                'd.disposal_code',
+                'a.asset_code',
+                'a.description',
+                'd.note',
+                'd.pic_request_uid',
+                'd.pic_approve_uid',
+                'd.kode_status',
+                'd.file_name',
+                'd.created_at',
+                'd.updated_at'
+            )
+            ->whereNull('d.deleted_at');
+
+        if ($status !== '') {
+            $q->where('d.kode_status', $status);
+        }
+        if ($requester !== '') {
+            $q->where('d.pic_request_uid', $requester);
+        }
+        if ($updatedFrom) {
+            $q->whereDate('d.updated_at', '>=', $updatedFrom);
+        }
+        if ($updatedTo) {
+            $q->whereDate('d.updated_at', '<=', $updatedTo);
+        }
+        if ($createdFrom) {
+            $q->whereDate('d.created_at', '>=', $createdFrom);
+        }
+        if ($createdTo) {
+            $q->whereDate('d.created_at', '<=', $createdTo);
+        }
+        if ($assetQ !== '') {
+            $q->where(function ($w) use ($assetQ) {
+                $w->where('a.asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetQ}%");
+            });
+        }
+
+        $rows = $q->orderBy('d.updated_at', 'desc')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Disposal');
+
+        $headers = [
+            'A1' => 'Transaction Number',
+            'B1' => 'Asset Code',
+            'C1' => 'Asset Description',
+            'D1' => 'Note',
+            'E1' => 'Requester',
+            'F1' => 'Approver',
+            'G1' => 'Status',
+            'H1' => 'File Name',
+            'I1' => 'Created At',
+            'J1' => 'Updated At',
+        ];
+        foreach ($headers as $cell => $text) {
+            $sheet->setCellValue($cell, $text);
+        }
+        $sheet->getStyle('A1:J1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $created = $r->created_at
+                ? Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+            $updated = $r->updated_at
+                ? Carbon::parse($r->updated_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->disposal_code);
+            $sheet->setCellValue("B{$rowNum}", $r->asset_code);
+            $sheet->setCellValue("C{$rowNum}", $r->description);
+            $sheet->setCellValue("D{$rowNum}", $r->note);
+            $sheet->setCellValue("E{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("F{$rowNum}", $r->pic_approve_uid);
+            $sheet->setCellValue("G{$rowNum}", $r->kode_status);
+            $sheet->setCellValue("H{$rowNum}", $r->file_name);
+            $sheet->setCellValue("I{$rowNum}", $created);
+            $sheet->setCellValue("J{$rowNum}", $updated);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'J') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'disposal_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function return_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('RETURN', 'R'), 403);
+
+        $source    = $request->input('source');
+        $tfType    = $request->input('tf_type');
+        $dateFrom  = $request->input('date_from');
+        $dateTo    = $request->input('date_to');
+        $assetLike = $request->input('asset');
+        $users     = $request->input('users');
+
+        $q = ReturnHistory::query()
+            ->with(['source', 'asset'])
+            ->orderByDesc('created_at');
+
+        if ($source) {
+            $q->where('source_type', $source);
+        }
+
+        if ($tfType) {
+            $q->where('source_type', 'transfer')
+                ->whereHas('source', function ($t) use ($tfType) {
+                    $t->where('type', $tfType);
+                });
+        }
+
+        if ($dateFrom) {
+            $q->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $q->whereDate('created_at', '<=', $dateTo);
+        }
+
+        if ($assetLike) {
+            $q->whereHas('asset', function ($w) use ($assetLike) {
+                $w->where('asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('description', 'ilike', "%{$assetLike}%");
+            });
+        }
+
+        if ($users) {
+            $q->where('pic_request_uid', $users);
+        }
+
+        $resolve = function (?string $type, ?string $code): string {
+            if (!$code) return '(empty)';
+            switch ($type) {
+                case 'owner':
+                case 'user':
+                case 'maintenance': {
+                        $row = MasterUserCode::select('kode', 'department')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->department) : $code;
+                    }
+                case 'status': {
+                        $row = MasterStatus::select('kode', 'name')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->name) : $code;
+                    }
+                case 'location': {
+                        $row = MasterLocation::select('kode', 'name')->where('kode', $code)->first();
+                        return $row ? ($code . ' - ' . $row->name) : $code;
+                    }
+                default:
+                    return $code;
+            }
+        };
+
+        $rows = $q->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Return History');
+
+        // headers
+        $sheet->setCellValue('A1', 'Transaction Number');
+        $sheet->setCellValue('B1', 'MOV/DSP Tr. No.');
+        $sheet->setCellValue('C1', 'Asset Code');
+        $sheet->setCellValue('D1', 'Asset Description');
+        $sheet->setCellValue('E1', 'Source');
+        $sheet->setCellValue('F1', 'Details');
+        $sheet->setCellValue('G1', 'Note');
+        $sheet->setCellValue('H1', 'Requester');
+        $sheet->setCellValue('I1', 'Created At');
+
+        $sheet->getStyle('A1:I1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $assetCode = $r->asset?->asset_code ?? $r->asset_uuid;
+            $assetDesc = $r->asset?->description ?? '';
+
+            if ($r->source_type === 'transfer' && $r->source) {
+                $t = $r->source;
+                $sourceTypeLabel = 'MOVEMENT';
+                $before = $resolve($t->type, data_get($t->before, 'value'));
+                $after  = $resolve($t->type, data_get($t->after,  'value'));
+                $detail = "MOVEMENT: {$before} → {$after}";
+                $sourceCode = $t->transfer_code ?? $r->source_code;
+            } elseif ($r->source_type === 'disposal') {
+                $sourceTypeLabel = 'DISPOSAL';
+                $detail = 'DISPOSAL';
+                $sourceCode = $r->source_code;
+            } else {
+                $sourceTypeLabel = '';
+                $detail = '';
+                $sourceCode = $r->source_code;
+            }
+
+            $created = $r->created_at
+                ? Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->return_code);
+            $sheet->setCellValue("B{$rowNum}", $sourceCode);
+            $sheet->setCellValue("C{$rowNum}", $assetCode);
+            $sheet->setCellValue("D{$rowNum}", $assetDesc);
+            $sheet->setCellValue("E{$rowNum}", $sourceTypeLabel);
+            $sheet->setCellValue("F{$rowNum}", $detail);
+            $sheet->setCellValue("G{$rowNum}", $r->note);
+            $sheet->setCellValue("H{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("I{$rowNum}", $created);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'I') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'return_history_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function acquisition_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('ACQUISITION', 'R'), 403);
+
+        $pic      = $request->input('pic');
+        $pajak    = $request->input('pajak');
+        $capFrom  = $request->input('cap_from');
+        $capTo    = $request->input('cap_to');
+        $assetLike = $request->input('asset');
+
+        $q = DB::table('assets_value_history as h')
+            ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
+            ->select(
+                'h.acq_code',
+                'h.asset_uuid',
+                'h.before_payload',
+                'h.after_payload',
+                'h.note',
+                'h.pic_request_uid',
+                'h.created_at',
+                'a.asset_code',
+                'a.description as asset_name'
+            )
+            ->orderByDesc('h.created_at');
+
+        if ($pic) {
+            $q->where('h.pic_request_uid', $pic);
+        }
+
+        if ($assetLike) {
+            $q->where(function ($w) use ($assetLike) {
+                $w->where('a.asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetLike}%");
+            });
+        }
+
+        if ($pajak !== null && $pajak !== '') {
+            if ($pajak === '1') {
+                $q->whereRaw("
+                coalesce(
+                    (h.after_payload::jsonb->>'is_pajak')::int,
+                    (h.before_payload::jsonb->>'is_pajak')::int,
+                    0
+                ) = 1
+            ");
+            } elseif ($pajak === '0') {
+                $q->whereRaw("
+                coalesce(
+                    (h.after_payload::jsonb->>'is_pajak')::int,
+                    (h.before_payload::jsonb->>'is_pajak')::int,
+                    0
+                ) = 0
+            ");
+            }
+        }
+
+        if ($capFrom) {
+            $q->whereRaw("
+            to_date(
+                coalesce(
+                    h.after_payload::jsonb->>'capitalization_date',
+                    h.before_payload::jsonb->>'capitalization_date'
+                ),
+                'YYYY-MM-DD'
+            ) >= ?
+        ", [$capFrom]);
+        }
+
+        if ($capTo) {
+            $q->whereRaw("
+            to_date(
+                coalesce(
+                    h.after_payload::jsonb->>'capitalization_date',
+                    h.before_payload::jsonb->>'capitalization_date'
+                ),
+                'YYYY-MM-DD'
+            ) <= ?
+        ", [$capTo]);
+        }
+
+        $rows = $q->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Acquisition');
+
+        // headers
+        $sheet->setCellValue('A1', 'Transaction Number');
+        $sheet->setCellValue('B1', 'Asset Code');
+        $sheet->setCellValue('C1', 'Asset Description');
+        $sheet->setCellValue('D1', 'Quantity');
+        $sheet->setCellValue('E1', 'UOM');
+        $sheet->setCellValue('F1', 'Price');
+        $sheet->setCellValue('G1', 'VAT In');
+        $sheet->setCellValue('H1', 'Total');
+        $sheet->setCellValue('I1', 'Actual Date');
+        $sheet->setCellValue('J1', 'Capitalization Date');
+        $sheet->setCellValue('K1', 'Pajak');
+        $sheet->setCellValue('L1', 'PIC');
+        $sheet->setCellValue('M1', 'Note');
+        $sheet->setCellValue('N1', 'Created At');
+
+        $sheet->getStyle('A1:N1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
+            $before = json_decode($r->before_payload ?? '[]', true) ?: [];
+
+            $get = function ($key, $default = null) use ($after, $before) {
+                $v = data_get($after, $key, null);
+                if ($v === null || $v === '') {
+                    $v = data_get($before, $key, $default);
+                }
+                return $v;
+            };
+
+            $qty   = (float) $get('quantity', 0);
+            $uom   = $get('kode_uom');
+            $price = (float) $get('price', 0);
+            $vat   = (float) $get('vat_in', 0);
+            $total = (float) $get('total', 0);
+            $actual = $get('actual_date');
+            $cap    = $get('capitalization_date');
+            $isPajak = $get('is_pajak', 0);
+            $pajakLabel = $isPajak ? 'Yes' : 'No';
+
+            $created = $r->created_at
+                ? Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->acq_code);
+            $sheet->setCellValue("B{$rowNum}", $r->asset_code);
+            $sheet->setCellValue("C{$rowNum}", $r->asset_name);
+            $sheet->setCellValue("D{$rowNum}", $qty);
+            $sheet->setCellValue("E{$rowNum}", $uom);
+            $sheet->setCellValue("F{$rowNum}", $price);
+            $sheet->setCellValue("G{$rowNum}", $vat);
+            $sheet->setCellValue("H{$rowNum}", $total);
+            $sheet->setCellValue("I{$rowNum}", $actual);
+            $sheet->setCellValue("J{$rowNum}", $cap);
+            $sheet->setCellValue("K{$rowNum}", $pajakLabel);
+            $sheet->setCellValue("L{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("M{$rowNum}", $r->note);
+            $sheet->setCellValue("N{$rowNum}", $created);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'N') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'acquisition_' . now()->format('Ymd_His') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

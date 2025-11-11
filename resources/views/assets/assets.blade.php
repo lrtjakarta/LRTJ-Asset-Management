@@ -469,7 +469,7 @@
             <div class="row g-5 gx-xl-10 mb-5 mb-xl-10">
                 <div class="col-md-12">
                     <div class="table-responsive">
-                        <div class="card mb-5">
+                        <div class="card mb-6">
                             <div class="card-body">
                                 <div class="row g-3 align-items-end">
                                     <div class="col-md-3">

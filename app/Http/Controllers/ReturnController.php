@@ -149,7 +149,7 @@ class ReturnController extends Controller
         if (!in_array($sourceType, ['transfer', 'disposal'], true) || !Str::isUuid($sourceId)) {
             abort(422, 'Invalid source selection.');
         }
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($sourceType, $sourceId, $data, $uid) {
@@ -347,22 +347,59 @@ class ReturnController extends Controller
             ->rawColumns(['source_detail', 'actions'])
             ->toJson();
     }
-
     public function datatable_all(Request $request)
     {
         if (!$this->canReadReturn()) {
             return DataTables::of(collect())->toJson();
         }
+
+        $source    = $request->input('source');
+        $tfType    = $request->input('tf_type');
+        $dateFrom  = $request->input('date_from');
+        $dateTo    = $request->input('date_to');  
+        $assetLike = $request->input('asset');    
+        $users     = $request->input('users');   
+
         $q = ReturnHistory::query()
             ->from('return_history')
-            ->with(['source'])
+            ->with(['source', 'asset'])
             ->leftJoin('assets as a', 'a.uuid', '=', 'return_history.asset_uuid')
-            ->orderByDesc('created_at')
+            ->orderByDesc('return_history.created_at')
             ->select([
                 'return_history.*',
                 'a.asset_code',
                 'a.description as asset_desc',
             ]);
+
+        if ($source) {
+            $q->where('return_history.source_type', $source);
+        }
+
+        if ($tfType) {
+            $q->where('return_history.source_type', 'transfer')
+                ->whereHas('source', function ($t) use ($tfType) {
+                    $t->where('type', $tfType);
+                });
+        }
+
+        if ($dateFrom) {
+            $q->whereDate('return_history.created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $q->whereDate('return_history.created_at', '<=', $dateTo);
+        }
+
+        if ($assetLike) {
+            $q->where(function ($w) use ($assetLike) {
+                $w->where('a.asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetLike}%");
+            });
+        }
+
+        if ($users) {
+            $q->where('return_history.pic_request_uid', $users);
+        }
+
         $user = $request->user();
         $canDelete = $user && $user->hasAction('RETURN', 'D');
 
@@ -401,7 +438,7 @@ class ReturnController extends Controller
             ->addColumn('source_detail', function (ReturnHistory $r) use ($resolve) {
                 if ($r->source_type === 'transfer' && $r->source) {
                     $t = $r->source;
-                    $type = "MOVEMENT";
+                    $type = 'MOVEMENT';
                     $before = $resolve($t->type, data_get($t->before, 'value'));
                     $after  = $resolve($t->type, data_get($t->after,  'value'));
                     return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";
@@ -414,15 +451,15 @@ class ReturnController extends Controller
             ->addColumn('actions', function (ReturnHistory $r) use ($canDelete) {
                 if ($canDelete) {
                     return '<div class="btn-group btn-group-sm">
-                        <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
-                    </div>';
-                } else {
-                    return '-';
+                    <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
+                </div>';
                 }
+                return '-';
             })
             ->rawColumns(['source_detail', 'actions'])
             ->toJson();
     }
+
 
     /** Soft delete */
     public function destroy(string $uuid)

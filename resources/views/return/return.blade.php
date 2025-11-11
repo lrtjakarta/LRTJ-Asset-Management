@@ -20,7 +20,54 @@
 
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-fluid">
-
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">Source</label>
+                            <select id="f-source" class="form-select">
+                                <option value="">All</option>
+                                <option value="transfer">Movement</option>
+                                <option value="disposal">Disposal</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Movement Type</label>
+                            <select id="f-tf-type" class="form-select">
+                                <option value="">All</option>
+                                <option value="owner">Owner</option>
+                                <option value="user">User</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="status">Status</option>
+                                <option value="location">Location</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Created From</label>
+                            <input type="date" id="f-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Created To</label>
+                            <input type="date" id="f-to" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Requester</label>
+                            <select id="f-users" class="form-select">
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="f-asset" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                    <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
+                    <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header border-0 pt-5">
                     <h3 class="card-title align-items-start flex-column">
@@ -118,10 +165,26 @@
                 destroy: id => '{{ route('return.destroy', ':id') }}'.replace(':id', id),
                 showAsset: uuid => '{{ route('assets.detail', ':uuid') }}'.replace(':uuid', encodeURIComponent(
                     uuid)),
+                export: '{{ route('export.return') }}',
             };
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                }
+            });
+            $('#f-users').select2({
+                placeholder: 'Select requester',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: '{{ route('users.options') }}',
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
                 }
             });
 
@@ -130,11 +193,19 @@
                 serverSide: true,
                 ajax: {
                     url: R.data,
-                    type: 'GET'
+                    type: 'GET',
+                    data: function(d) {
+                        d.source = $('#f-source').val() || '';
+                        d.tf_type = $('#f-tf-type').val() || '';
+                        d.date_from = $('#f-from').val() || '';
+                        d.date_to = $('#f-to').val() || '';
+                        d.users = $('#f-users').val() || '';
+                        d.asset = $('#f-asset').val() || '';
+                    }
                 },
                 order: [
-                    [6, 'desc']
-                ], 
+                    [7, 'desc']
+                ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
@@ -143,7 +214,7 @@
                 columns: [{
                         data: 'return_code',
                         name: 'return_history.return_code'
-                    },{
+                    }, {
                         data: 'source_code',
                         name: 'return_history.source_code'
                     },
@@ -209,7 +280,36 @@
                     },
                 ]
             });
+            $('#btnFilter').on('click', function(e) {
+                e.preventDefault();
+                dt.ajax.reload();
+            });
 
+            $('#btnReset').on('click', function(e) {
+                e.preventDefault();
+                $('#f-source').val('');
+                $('#f-tf-type').val('');
+                $('#f-from').val('');
+                $('#f-to').val('');
+                $('#f-asset').val('');
+                $('#f-users').val(null).trigger('change');
+                dt.ajax.reload();
+            });
+
+            $('#btnExport').on('click', function(e) {
+                e.preventDefault();
+
+                const params = $.param({
+                    source: $('#f-source').val() || '',
+                    tf_type: $('#f-tf-type').val() || '',
+                    date_from: $('#f-from').val() || '',
+                    date_to: $('#f-to').val() || '',
+                    users: $('#f-users').val() || '',
+                    asset: $('#f-asset').val() || '',
+                });
+
+                window.location = R.export+'?' + params;
+            });
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 $('#formReturn')[0].reset();

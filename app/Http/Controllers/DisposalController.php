@@ -45,7 +45,7 @@ class DisposalController extends Controller
                 'max:20480',
             ],
         ]);
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $asset = Assets::select('uuid', 'asset_code', 'kode_status')
@@ -179,7 +179,7 @@ class DisposalController extends Controller
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($d, $uid) {
@@ -202,7 +202,7 @@ class DisposalController extends Controller
         $d = Disposal::findOrFail($uuid);
         abort_if($d->kode_status !== 'APR', 422, 'Already processed.');
 
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $d->update([
@@ -273,12 +273,51 @@ class DisposalController extends Controller
         if (!$this->canReadDisposal()) {
             return DataTables::of(collect())->toJson();
         }
+
+        $status      = trim((string) $request->input('status', ''));
+        $requester   = trim((string) $request->input('requester', ''));
+        $updatedFrom = $request->input('updated_from');
+        $updatedTo   = $request->input('updated_to');
+        $createdFrom = $request->input('created_from');
+        $createdTo   = $request->input('created_to');
+        $assetQ      = trim((string) $request->input('asset_q', ''));
+
         $q = Disposal::query()
             ->with(['status', 'target', 'asset'])
             ->orderByDesc('created_at');
 
-        if ($request->filled('workflow')) {
+        // old workflow param (keep for safety, but status takes priority)
+        if ($request->filled('workflow') && $status === '') {
             $q->where('kode_status', $request->string('workflow'));
+        }
+
+        if ($status !== '') {
+            $q->where('kode_status', $status);
+        }
+
+        if ($requester !== '') {
+            $q->where('pic_request_uid', $requester);
+        }
+
+        if ($updatedFrom) {
+            $q->whereDate('updated_at', '>=', $updatedFrom);
+        }
+        if ($updatedTo) {
+            $q->whereDate('updated_at', '<=', $updatedTo);
+        }
+
+        if ($createdFrom) {
+            $q->whereDate('created_at', '>=', $createdFrom);
+        }
+        if ($createdTo) {
+            $q->whereDate('created_at', '<=', $createdTo);
+        }
+
+        if ($assetQ !== '') {
+            $q->whereHas('asset', function ($w) use ($assetQ) {
+                $w->where('asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('description', 'ilike', "%{$assetQ}%");
+            });
         }
 
         $user = $request->user();
@@ -290,13 +329,10 @@ class DisposalController extends Controller
             ->addColumn('asset_label', fn($t) => $t->asset ? $t->asset->asset_code : $t->asset_uuid)
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
             ->addColumn('target_label',   fn($t) => $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status)
-
             ->addColumn('file', function ($r) {
                 if (!$r->file_path) return '';
-
                 $url  = url('storage/' . ltrim($r->file_path, '/'));
                 $name = $r->file_name ?: 'Attachment';
-
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
             })
             ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
@@ -320,6 +356,7 @@ class DisposalController extends Controller
             ->rawColumns(['file', 'actions'])
             ->toJson();
     }
+
 
     private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?Disposal $existing = null): array
     {

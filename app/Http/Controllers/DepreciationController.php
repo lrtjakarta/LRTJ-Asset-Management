@@ -1046,7 +1046,7 @@ class DepreciationController extends Controller
         ]);
 
         $type = $data['transfer_type'] ?? 'tf-val';
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         if ($type === 'tf-val') {
@@ -1108,7 +1108,7 @@ class DepreciationController extends Controller
             ->where('kode_status', self::STATUS_APR)
             ->firstOrFail();
 
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($req, $uid) {
@@ -1147,7 +1147,7 @@ class DepreciationController extends Controller
             'status_note' => ['nullable', 'string', 'max:500'],
         ]);
 
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $req = AssetDeprTransferRequest::where('uuid', $uuid)

@@ -15,12 +15,18 @@ class AcquisitionController extends Controller
     {
         return view('acquisition.acquisition');
     }
-
     public function dtGlobal(Request $request)
     {
         if (!$this->canReadAcquisition()) {
             return DataTables::of(collect())->toJson();
         }
+
+        $pic      = $request->input('pic');
+        $pajak    = $request->input('pajak');      // '1' / '0'
+        $capFrom  = $request->input('cap_from');
+        $capTo    = $request->input('cap_to');
+        $assetLike = $request->input('asset');
+
         $q = DB::table('assets_value_history as h')
             ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
             ->select(
@@ -36,9 +42,63 @@ class AcquisitionController extends Controller
             )
             ->orderByDesc('h.created_at');
 
+        if ($pic) {
+            $q->where('h.pic_request_uid', $pic);
+        }
+
+        if ($assetLike) {
+            $q->where(function ($w) use ($assetLike) {
+                $w->where('a.asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetLike}%");
+            });
+        }
+
+        if ($pajak !== null && $pajak !== '') {
+            if ($pajak === '1') {
+                $q->whereRaw("
+                coalesce(
+                    (h.after_payload::jsonb->>'is_pajak')::int,
+                    (h.before_payload::jsonb->>'is_pajak')::int,
+                    0
+                ) = 1
+            ");
+            } elseif ($pajak === '0') {
+                $q->whereRaw("
+                coalesce(
+                    (h.after_payload::jsonb->>'is_pajak')::int,
+                    (h.before_payload::jsonb->>'is_pajak')::int,
+                    0
+                ) = 0
+            ");
+            }
+        }
+
+        if ($capFrom) {
+            $q->whereRaw("
+            to_date(
+                coalesce(
+                    h.after_payload::jsonb->>'capitalization_date',
+                    h.before_payload::jsonb->>'capitalization_date'
+                ),
+                'YYYY-MM-DD'
+            ) >= ?
+        ", [$capFrom]);
+        }
+
+        if ($capTo) {
+            $q->whereRaw("
+            to_date(
+                coalesce(
+                    h.after_payload::jsonb->>'capitalization_date',
+                    h.before_payload::jsonb->>'capitalization_date'
+                ),
+                'YYYY-MM-DD'
+            ) <= ?
+        ", [$capTo]);
+        }
+
         return DataTables::of($q)
             ->addColumn('asset_label', fn($r) => "{$r->asset_code} - {$r->asset_name}")
-
             ->addColumn('quantity', function ($r) {
                 $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
                 $before = json_decode($r->before_payload ?? '[]', true) ?: [];
@@ -101,6 +161,7 @@ class AcquisitionController extends Controller
             })
             ->toJson();
     }
+
 
     private function parseDate(?string $v): ?string
     {
@@ -179,7 +240,7 @@ class AcquisitionController extends Controller
             'capitalization_date' => $this->parseDate($data['capitalization_date'] ?? null),
         ];
 
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         DB::beginTransaction();
@@ -245,7 +306,7 @@ class AcquisitionController extends Controller
 
     public function dataByAsset(string $assetUuid, Request $request)
     {
-        
+
         if (!$this->canReadAcquisition()) {
             return DataTables::of(collect())->toJson();
         }

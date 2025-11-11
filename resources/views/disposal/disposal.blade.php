@@ -20,7 +20,60 @@
 
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">Status Approval</label>
+                            <select id="ds-status" class="form-select">
+                                <option value="">All</option>
+                                @foreach ($workflows as $w)
+                                    <option value="{{ $w->kode }}">{{ $w->kode }} - {{ $w->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Requester</label>
+                            <select id="ds-requester" class="form-select"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Updated From</label>
+                            <input type="date" id="ds-updated-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Updated To</label>
+                            <input type="date" id="ds-updated-to" class="form-control">
+                        </div>
+                    </div>
 
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-md-3">
+                            <label class="form-label">Created From</label>
+                            <input type="date" id="ds-created-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Created To</label>
+                            <input type="date" id="ds-created-to" class="form-control">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="ds-asset-q" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button id="ds-btn-apply" class="btn btn-sm btn-danger me-2">
+                        Apply Filter
+                    </button>
+                    <button id="ds-btn-reset" class="btn btn-sm btn-light-danger me-2">
+                        Reset
+                    </button>
+                    <button id="ds-btn-export" class="btn btn-sm btn-light-danger me-2">
+                        Export Excel
+                    </button>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header border-0 pt-5">
                     <h3 class="card-title align-items-start flex-column">
@@ -28,12 +81,6 @@
                     </h3>
                     <div class="card-toolbar">
                         <div class="d-flex align-items-center gap-3">
-                            <select id="filter-workflow" class="form-select form-select-sm w-auto">
-                                <option value="">All Status</option>
-                                @foreach ($workflows as $w)
-                                    <option value="{{ $w->kode }}">{{ $w->kode }} - {{ $w->name }}</option>
-                                @endforeach
-                            </select>
                             <a href="#" id="btnOpenCreate" class="btn btn-sm btn-danger">
                                 <i class="ki-duotone ki-plus fs-2"></i>Add New
                             </a>
@@ -193,11 +240,27 @@
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
 
                 assets: '{{ route('assets.options') }}',
+                exportUrl: '{{ route('export.disposal') }}',
             };
 
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                }
+            });
+            $('#ds-requester').select2({
+                placeholder: 'Select requester',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: '{{ route('users.options') }}',
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1,
+                    }),
+                    processResults: d => d,
                 }
             });
 
@@ -273,7 +336,7 @@
                 $('#snap-maintenance').text(safe(d.maintenance_label));
                 $('#snap-status').text(safe(d.status_label));
                 $('#snap-location').text(safe(d.location_label));
-                
+
                 $('#snap-price').text(safe(d.price));
                 $('#snap-quantity').text(safe(d.quantity));
                 $('#snap-vat-in').text(safe(d.vat_in));
@@ -305,7 +368,13 @@
                 ajax: {
                     url: R.data,
                     data: d => {
-                        d.workflow = $('#filter-workflow').val() || '';
+                        d.status = $('#ds-status').val() || '';
+                        d.requester = $('#ds-requester').val() || '';
+                        d.updated_from = $('#ds-updated-from').val() || '';
+                        d.updated_to = $('#ds-updated-to').val() || '';
+                        d.created_from = $('#ds-created-from').val() || '';
+                        d.created_to = $('#ds-created-to').val() || '';
+                        d.asset_q = $('#ds-asset-q').val() || '';
                     }
                 },
                 order: [
@@ -397,9 +466,38 @@
                     }
                 ]
             });
+            $('#ds-btn-apply').on('click', function(e) {
+                e.preventDefault();
+                dt.ajax.reload();
+            });
 
-            $('#filter-workflow').on('change', () => dt.ajax.reload());
+            $('#ds-btn-reset').on('click', function(e) {
+                e.preventDefault();
+                $('#ds-status').val('');
+                $('#ds-requester').val(null).trigger('change');
+                $('#ds-updated-from').val('');
+                $('#ds-updated-to').val('');
+                $('#ds-created-from').val('');
+                $('#ds-created-to').val('');
+                $('#ds-asset-q').val('');
+                dt.ajax.reload();
+            });
 
+            $('#ds-btn-export').on('click', function(e) {
+                e.preventDefault();
+
+                const params = $.param({
+                    status: $('#ds-status').val() || '',
+                    requester: $('#ds-requester').val() || '',
+                    updated_from: $('#ds-updated-from').val() || '',
+                    updated_to: $('#ds-updated-to').val() || '',
+                    created_from: $('#ds-created-from').val() || '',
+                    created_to: $('#ds-created-to').val() || '',
+                    asset_q: $('#ds-asset-q').val() || '',
+                });
+
+                window.location = R.exportUrl + '?' + params;
+            });
             $('#formDisposal').off('submit').on('submit', function(e) {
                 e.preventDefault();
 

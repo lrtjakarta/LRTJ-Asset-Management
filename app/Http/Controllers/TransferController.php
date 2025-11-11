@@ -182,7 +182,7 @@ class TransferController extends Controller
         ]);
 
 
-        $currentUid = auth()->user()?->username;
+        $currentUid = auth()->user()?->name;
         abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
@@ -357,7 +357,7 @@ class TransferController extends Controller
     public function approve(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
         DB::transaction(function () use ($uuid, $uid) {
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
@@ -397,7 +397,7 @@ class TransferController extends Controller
     public function reject(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();

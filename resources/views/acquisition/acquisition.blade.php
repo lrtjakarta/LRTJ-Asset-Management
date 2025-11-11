@@ -21,6 +21,42 @@
     </div>
 
     <div class="container-xxl" id="kt_content_container">
+        <div class="card mb-6">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">PIC</label>
+                        <select id="f-pic" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Pajak</label>
+                        <select id="f-pajak" class="form-select">
+                            <option value="">All</option>
+                            <option value="1">Yes</option>
+                            <option value="0">No</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Capitalization From</label>
+                        <input type="date" id="f-cap-from" class="form-control">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Capitalization To</label>
+                        <input type="date" id="f-cap-to" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Asset (code / description)</label>
+                        <input type="text" id="f-asset" class="form-control"
+                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
+                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+            </div>
+        </div>
         <div class="card">
             <div class="card-header align-items-center justify-content-between">
                 <div class="d-flex flex-column">
@@ -42,7 +78,7 @@
                     class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
                     <thead class="table-light">
                         <tr>
-                            <th class="min-w-150px">Acq Code</th>
+                            <th class="min-w-150px">Transaction Number</th>
                             <th class="min-w-200px">Asset</th>
                             <th class="min-w-100px">Qty</th>
                             <th class="min-w-150px">UOM</th>
@@ -83,8 +119,8 @@
 
                             <div class="col-md-4">
                                 <label class="form-label required">Quantity</label>
-                                <input type="number" step="0.001" min="0" class="form-control" id="acq-quantity"
-                                    name="quantity">
+                                <input type="number" step="0.001" min="0" class="form-control"
+                                    id="acq-quantity" name="quantity">
                             </div>
 
                             <div class="col-md-4">
@@ -100,8 +136,8 @@
 
                             <div class="col-md-4">
                                 <label class="form-label required">Useful Life (Months)</label>
-                                <input type="number" step="1" min="0" class="form-control" id="acq-life-month"
-                                    name="useful_life_month">
+                                <input type="number" step="1" min="0" class="form-control"
+                                    id="acq-life-month" name="useful_life_month">
                                 <div class="form-text">Year will be auto-calculated</div>
                             </div>
 
@@ -158,6 +194,21 @@
                 if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
                 else $btnSave.removeAttr('data-kt-indicator').prop('disabled', false);
             };
+            $('#f-pic').select2({
+                placeholder: 'Select PIC',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: "{{ route('users.options') }}",
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
+            });
 
             var tbl = $('#tbl-acq-global').DataTable({
                 processing: true,
@@ -172,7 +223,11 @@
                 ajax: {
                     url: "{{ route('acquisition.dt') }}",
                     data: d => {
-                        // filters here later
+                        d.pic = $('#f-pic').val() || '';
+                        d.pajak = $('#f-pajak').val() || '';
+                        d.cap_from = $('#f-cap-from').val() || '';
+                        d.cap_to = $('#f-cap-to').val() || '';
+                        d.asset = $('#f-asset').val() || '';
                     }
                 },
                 order: [
@@ -234,6 +289,34 @@
                         name: 'h.created_at'
                     },
                 ]
+            });
+            $('#btnFilter').on('click', function(e) {
+                e.preventDefault();
+                tbl.ajax.reload();
+            });
+
+            $('#btnReset').on('click', function(e) {
+                e.preventDefault();
+                $('#f-pic').val(null).trigger('change');
+                $('#f-pajak').val('');
+                $('#f-cap-from').val('');
+                $('#f-cap-to').val('');
+                $('#f-asset').val('');
+                tbl.ajax.reload();
+            });
+
+            $('#btnExport').on('click', function(e) {
+                e.preventDefault();
+
+                const params = $.param({
+                    pic: $('#f-pic').val() || '',
+                    pajak: $('#f-pajak').val() || '',
+                    cap_from: $('#f-cap-from').val() || '',
+                    cap_to: $('#f-cap-to').val() || '',
+                    asset: $('#f-asset').val() || '',
+                });
+
+                window.location = "{{ route('export.acquisition') }}" +'?' + params;
             });
 
             $('#acq-asset-select').select2({

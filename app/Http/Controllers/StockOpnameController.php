@@ -280,7 +280,7 @@ class StockOpnameController extends Controller
             'note'         => ['nullable', 'string', 'max:1000'],
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
-        $currentUid = auth()->user()?->username;
+        $currentUid = auth()->user()?->name;
         abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
@@ -463,7 +463,7 @@ class StockOpnameController extends Controller
             'target_status' => ['nullable', 'string'],
             'file'          => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
-        $uid = auth()->user()?->username;
+        $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $asset = Assets::select('uuid', 'asset_code', 'kode_status')->findOrFail($data['asset_uuid']);

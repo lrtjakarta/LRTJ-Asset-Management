@@ -43,11 +43,11 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Date From</label>
+                            <label class="form-label">Created From</label>
                             <input type="date" id="f-from" class="form-control">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Date To</label>
+                            <label class="form-label">Created To</label>
                             <input type="date" id="f-to" class="form-control">
                         </div>
                         <div class="col-md-3">
@@ -267,7 +267,7 @@
     <script>
         (function() {
             $("#f-users").select2({
-                placeholder: 'Select user',
+                placeholder: 'Select requester',
                 width: '100%',
                 allowClear: true,
                 ajax: {
