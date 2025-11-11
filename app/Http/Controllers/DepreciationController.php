@@ -367,7 +367,12 @@ class DepreciationController extends Controller
 
                 $capDate  = $av?->capitalization_date ?? $av?->actual_date ?? $av?->created_at;
                 $capTotal = (float) ($av?->total ?? 0);
-
+                if ($capDate) {
+                    $assetStartMonth = Carbon::parse($capDate)->startOfMonth();
+                    if ($period->lt($assetStartMonth)) {
+                        continue;
+                    }
+                }
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
                     ->whereDate('period', '<', $period)
                     ->orderBy('period', 'desc')
