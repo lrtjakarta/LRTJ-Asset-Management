@@ -66,7 +66,7 @@
                 </div>
                 <div class="card-footer">
                     <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
-                    <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
+                    <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
                     <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
                 </div>
             </div>

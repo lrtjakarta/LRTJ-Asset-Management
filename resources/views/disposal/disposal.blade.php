@@ -69,7 +69,7 @@
                     <button id="ds-btn-reset" class="btn btn-sm btn-light-danger me-2">
                         Reset
                     </button>
-                    <button id="ds-btn-export" class="btn btn-sm btn-light-danger me-2">
+                    <button id="ds-btn-export" class="btn btn-sm btn-light-danger">
                         Export Excel
                     </button>
                 </div>
