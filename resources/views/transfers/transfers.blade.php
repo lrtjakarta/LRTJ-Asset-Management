@@ -68,9 +68,7 @@
                             <label class="form-label">Created To</label>
                             <input type="date" id="mv-created-to" class="form-control">
                         </div>
-                    </div>
-                    <div class="row g-3 align-items-end mt-1">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="mv-asset-q" class="form-control"
                                 placeholder="e.g. A1101000002-00 / Laptop Dell">

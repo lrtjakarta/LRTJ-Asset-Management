@@ -55,7 +55,7 @@
                             <label class="form-label">Created To</label>
                             <input type="date" id="ds-created-to" class="form-control">
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="ds-asset-q" class="form-control"
                                 placeholder="e.g. A1101000002-00 / Laptop Dell">
