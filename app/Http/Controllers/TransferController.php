@@ -41,11 +41,19 @@ class TransferController extends Controller
             return DataTables::of(collect())->toJson();
         }
 
-        $user = $request->user();
+        $user      = $request->user();
         $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
         $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
         $canApr    = $user && $user->hasAction('MOVEMENT', 'APR');
 
+        $type        = trim((string) $request->input('type', ''));
+        $status      = trim((string) $request->input('status', ''));
+        $requester   = trim((string) $request->input('requester', ''));
+        $updatedFrom = $request->input('updated_from');
+        $updatedTo   = $request->input('updated_to');
+        $createdFrom = $request->input('created_from');
+        $createdTo   = $request->input('created_to');
+        $assetQ = trim((string) $request->input('asset_q', ''));
         $q = Transfer::query()
             ->from('assets_transfers')
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
@@ -55,12 +63,40 @@ class TransferController extends Controller
                 'a.asset_code',
                 'a.description as asset_desc',
             ])
+            ->whereNull('assets_transfers.deleted_at')
             ->orderByDesc('assets_transfers.updated_at');
 
-        if ($request->filled('workflow')) {
-            $q->where('assets_transfers.kode_status', $request->string('workflow'));
+        // apply filters
+        if ($type !== '') {
+            $q->where('assets_transfers.type', $type);
         }
 
+        if ($status !== '') {
+            $q->where('assets_transfers.kode_status', $status);
+        }
+
+        if ($requester !== '') {
+            $q->where('assets_transfers.pic_request_uid', $requester);
+        }
+
+        if ($updatedFrom) {
+            $q->whereDate('assets_transfers.updated_at', '>=', $updatedFrom);
+        }
+        if ($updatedTo) {
+            $q->whereDate('assets_transfers.updated_at', '<=', $updatedTo);
+        }
+        if ($createdFrom) {
+            $q->whereDate('assets_transfers.created_at', '>=', $createdFrom);
+        }
+        if ($createdTo) {
+            $q->whereDate('assets_transfers.created_at', '<=', $createdTo);
+        }
+        if ($assetQ !== '') {
+            $q->where(function ($w) use ($assetQ) {
+                $w->where('a.asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetQ}%");
+            });
+        }
         return DataTables::of($q)
             ->addColumn('asset_label', function ($r) {
                 $code = $r->asset_code ?? $r->asset_uuid;
@@ -74,13 +110,11 @@ class TransferController extends Controller
             })
             ->addColumn(
                 'before_show',
-                fn($r) =>
-                $this->resolveLabel($r->type, data_get($r->before, 'value'))
+                fn($r) => $this->resolveLabel($r->type, data_get($r->before, 'value'))
             )
             ->addColumn(
                 'after_show',
-                fn($r) =>
-                $this->resolveLabel($r->type, data_get($r->after, 'value'))
+                fn($r) => $this->resolveLabel($r->type, data_get($r->after, 'value'))
             )
 
             ->filterColumn('asset_label', function ($builder, $keyword) {
@@ -135,6 +169,7 @@ class TransferController extends Controller
             ->rawColumns(['file', 'actions'])
             ->toJson();
     }
+
     public function store(Request $request)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'C'), 403);

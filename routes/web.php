@@ -266,6 +266,12 @@ Route::middleware('ldap.session')->group(function () {
             Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
         });
 
+        // VALUE MOVEMENT
+        Route::post('/transfer/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
+        Route::post('/transfer/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
+        Route::get('/transfer/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
+        Route::post('/transfer/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
+        Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
 
         // TRANSFER REQUESTS
         Route::prefix('transfer-requests')->name('transfer-requests.')->group(function () {
@@ -277,12 +283,6 @@ Route::middleware('ldap.session')->group(function () {
             });
             Route::middleware('role.action:TRANSFER,C')->group(function () {
                 Route::post('/', [DepreciationController::class, 'storeTransferRequest'])->name('store');
-                // VALUE MOVEMENT
-                Route::post('/transfer/addition',                 [DepreciationController::class, 'recordAddition'])->name('mv.addition');
-                Route::post('/transfer/transfer',                 [DepreciationController::class, 'recordTransfer'])->name('mv.transfer');
-                Route::get('/transfer/transfer-limit',            [DepreciationController::class, 'transferLimit'])->name('mv.transfer.limit');
-                Route::post('/transfer/disposal',                 [DepreciationController::class, 'recordDisposal'])->name('mv.disposal');
-                Route::get('/transfer/carryover-preview', [DepreciationController::class, 'carryOverPreview'])->name('mv.carryover.preview');
             });
             Route::middleware('role.action:TRANSFER,U')->group(function () {
                 Route::put('/{uuid}', [DepreciationController::class, 'updateTransferRequest'])->name('update');
@@ -328,6 +328,8 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/master-user-code', [ExportController::class, 'master_user_code_export'])->name('master_user_code');
         Route::get('/master-sumber', [ExportController::class, 'master_sumber_export'])->name('master_sumber');
         Route::get('/assets', [ExportController::class, 'assets_export'])->name('assets');
+        Route::get('/stock-opname', [ExportController::class, 'stock_opname_export'])->name('stockopname');
+        Route::get('/movement', [ExportController::class, 'movement_export'])->name('movement');
     });
 
     // TRASH ROUTE
@@ -374,6 +376,8 @@ Route::middleware('ldap.session')->group(function () {
             ->name('users.update')
             ->middleware('role.action:USER_MGMT,U');
     });
+
+    Route::get('users/select-user', [UserManagementController::class, 'select_users'])->name('users.options');
 
     // LOGOUT ROUTE
     Route::post('/ldap-logout', [AuthLdapController::class, 'logout'])->name('ldap.logout');

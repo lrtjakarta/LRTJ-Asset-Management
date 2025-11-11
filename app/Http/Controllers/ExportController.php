@@ -12,13 +12,15 @@ use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
 use App\Models\MasterUOM;
 use App\Models\MasterUserCode;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
 
 class ExportController
 {
-    public function master_transaction_export()
+    public function master_transaction_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterTransaction::select(['uuid', 'kode', 'name', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -55,8 +57,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_location_export()
+    public function master_location_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterLocation::select(['uuid', 'kode', 'name', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -93,8 +96,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_uom_export()
+    public function master_uom_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterUOM::select(['uuid', 'kode', 'name', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -131,8 +135,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_sumber_export()
+    public function master_sumber_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterSumber::select(['uuid', 'kode', 'name', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -169,8 +174,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_status_export()
+    public function master_status_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterStatus::select(['uuid', 'kode', 'name', 'type', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -209,8 +215,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_asset_class_export()
+    public function master_asset_class_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterAssetClass::select(['uuid', 'kode', 'kode_transaction', 'name', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -260,8 +267,9 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-    public function master_user_code_export()
+    public function master_user_code_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('MASTER_DATA', 'R'), 403);
         $rows = MasterUserCode::select(['uuid', 'kode', 'department', 'description', 'status', 'updated_at'])
             ->orderBy('kode')
             ->get();
@@ -302,6 +310,7 @@ class ExportController
     }
     public function assets_export(Request $request)
     {
+        abort_unless($request->user()?->hasAction('ASSETS', 'R'), 403);
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
@@ -451,6 +460,282 @@ class ExportController
         }
 
         $fileName = 'assets-' . now()->format('Ymd-His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function stock_opname_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
+
+        $source    = $request->input('source');
+        $tfType    = $request->input('tf_type');
+        $dateFrom  = $request->input('date_from');
+        $dateTo    = $request->input('date_to');
+        $assetLike = $request->input('asset');
+        $users     = $request->input('users');
+
+        $t = DB::table('assets_transfers as t')
+            ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
+            ->selectRaw("
+            t.uuid,
+            t.asset_uuid,
+            a.asset_code,
+            a.description,
+            t.transfer_code       as code,
+            'transfer'            as source_type,
+            t.type                as tf_type,
+            COALESCE(t.before->>'value','') as before_val,
+            COALESCE(t.after->>'value','')  as after_val,
+            t.pic_request_uid,
+            t.pic_approve_uid,
+            t.note,
+            t.file_name,
+            t.file_path,
+            t.updated_at
+        ")
+            ->whereNull('t.deleted_at')
+            ->where('t.kode_status', 'ACC');
+
+        $d = DB::table('assets_disposals as d')
+            ->join('assets as a', 'a.uuid', '=', 'd.asset_uuid')
+            ->selectRaw("
+            d.uuid,
+            d.asset_uuid,
+            a.asset_code,
+            a.description,
+            d.disposal_code       as code,
+            'disposal'            as source_type,
+            NULL::text            as tf_type,
+            COALESCE(d.before_status,'') as before_val,
+            COALESCE('DIS','')           as after_val,
+            d.pic_request_uid,
+            d.pic_approve_uid,
+            d.note,
+            d.file_name,
+            d.file_path,
+            d.updated_at
+        ")
+            ->whereNull('d.deleted_at')
+            ->where('d.kode_status', 'ACC');
+
+        if ($source === 'transfer') {
+            $union = $t;
+        } elseif ($source === 'disposal') {
+            $union = $d;
+        } else {
+            $union = $t->unionAll($d);
+        }
+
+        $q = DB::query()->fromSub($union, 'u');
+
+        if ($tfType) {
+            $q->where('source_type', 'transfer')->where('tf_type', $tfType);
+        }
+        if ($dateFrom) {
+            $q->whereDate('updated_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $q->whereDate('updated_at', '<=', $dateTo);
+        }
+        if ($assetLike) {
+            $q->where(function ($qq) use ($assetLike) {
+                $qq->where('asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('description', 'ilike', "%{$assetLike}%");
+            });
+        }
+        if ($users) {
+            $q->where('pic_request_uid', $users);
+        }
+
+        $rows = $q->orderBy('updated_at', 'desc')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Stock Opname');
+
+        // Header row
+        $sheet->setCellValue('A1', 'Asset Code');
+        $sheet->setCellValue('B1', 'Asset Description');
+        $sheet->setCellValue('C1', 'Transaction Number');
+        $sheet->setCellValue('D1', 'Source');
+        $sheet->setCellValue('E1', 'Type');
+        $sheet->setCellValue('F1', 'Before');
+        $sheet->setCellValue('G1', 'After');
+        $sheet->setCellValue('H1', 'Note');
+        $sheet->setCellValue('I1', 'Requester');
+        $sheet->setCellValue('J1', 'Approver');
+        $sheet->setCellValue('K1', 'Updated At');
+
+        $sheet->getStyle('A1:K1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $source  = strtoupper($r->source_type);
+            $type    = $r->source_type === 'transfer'
+                ? strtoupper($r->tf_type)
+                : 'DISPOSAL';
+
+            $before  = $r->before_val;
+            $after   = $r->after_val;
+
+            $updated = $r->updated_at
+                ? Carbon::parse($r->updated_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->asset_code);
+            $sheet->setCellValue("B{$rowNum}", $r->description);
+            $sheet->setCellValue("C{$rowNum}", $r->code);
+            $sheet->setCellValue("D{$rowNum}", $source);
+            $sheet->setCellValue("E{$rowNum}", $type);
+            $sheet->setCellValue("F{$rowNum}", $before);
+            $sheet->setCellValue("G{$rowNum}", $after);
+            $sheet->setCellValue("H{$rowNum}", $r->note);
+            $sheet->setCellValue("I{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("J{$rowNum}", $r->pic_approve_uid);
+            $sheet->setCellValue("K{$rowNum}", $updated);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'K') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'stock_opname_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+    public function movement_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
+
+        $type        = trim((string) $request->input('type', ''));
+        $status      = trim((string) $request->input('status', ''));
+        $requester   = trim((string) $request->input('requester', ''));
+        $updatedFrom = $request->input('updated_from');
+        $updatedTo   = $request->input('updated_to');
+        $createdFrom = $request->input('created_from');
+        $createdTo   = $request->input('created_to');
+        $assetQ      = trim((string) $request->input('asset_q', ''));
+
+        $q = DB::table('assets_transfers as t')
+            ->leftJoin('assets as a', 'a.uuid', '=', 't.asset_uuid')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 't.kode_status')
+            ->selectRaw("
+            t.transfer_code,
+            a.asset_code,
+            a.description as asset_desc,
+            t.type,
+            COALESCE(t.before->>'value','') as before_val,
+            COALESCE(t.after->>'value','')  as after_val,
+            t.note,
+            t.pic_request_uid,
+            t.pic_approve_uid,
+            t.kode_status,
+            ms.name as status_name,
+            t.file_name,
+            t.created_at,
+            t.updated_at
+        ")
+            ->whereNull('t.deleted_at');
+
+        if ($type !== '') {
+            $q->where('t.type', $type);
+        }
+        if ($status !== '') {
+            $q->where('t.kode_status', $status);
+        }
+        if ($requester !== '') {
+            $q->where('t.pic_request_uid', $requester);
+        }
+        if ($updatedFrom) {
+            $q->whereDate('t.updated_at', '>=', $updatedFrom);
+        }
+        if ($updatedTo) {
+            $q->whereDate('t.updated_at', '<=', $updatedTo);
+        }
+        if ($createdFrom) {
+            $q->whereDate('t.created_at', '>=', $createdFrom);
+        }
+        if ($createdTo) {
+            $q->whereDate('t.created_at', '<=', $createdTo);
+        }
+        if ($assetQ !== '') {
+            $q->where(function ($w) use ($assetQ) {
+                $w->where('a.asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('a.description', 'ilike', "%{$assetQ}%");
+            });
+        }
+        $rows = $q->orderBy('t.updated_at', 'desc')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Movement');
+
+        // header
+        $sheet->setCellValue('A1', 'Transaction Number');
+        $sheet->setCellValue('B1', 'Asset Code');
+        $sheet->setCellValue('C1', 'Asset Description');
+        $sheet->setCellValue('D1', 'Type');
+        $sheet->setCellValue('E1', 'Before');
+        $sheet->setCellValue('F1', 'After');
+        $sheet->setCellValue('G1', 'Note');
+        $sheet->setCellValue('H1', 'Requester');
+        $sheet->setCellValue('I1', 'Approver');
+        $sheet->setCellValue('J1', 'Status');
+        $sheet->setCellValue('K1', 'File Name');
+        $sheet->setCellValue('L1', 'Created At');
+        $sheet->setCellValue('M1', 'Updated At');
+
+        $sheet->getStyle('A1:M1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $statusLabel = $r->kode_status
+                ? ($r->kode_status . ($r->status_name ? (' - ' . $r->status_name) : ''))
+                : '';
+
+            $created = $r->created_at
+                ? Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $updated = $r->updated_at
+                ? Carbon::parse($r->updated_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->transfer_code);
+            $sheet->setCellValue("B{$rowNum}", $r->asset_code);
+            $sheet->setCellValue("C{$rowNum}", $r->asset_desc);
+            $sheet->setCellValue("D{$rowNum}", strtoupper($r->type ?? ''));
+            $sheet->setCellValue("E{$rowNum}", $r->before_val);
+            $sheet->setCellValue("F{$rowNum}", $r->after_val);
+            $sheet->setCellValue("G{$rowNum}", $r->note);
+            $sheet->setCellValue("H{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("I{$rowNum}", $r->pic_approve_uid);
+            $sheet->setCellValue("J{$rowNum}", $statusLabel);
+            $sheet->setCellValue("K{$rowNum}", $r->file_name);
+            $sheet->setCellValue("L{$rowNum}", $created);
+            $sheet->setCellValue("M{$rowNum}", $updated);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'M') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'movement_' . now()->format('Ymd_His') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

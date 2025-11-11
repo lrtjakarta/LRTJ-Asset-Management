@@ -55,6 +55,7 @@ class StockOpnameController extends Controller
         $dateFrom  = $request->input('date_from');
         $dateTo    = $request->input('date_to');
         $assetLike = $request->input('asset');
+        $users = $request->input('users');
 
         $t = DB::table('assets_transfers as t')
             ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
@@ -124,6 +125,9 @@ class StockOpnameController extends Controller
                 $qq->where('asset_code', 'ilike', "%{$assetLike}%")
                     ->orWhere('description', 'ilike', "%{$assetLike}%");
             });
+        }
+        if($users){
+            $q->where('pic_request_uid', $users);
         }
         if ($search !== '') {
             $q->where(function ($qq) use ($search) {

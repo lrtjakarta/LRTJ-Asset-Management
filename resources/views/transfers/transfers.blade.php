@@ -21,6 +21,74 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-fluid">
 
+            {{-- FILTERS --}}
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label">Type</label>
+                            <select id="mv-type" class="form-select">
+                                <option value="">All</option>
+                                <option value="owner">Owner</option>
+                                <option value="user">User</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="status">Status</option>
+                                <option value="location">Location</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Status Approval</label>
+                            <select id="mv-status" class="form-select">
+                                <option value="">All</option>
+                                @foreach ($workflows as $w)
+                                    <option value="{{ $w->kode }}">{{ $w->kode }} - {{ $w->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Requester</label>
+                            <select id="mv-requester" class="form-select"></select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-md-3">
+                            <label class="form-label">Updated From</label>
+                            <input type="date" id="mv-updated-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Updated To</label>
+                            <input type="date" id="mv-updated-to" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Created From</label>
+                            <input type="date" id="mv-created-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Created To</label>
+                            <input type="date" id="mv-created-to" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row g-3 align-items-end mt-1">
+                        <div class="col-md-6">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="mv-asset-q" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button id="mv-btn-apply" class="btn btn-danger btn-sm me-2">
+                        Apply Filter
+                    </button>
+                    <button id="mv-btn-reset" class="btn btn-light-danger btn-sm me-2">
+                        Reset
+                    </button>
+                    <button id="mv-btn-export" class="btn btn-light-danger btn-sm">
+                        Export Excel
+                    </button>
+                </div>
+            </div>
             <div class="card">
                 <div class="card-header border-0 pt-5">
                     <h3 class="card-title align-items-start flex-column">
@@ -29,12 +97,6 @@
                     <div class="card-toolbar">
 
                         <div class="d-flex align-items-center gap-3">
-                            <select id="filter-workflow" class="form-select form-select-sm w-auto">
-                                <option value="">All Status</option>
-                                @foreach ($workflows as $w)
-                                    <option value="{{ $w->kode }}">{{ $w->kode }} - {{ $w->name }}</option>
-                                @endforeach
-                            </select>
                             <a href="#" id="btnOpenCreate" class="btn btn-sm btn-danger">
                                 <i class="ki-duotone ki-plus fs-2"></i>Add New
                             </a>
@@ -178,6 +240,8 @@
                 approve: id => '{{ route('transfer.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('transfer.reject', ':id') }}'.replace(':id', id),
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
+                export: '{{ route('export.movement') }}',
+                usersOptions: '{{ route('users.options') }}',
             };
 
             $.ajaxSetup({
@@ -293,7 +357,6 @@
                 });
             }
 
-
             function initTargetSelect(type) {
                 const $t = $('#tf-target');
                 $t.off('select2:select').empty().trigger('change');
@@ -312,6 +375,23 @@
                     $('#tf-target-help').text('Pick the new Location.');
                 }
             }
+
+            $('#mv-requester').select2({
+                placeholder: 'All',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: R.usersOptions,
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
+            });
+
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
             const dt = $('#tbl-transfers-all').DataTable({
                 processing: true,
@@ -319,7 +399,14 @@
                 ajax: {
                     url: R.data,
                     data: d => {
-                        d.workflow = $('#filter-workflow').val() || '';
+                        d.type = $('#mv-type').val() || '';
+                        d.status = $('#mv-status').val() || '';
+                        d.requester = $('#mv-requester').val() || '';
+                        d.updated_from = $('#mv-updated-from').val() || '';
+                        d.updated_to = $('#mv-updated-to').val() || '';
+                        d.created_from = $('#mv-created-from').val() || '';
+                        d.created_to = $('#mv-created-to').val() || '';
+                        d.asset_q = $('#mv-asset-q').val() || '';
                     }
                 },
                 order: [
@@ -334,7 +421,6 @@
                         data: 'transfer_code',
                         name: 'assets_transfers.transfer_code'
                     },
-
                     {
                         data: 'asset_label',
                         name: 'asset_label',
@@ -347,7 +433,6 @@
                             return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
                         }
                     },
-
                     {
                         data: 'type',
                         name: 'assets_transfers.type',
@@ -428,7 +513,38 @@
                 ]
             });
 
-            $('#filter-workflow').on('change', () => dt.ajax.reload());
+            // filter buttons
+            $('#mv-btn-apply').on('click', function() {
+                dt.ajax.reload();
+            });
+
+            $('#mv-btn-reset').on('click', function() {
+                $('#mv-type').val('');
+                $('#mv-status').val('');
+                $('#mv-requester').val(null).trigger('change');
+                $('#mv-updated-from').val('');
+                $('#mv-updated-to').val('');
+                $('#mv-created-from').val('');
+                $('#mv-created-to').val('');
+                $('#mv-asset-q').val('');
+                dt.ajax.reload();
+            });
+
+            // export button
+            $('#mv-btn-export').on('click', function(e) {
+                e.preventDefault();
+                const params = $.param({
+                    type: $('#mv-type').val() || '',
+                    status: $('#mv-status').val() || '',
+                    requester: $('#mv-requester').val() || '',
+                    updated_from: $('#mv-updated-from').val() || '',
+                    updated_to: $('#mv-updated-to').val() || '',
+                    created_from: $('#mv-created-from').val() || '',
+                    created_to: $('#mv-created-to').val() || '',
+                    asset_q: $('#mv-asset-q').val() || '',
+                });
+                window.location = R.export+'?' + params;
+            });
 
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
@@ -548,8 +664,7 @@
 
                     $asset.empty();
                     const opt = new Option(assetText ?? '', d.asset_uuid ?? '', true, true);
-                    $asset.append(opt).trigger(
-                        'change.select2');
+                    $asset.append(opt).trigger('change.select2');
                     $asset.prop('disabled', true);
 
                     const type = d?.type || 'owner';
@@ -578,8 +693,7 @@
                                 const label = found ? found.text : afterVal;
                                 const tOpt = new Option(label, afterVal, true, true);
                                 $('#tf-target').append(tOpt).trigger('change.select2');
-                                $('#tf-target-hidden').val(
-                                    afterVal);
+                                $('#tf-target-hidden').val(afterVal);
                             }).fail(() => {
                                 const tOpt = new Option(afterVal, afterVal, true, true);
                                 $('#tf-target').append(tOpt).trigger('change.select2');
@@ -625,6 +739,7 @@
                             .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
+
             $('#tbl-transfers-all').on('click', '.btn-tf-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -647,6 +762,7 @@
                             .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
+
             $('#tbl-transfers-all').on('click', '.btn-tf-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({

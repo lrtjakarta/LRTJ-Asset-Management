@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\MasterRole;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 
 class UserManagementController extends Controller
@@ -91,5 +92,34 @@ class UserManagementController extends Controller
         return redirect()
             ->route('settings.users.index')
             ->with('success', 'User updated.');
+    }
+    public function select_users(Request $request)
+    {
+        $q = trim((string) $request->get('q', ''));
+        $page = max(1, (int) $request->get('page', 1));
+        $perPage = 20;
+
+        $builder = User::query()->orderBy('id');
+
+        if ($q !== '') {
+            $builder->where(function ($w) use ($q) {
+                $ilike = '%' . Str::of($q)->lower() . '%';
+                $w->whereRaw('LOWER(username) LIKE ?', [$ilike])
+                    ->orWhereRaw('LOWER(name) LIKE ?', [$ilike]);
+            });
+        }
+
+        $total = (clone $builder)->count();
+        $rows  = $builder->forPage($page, $perPage)->get(['id', 'username', 'name']);
+
+        $results = $rows->map(fn($r) => [
+            'id'   => $r->name,
+            'text' => "{$r->username} - {$r->name}",
+        ]);
+
+        return response()->json([
+            'results'    => $results,
+            'pagination' => ['more' => ($page * $perPage) < $total],
+        ]);
     }
 }
