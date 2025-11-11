@@ -27,12 +27,12 @@
                             <label class="form-label">Source</label>
                             <select id="f-source" class="form-select">
                                 <option value="">All</option>
-                                <option value="transfer">Transfer</option>
+                                <option value="transfer">Movement</option>
                                 <option value="disposal">Disposal</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Transfer Type</label>
+                            <label class="form-label">Movement Type</label>
                             <select id="f-tf-type" class="form-select">
                                 <option value="">All</option>
                                 <option value="owner">Owner</option>
@@ -78,7 +78,7 @@
                     <div class="card-toolbar">
                         <div class="d-flex align-items-center gap-3">
                             <a href="#" id="btnOpenTf" class="btn btn-sm btn-danger">
-                                <i class="ki-duotone ki-plus fs-2"></i>Transfers
+                                <i class="ki-duotone ki-plus fs-2"></i>Movement
                             </a>
                             <a href="#" id="btnOpenDis" class="btn btn-sm btn-danger">
                                 <i class="ki-duotone ki-plus fs-2"></i>Disposal
@@ -121,7 +121,7 @@
                     <input type="hidden" name="asset_uuid" id="tf-asset-uuid">
                     <input type="hidden" id="tf-edit-id" value="">
                     <div class="modal-header">
-                        <h5 class="modal-title">New Transfer</h5>
+                        <h5 class="modal-title">New Movement</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -172,7 +172,7 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label required">Transfer To</label>
+                                <label class="form-label required">Move To</label>
                                 <select id="tf-target" class="form-select" required></select>
                                 <input type="hidden" name="after[value]" id="tf-target-hidden">
                                 <div class="form-text" id="tf-target-help">Pick the new value.</div>
@@ -597,7 +597,7 @@
                 };
 
                 if (!base['after[value]']) {
-                    Swal.fire('Target required', 'Please select a transfer target.', 'warning');
+                    Swal.fire('Target required', 'Please select a movement target.', 'warning');
                     return;
                 }
                 if (!base.asset_uuid) {
@@ -643,8 +643,8 @@
                 req
                     .done(() => {
                         $('#modal-transfer').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Transfer updated.' :
-                            'Transfer created.', 'success');
+                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Movement updated.' :
+                            'Movement created.', 'success');
                         $('#tf-asset').prop('disabled', false);
                         $('#tbl-so-global').DataTable().ajax.reload(null, false);
 

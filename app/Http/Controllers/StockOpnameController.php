@@ -176,7 +176,7 @@ class StockOpnameController extends Controller
                     'asset_code'      => $r->asset_code,
                     'asset_uuid'      => $r->asset_uuid,
                     'code'            => $r->code,
-                    'source'          => strtoupper($r->source_type),
+                    'source'          => $r->source_type === 'transfer' ? 'MOVEMENT' : 'DISPOSAL',
                     'type'            => $r->source_type === 'transfer' ? strtoupper($r->tf_type) : 'DISPOSAL',
                     'detail'          => $detail,
                     'note'            => $r->note,
@@ -256,7 +256,7 @@ class StockOpnameController extends Controller
 
                 return [
                     'code'            => $r->code,
-                    'source'          => $r->source_type === 'transfer' ? 'TRANSFER' : 'DISPOSAL',
+                    'source'          => $r->source_type === 'transfer' ? 'MOVEMENT' : 'DISPOSAL',
                     'type'            => $r->source_type === 'transfer' ? strtoupper($r->tf_type) : 'DISPOSAL',
                     'detail'          => $detail,
                     'note'            => $r->note,

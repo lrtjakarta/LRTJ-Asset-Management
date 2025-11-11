@@ -112,7 +112,7 @@ class ReturnController extends Controller
         $results = $rows->map(function ($r) {
             $assetLabel = trim(($r->asset_code ?? '') . ' - ' . ($r->description ?? ''));
             $text = ($r->source_type === 'transfer')
-                ? "{$r->code} • " . strtoupper($r->tf_type) . " • {$assetLabel} • {$r->before_label} → {$r->after_label}"
+                ? "{$r->code} • MOVEMENT • {$assetLabel} • {$r->before_label} → {$r->after_label}"
                 : "{$r->code} • DISPOSAL • {$assetLabel}";
 
             return [
@@ -313,11 +313,19 @@ class ReturnController extends Controller
         };
 
         return DataTables::of($q)
-            ->addColumn('source_type_label', fn(ReturnHistory $r) => strtoupper($r->source_type))
+            ->addColumn('source_type_label', function (ReturnHistory $r) {
+                if ($r->source_type === 'transfer' && $r->source) {
+                    return 'MOVEMENT';
+                }
+                if ($r->source_type === 'disposal') {
+                    return 'DISPOSAL';
+                }
+                return '';
+            })
             ->addColumn('source_detail', function (ReturnHistory $r) use ($resolve) {
                 if ($r->source_type === 'transfer' && $r->source) {
                     $t = $r->source;
-                    $type = strtoupper($t->type);
+                    $type = "MOVEMENT";
                     $before = $resolve($t->type, data_get($t->before, 'value'));
                     $after  = $resolve($t->type, data_get($t->after,  'value'));
                     return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";
@@ -381,11 +389,19 @@ class ReturnController extends Controller
         };
 
         return DataTables::of($q)
-            ->addColumn('source_type_label', fn(ReturnHistory $r) => strtoupper($r->source_type))
+            ->addColumn('source_type_label', function (ReturnHistory $r) {
+                if ($r->source_type === 'transfer' && $r->source) {
+                    return 'MOVEMENT';
+                }
+                if ($r->source_type === 'disposal') {
+                    return 'DISPOSAL';
+                }
+                return '';
+            })
             ->addColumn('source_detail', function (ReturnHistory $r) use ($resolve) {
                 if ($r->source_type === 'transfer' && $r->source) {
                     $t = $r->source;
-                    $type = strtoupper($t->type);
+                    $type = "MOVEMENT";
                     $before = $resolve($t->type, data_get($t->before, 'value'));
                     $after  = $resolve($t->type, data_get($t->after,  'value'));
                     return "{$type}: {$before} &rarr; <span class=\"fw-bold\">{$after}</span>";

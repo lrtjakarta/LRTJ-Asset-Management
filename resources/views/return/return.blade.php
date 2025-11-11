@@ -40,7 +40,7 @@
                         <thead>
                             <tr class="table-light">
                                 <th class="min-w-150px">Transaction Number</th>
-                                <th class="min-w-200px">MOV/DSP Code</th>
+                                <th class="min-w-200px">MOV/DSP Tr. No.</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-300px">Details</th>
@@ -71,9 +71,9 @@
                     <div class="modal-body">
                         <div class="row g-5">
                             <div class="col-md-12">
-                                <label class="form-label required">Select Transfer/Disposal</label>
+                                <label class="form-label required">Select Movement/Disposal</label>
                                 <select id="ret-source" class="form-select" required></select>
-                                <div class="form-text">Shows latest accepted only (transfer-by-type per asset, disposal per
+                                <div class="form-text">Shows latest accepted only (movement-by-type per asset, disposal per
                                     asset)</div>
                             </div>
 
