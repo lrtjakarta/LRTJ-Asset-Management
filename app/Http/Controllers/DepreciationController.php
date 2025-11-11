@@ -40,7 +40,7 @@ class DepreciationController extends Controller
     }
 
     public function dtPolicies(Request $r)
-    { 
+    {
         if (!$this->canReadDepr()) {
             return DataTables::of(collect())->toJson();
         }
@@ -174,6 +174,26 @@ class DepreciationController extends Controller
             "),
             ]);
 
+        if ($status = $r->get('asset_status')) {
+            $q->whereHas('asset', function ($qa) use ($status) {
+                $qa->where('kode_status', $status);
+            });
+        }
+
+        if ($capFrom = $r->get('cap_from')) {
+            $q->whereDate('av.capitalization_date', '>=', $capFrom);
+        }
+        if ($capTo = $r->get('cap_to')) {
+            $q->whereDate('av.capitalization_date', '<=', $capTo);
+        }
+
+        if ($assetQ = trim((string) $r->get('asset_q', ''))) {
+            $q->whereHas('asset', function ($qa) use ($assetQ) {
+                $qa->where('asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('description', 'ilike', "%{$assetQ}%");
+            });
+        }
+
         return DataTables::of($q)
             ->addColumn('asset_code', fn($row) => $row->asset?->asset_code)
             ->addColumn('asset_name', fn($row) => $row->asset?->description)
@@ -222,18 +242,39 @@ class DepreciationController extends Controller
             ->toJson();
     }
 
-    public function runMonth(Request $r)
+    public function runMonth(Request $request)
     {
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
-        $r->validate(['period' => ['required', 'date']]);
-        $period = Carbon::parse($r->period)->startOfMonth();
 
-        $this->processMonthlyDepr($period);
+        $to = $request->filled('period')
+            ? Carbon::parse($request->input('period'))->startOfMonth()
+            : now()->startOfMonth();
 
-        return response()->json([
-            'ok'      => true,
-            'message' => "Depreciation processed for {$period->toDateString()}",
-        ]);
+        $fromPolicy = AssetDeprPolicy::whereNotNull('depr_start_date')
+            ->min(DB::raw("date_trunc('month', depr_start_date)::date"));
+
+        $from = $fromPolicy
+            ? Carbon::parse($fromPolicy)->startOfMonth()
+            : $to->copy();
+
+        $this->processMonthlyDeprRange($from, $to);
+
+        return response()->json(['ok' => true]);
+    }
+
+    private function processMonthlyDeprRange(Carbon $from, Carbon $to): void
+    {
+        $from = $from->copy()->startOfMonth();
+        $to   = $to->copy()->startOfMonth();
+
+        if ($from->gt($to)) {
+            return;
+        }
+
+        while ($from->lte($to)) {
+            $this->processMonthlyDepr($from);
+            $from->addMonth();
+        }
     }
 
     private function processMonthlyDepr(Carbon $period): void
@@ -425,7 +466,7 @@ class DepreciationController extends Controller
 
     public function buildYear(Request $r)
     {
-        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+        abort_unless($r->user()?->hasAction('DEPRECIATION', 'C'), 403);
         $r->validate(['year' => ['required', 'integer', 'min:1900', 'max:3000']]);
         $year = (int) $r->year;
 
@@ -994,17 +1035,47 @@ class DepreciationController extends Controller
         abort_unless($this->canReadTransferRequests(), 403);
         return view('depreciation.transfer_requests');
     }
-
     public function dtTransferRequests(Request $r)
     {
         if (!$this->canReadTransferRequests()) {
             return DataTables::of(collect())->toJson();
         }
-        $q = AssetDeprTransferRequest::query()
-            ->with(['fromAsset:uuid,asset_code,description', 'toAsset:uuid,asset_code,description']);
 
+        $q = AssetDeprTransferRequest::query()
+            ->with([
+                'fromAsset:uuid,asset_code,description',
+                'toAsset:uuid,asset_code,description',
+            ]);
+
+        // type
+        if ($type = $r->get('type')) {
+            $q->where('transfer_type', $type);
+        }
+
+        // status approval
         if ($status = $r->get('status')) {
             $q->where('kode_status', $status);
+        }
+
+        // requester
+        if ($req = $r->get('requester')) {
+            $q->where('requested_by', $req);
+        }
+
+        // request date range (created_at)
+        if ($from = $r->get('req_from')) {
+            $q->whereDate('created_at', '>=', $from);
+        }
+        if ($to = $r->get('req_to')) {
+            $q->whereDate('created_at', '<=', $to);
+        }
+
+        // approve date range (approved_at)
+        if ($from = $r->get('apr_from')) {
+            $q->whereDate('approved_at', '>=', $from);
+        }
+        if ($to = $r->get('apr_to')) {
+            $q->whereDate('approved_at', '<=', $to);
         }
 
         if ($search = trim($r->get('asset_q', ''))) {
@@ -1031,6 +1102,7 @@ class DepreciationController extends Controller
             })
             ->toJson();
     }
+
 
     public function storeTransferRequest(Request $r)
     {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AssetDeprMonthly;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -1150,6 +1151,353 @@ class ExportController
         }
 
         $fileName = 'acquisition_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function transfer_requests_export(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('TRANSFER', 'R'), 403);
+
+        $type      = $request->get('type');
+        $status    = $request->get('status');
+        $requester = $request->get('requester');
+        $reqFrom   = $request->get('req_from');
+        $reqTo     = $request->get('req_to');
+        $aprFrom   = $request->get('apr_from');
+        $aprTo     = $request->get('apr_to');
+        $assetQ    = trim((string) $request->get('asset_q', ''));
+
+        $q = DB::table('assets_depr_transfer_requests as t')
+            ->leftJoin('assets as af', 'af.uuid', '=', 't.from_asset_uuid')
+            ->leftJoin('assets as at', 'at.uuid', '=', 't.to_asset_uuid')
+            ->select(
+                't.*',
+                'af.asset_code as from_code',
+                'af.description as from_name',
+                'at.asset_code as to_code',
+                'at.description as to_name'
+            )
+            ->orderByDesc('t.created_at');
+
+        if ($type) {
+            $q->where('t.transfer_type', $type);
+        }
+        if ($status) {
+            $q->where('t.kode_status', $status);
+        }
+        if ($requester) {
+            $q->where('t.requested_by', $requester);
+        }
+        if ($reqFrom) {
+            $q->whereDate('t.created_at', '>=', $reqFrom);
+        }
+        if ($reqTo) {
+            $q->whereDate('t.created_at', '<=', $reqTo);
+        }
+        if ($aprFrom) {
+            $q->whereDate('t.approved_at', '>=', $aprFrom);
+        }
+        if ($aprTo) {
+            $q->whereDate('t.approved_at', '<=', $aprTo);
+        }
+        if ($assetQ !== '') {
+            $q->where(function ($w) use ($assetQ) {
+                $w->where('af.asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('af.description', 'ilike', "%{$assetQ}%")
+                    ->orWhere('at.asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('at.description', 'ilike', "%{$assetQ}%");
+            });
+        }
+
+        $rows = $q->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Transfer Requests');
+
+        // headers
+        $sheet->setCellValue('A1', 'Transaction Number');
+        $sheet->setCellValue('B1', 'From Asset');
+        $sheet->setCellValue('C1', 'To Asset');
+        $sheet->setCellValue('D1', 'Type');
+        $sheet->setCellValue('E1', 'Amount');
+        $sheet->setCellValue('F1', 'Actual Date');
+        $sheet->setCellValue('G1', 'Status');
+        $sheet->setCellValue('H1', 'Requested By');
+        $sheet->setCellValue('I1', 'Requested At');
+        $sheet->setCellValue('J1', 'Approved By');
+        $sheet->setCellValue('K1', 'Approved At');
+        $sheet->setCellValue('L1', 'Note');
+
+        $sheet->getStyle('A1:L1')->getFont()->setBold(true);
+
+        $typeLabel = function (?string $t): string {
+            return match ($t) {
+                'acq_fix' => '2. Acquisition Fix',
+                'carry_over_gross_accum' => '3. Carry-Over (Gross + Accum)',
+                default => '1. Partials/Full (Gross only)',
+            };
+        };
+
+        $statusLabel = function (?string $k): string {
+            $k = strtoupper((string) $k);
+            return match ($k) {
+                'ACC' => 'Accepted',
+                'REJ' => 'Rejected',
+                'APR' => 'Waiting for Approval',
+                default => $k,
+            };
+        };
+
+        $rowNum = 2;
+        foreach ($rows as $r) {
+            $fromLabel = trim(($r->from_code ?? '') . ($r->from_name ? ' - ' . $r->from_name : ''));
+            $toLabel   = trim(($r->to_code ?? '') . ($r->to_name ? ' - ' . $r->to_name : ''));
+
+            $actual = $r->actual_date
+                ? Carbon::parse($r->actual_date)->format('Y-m-d')
+                : '';
+
+            $created = $r->created_at
+                ? Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $approvedAt = $r->approved_at
+                ? Carbon::parse($r->approved_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
+                : '';
+
+            $sheet->setCellValue("A{$rowNum}", $r->transfer_code);
+            $sheet->setCellValue("B{$rowNum}", $fromLabel);
+            $sheet->setCellValue("C{$rowNum}", $toLabel);
+            $sheet->setCellValue("D{$rowNum}", $typeLabel($r->transfer_type));
+            $sheet->setCellValue("E{$rowNum}", (float) ($r->amount ?? 0));
+            $sheet->setCellValue("F{$rowNum}", $actual);
+            $sheet->setCellValue("G{$rowNum}", $statusLabel($r->kode_status));
+            $sheet->setCellValue("H{$rowNum}", $r->requested_by);
+            $sheet->setCellValue("I{$rowNum}", $created);
+            $sheet->setCellValue("J{$rowNum}", $r->approved_by);
+            $sheet->setCellValue("K{$rowNum}", $approvedAt);
+            $sheet->setCellValue("L{$rowNum}", $r->note);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'L') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'transfer_requests_' . now()->format('Ymd_His') . '.xlsx';
+        $writer   = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+    public function depreciation_monthly_export(Request $request)
+    {
+        
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'R'), 403);
+
+        $period = $request->period
+            ? Carbon::parse($request->period)->startOfMonth()->toDateString()
+            : now()->startOfMonth()->toDateString();
+
+        $periodYear = (int) Carbon::parse($period)->year;
+        $prevYear   = $periodYear - 1;
+
+        $q = AssetDeprMonthly::query()
+            ->with('asset:uuid,asset_code,description,kode_status')
+            ->leftJoin('assets_value as av', 'av.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
+            ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
+            ->leftJoin('assets_depr_yearly as y', function ($j) use ($prevYear) {
+                $j->on('y.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
+                    ->where('y.fiscal_year', '=', $prevYear);
+            })
+            ->whereDate('assets_depr_ledger_monthly.period', $period)
+            ->select([
+                'assets_depr_ledger_monthly.uuid',
+                'assets_depr_ledger_monthly.asset_uuid',
+                'assets_depr_ledger_monthly.period',
+                'assets_depr_ledger_monthly.opening_balance',
+                'assets_depr_ledger_monthly.additions',
+                'assets_depr_ledger_monthly.transfers_in',
+                'assets_depr_ledger_monthly.transfers_out',
+                'assets_depr_ledger_monthly.disposals',
+                'assets_depr_ledger_monthly.adjustment_value',
+                'assets_depr_ledger_monthly.adjustment_depreciation',
+                'assets_depr_ledger_monthly.depr_expense',
+                'assets_depr_ledger_monthly.accumulated_depr_end',
+                'assets_depr_ledger_monthly.ending_balance',
+                'assets_depr_ledger_monthly.depr_code',
+                'av.capitalization_date as cap_date',
+                'av.total as total_value',
+                DB::raw("
+                COALESCE(
+                    NULLIF(p.useful_life_months, 0),
+                    NULLIF(av.useful_life_month, 0),
+                    CASE WHEN av.useful_life_year IS NOT NULL
+                         THEN (av.useful_life_year * 12)::int
+                         ELSE 0 END,
+                    0
+                ) AS useful_life_months
+            "),
+                'y.ending_balance_year as ending_balance_prev_year',
+                DB::raw("
+                GREATEST(
+                  COALESCE(
+                    (
+                      COALESCE(
+                        NULLIF(p.useful_life_months, 0),
+                        NULLIF(av.useful_life_month, 0),
+                        CASE WHEN av.useful_life_year IS NOT NULL
+                             THEN (av.useful_life_year * 12)::int
+                             ELSE 0 END,
+                        0
+                      )
+                      -
+                      (
+                        CASE
+                          WHEN p.depr_start_date IS NULL THEN 0
+                          ELSE
+                            CASE
+                              WHEN date_trunc('month', assets_depr_ledger_monthly.period) <
+                                (
+                                  CASE
+                                    WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                      THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
+                                    ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
+                                  END
+                                )
+                              THEN 0
+                              ELSE
+                                (
+                                  (DATE_PART('year', AGE(
+                                      date_trunc('month', assets_depr_ledger_monthly.period),
+                                      CASE
+                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
+                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
+                                      END
+                                  ))::int * 12)
+                                  +
+                                  DATE_PART('month', AGE(
+                                      date_trunc('month', assets_depr_ledger_monthly.period),
+                                      CASE
+                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
+                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
+                                      END
+                                  ))::int
+                                  + 1
+                                )
+                            END
+                        END
+                      )
+                    ),
+                    0
+                  ),
+                0) AS remaining_useful_life_months
+            "),
+            ]);
+
+        // same filters as dtMonthly
+        if ($status = $request->get('asset_status')) {
+            $q->whereHas('asset', function ($qa) use ($status) {
+                $qa->where('kode_status', $status);
+            });
+        }
+
+        if ($capFrom = $request->get('cap_from')) {
+            $q->whereDate('av.capitalization_date', '>=', $capFrom);
+        }
+        if ($capTo = $request->get('cap_to')) {
+            $q->whereDate('av.capitalization_date', '<=', $capTo);
+        }
+
+        if ($assetQ = trim((string) $request->get('asset_q', ''))) {
+            $q->whereHas('asset', function ($qa) use ($assetQ) {
+                $qa->where('asset_code', 'ilike', "%{$assetQ}%")
+                    ->orWhere('description', 'ilike', "%{$assetQ}%");
+            });
+        }
+
+        $rows = $q->get();
+
+        // status label map
+        $statusMap = MasterStatus::pluck('name', 'kode')->toArray();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Depreciation');
+
+        // Headers (match table)
+        $sheet->setCellValue('A1', 'Asset Code');
+        $sheet->setCellValue('B1', 'Asset Description');
+        $sheet->setCellValue('C1', 'Transaction Number');
+        $sheet->setCellValue('D1', 'Asset Status');
+        $sheet->setCellValue('E1', 'Tanggal Masuk');
+        $sheet->setCellValue('F1', 'Depreciation Date');
+        $sheet->setCellValue('G1', 'Awal');
+        $sheet->setCellValue('H1', 'Total (Assets Value)');
+        $sheet->setCellValue('I1', 'Useful Life (Month)');
+        $sheet->setCellValue('J1', 'Ending Balance ' . ($periodYear - 1));
+        $sheet->setCellValue('K1', 'Remaining Useful Life');
+        $sheet->setCellValue('L1', 'Transfer In');
+        $sheet->setCellValue('M1', 'Transfer Out');
+        $sheet->setCellValue('N1', 'Adjustment Depreciation');
+        $sheet->setCellValue('O1', 'Depreciation');
+        $sheet->setCellValue('P1', 'Total Addition');
+        $sheet->setCellValue('Q1', 'Ending Balance');
+
+        $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
+
+        $rowNum = 2;
+        foreach ($rows as $row) {
+            $asset   = $row->asset;
+            $kode    = $asset?->kode_status;
+            $statusName = $kode && isset($statusMap[$kode]) ? $statusMap[$kode] : null;
+            $statusLabel = $kode ? ($statusName ? ($kode . ' - ' . $statusName) : $kode) : '';
+
+            $totalAddition = (float) $row->additions
+                + (float) $row->transfers_in
+                - (float) $row->transfers_out
+                + (float) $row->adjustment_value
+                - (float) $row->disposals;
+
+            $sheet->setCellValue("A{$rowNum}", $asset?->asset_code ?? '');
+            $sheet->setCellValue("B{$rowNum}", $asset?->description ?? '');
+            $sheet->setCellValue("C{$rowNum}", $row->depr_code);
+            $sheet->setCellValue("D{$rowNum}", $statusLabel);
+            $sheet->setCellValue("E{$rowNum}", optional($row->cap_date)->format('Y-m-d'));
+            $sheet->setCellValue("F{$rowNum}", optional($row->period)->format('Y-m-d'));
+            $sheet->setCellValue("G{$rowNum}", $row->opening_balance);
+            $sheet->setCellValue("H{$rowNum}", $row->total_value);
+            $sheet->setCellValue("I{$rowNum}", $row->useful_life_months);
+            $sheet->setCellValue("J{$rowNum}", $row->ending_balance_prev_year);
+            $sheet->setCellValue("K{$rowNum}", $row->remaining_useful_life_months);
+            $sheet->setCellValue("L{$rowNum}", $row->transfers_in);
+            $sheet->setCellValue("M{$rowNum}", $row->transfers_out);
+            $sheet->setCellValue("N{$rowNum}", $row->adjustment_depreciation);
+            $sheet->setCellValue("O{$rowNum}", $row->depr_expense);
+            $sheet->setCellValue("P{$rowNum}", $totalAddition);
+            $sheet->setCellValue("Q{$rowNum}", $row->ending_balance);
+
+            $rowNum++;
+        }
+
+        foreach (range('A', 'Q') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = 'depreciation_' . str_replace('-', '', $period) . '.xlsx';
         $writer   = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

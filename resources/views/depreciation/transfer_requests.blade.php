@@ -29,6 +29,67 @@
     </div>
 
     <div class="container-xxl" id="kt_content_container">
+        <div class="card mb-6">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Transfer Type</label>
+                        <select id="f-type" class="form-select">
+                            <option value="">All</option>
+                            <option value="tf-val">1. Partials/Full (Gross only)</option>
+                            <option value="acq_fix">2. Acquisition Fix</option>
+                            <option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Requester</label>
+                        <select id="f-requester" class="form-select"></select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Status Approval</label>
+                        <select id="f-status" class="form-select">
+                            <option value="">All</option>
+                            <option value="APR">APR - Waiting</option>
+                            <option value="ACC">ACC - Accepted</option>
+                            <option value="REJ">REJ - Rejected</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Request From</label>
+                        <input type="date" id="f-req-from" class="form-control">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Request To</label>
+                        <input type="date" id="f-req-to" class="form-control">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Approve From</label>
+                        <input type="date" id="f-apr-from" class="form-control">
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Approve To</label>
+                        <input type="date" id="f-apr-to" class="form-control">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Asset (code / description)</label>
+                        <input type="text" id="f-asset" class="form-control"
+                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
+                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+            </div>
+        </div>
         <div class="card">
             <div class="card-header align-items-center justify-content-between">
                 <div class="d-flex flex-column">
@@ -109,8 +170,8 @@
 
                             <div class="col-md-6">
                                 <label class="form-label required">Amount</label>
-                                <input type="number" step="0.01" min="0.01" class="form-control" id="edit-amount"
-                                    name="amount">
+                                <input type="number" step="0.01" min="0.01" class="form-control"
+                                    id="edit-amount" name="amount">
                             </div>
 
                             <div class="col-md-6">
@@ -327,6 +388,21 @@
             const $btnUpdate = $('#btn-update-transfer-request');
             const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
             const PERIOD = "{{ $currentMonth }}";
+            $('#f-requester').select2({
+                placeholder: 'Select requester',
+                allowClear: true,
+                width: '100%',
+                ajax: {
+                    url: "{{ route('users.options') }}",
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
+            });
 
             // Open Transfer modal
             $('#btn-open-transfer').on('click', () => {
@@ -412,7 +488,16 @@
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 ajax: {
                     url: "{{ route('depreciation.transfer-requests.dt') }}",
-                    data: d => {}
+                    data: d => {
+                        d.type = $('#f-type').val() || '';
+                        d.requester = $('#f-requester').val() || '';
+                        d.status = $('#f-status').val() || '';
+                        d.req_from = $('#f-req-from').val() || '';
+                        d.req_to = $('#f-req-to').val() || '';
+                        d.apr_from = $('#f-apr-from').val() || '';
+                        d.apr_to = $('#f-apr-to').val() || '';
+                        d.asset_q = $('#f-asset').val() || '';
+                    }
                 },
                 order: [
                     [4, 'desc']
@@ -666,7 +751,40 @@
             $('#tr-amount').on('keyup change', () => {
                 if (getTransferType() === 'carry_over_gross_accum') refreshCarryPreview();
             });
+            $('#btnFilter').on('click', function(e) {
+                e.preventDefault();
+                tbl.ajax.reload();
+            });
 
+            $('#btnReset').on('click', function(e) {
+                e.preventDefault();
+                $('#f-type').val('');
+                $('#f-status').val('');
+                $('#f-req-from').val('');
+                $('#f-req-to').val('');
+                $('#f-apr-from').val('');
+                $('#f-apr-to').val('');
+                $('#f-asset').val('');
+                $('#f-requester').val(null).trigger('change');
+                tbl.ajax.reload();
+            });
+
+            $('#btnExport').on('click', function(e) {
+                e.preventDefault();
+
+                const params = $.param({
+                    type: $('#f-type').val() || '',
+                    requester: $('#f-requester').val() || '',
+                    status: $('#f-status').val() || '',
+                    req_from: $('#f-req-from').val() || '',
+                    req_to: $('#f-req-to').val() || '',
+                    apr_from: $('#f-apr-from').val() || '',
+                    apr_to: $('#f-apr-to').val() || '',
+                    asset_q: $('#f-asset').val() || '',
+                });
+
+                window.location = "{{ route('export.transfer-requests') }}" + '?' + params;
+            });
 
             // ===== Row actions =====
 

@@ -29,11 +29,48 @@
     </div>
 
     <div class="container-xxl" id="kt_content_container">
+        <div class="card mb-6">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+
+                    <div class="col-md-4">
+                        <label class="form-label">Asset Status</label>
+                        <select id="f-asset-status" class="form-select"></select>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Tanggal Masuk From</label>
+                        <input type="date" id="f-cap-from" class="form-control">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Tanggal Masuk To</label>
+                        <input type="date" id="f-cap-to" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Period</label>
+                        <input type="month" id="f-period" class="form-control"
+                            value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
+                    </div>
+
+                    <div class="col-md-4">
+                        <label class="form-label">Asset (code / description)</label>
+                        <input type="text" id="f-asset" class="form-control"
+                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
+                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+            </div>
+        </div>
         <div class="card">
             <div class="card-header align-items-center justify-content-between">
                 <div class="d-flex flex-column">
                     <h3 class="card-title mb-1">
-                        <span class="fw-semibold">{{ $currentMonthText }}</span>
+                        <span class="fw-semibold" id="currentMonthText">{{ $currentMonthText }}</span>
                     </h3>
                 </div>
 
@@ -79,7 +116,7 @@
                     <thead class="table-light">
                         <tr>
                             <th class="min-w-200px">Asset Code</th>
-                            <th class="min-w-200px">Asset Name</th>
+                            <th class="min-w-200px">Asset Description</th>
                             <th class="min-w-150px">Transaction Number</th>
                             <th class="min-w-150px">Asset Status</th>
                             <th class="min-w-200px">Tanggal Masuk</th>
@@ -190,6 +227,18 @@
                 else $btnYear.removeAttr('data-kt-indicator').prop('disabled', false);
             };
 
+            function buildFilters() {
+                const periodMonth = $('#f-period').val();
+                const period = periodMonth ? (periodMonth + '-01') : PERIOD;
+
+                return {
+                    period: period,
+                    asset_status: $('#f-asset-status').val() || '',
+                    cap_from: $('#f-cap-from').val() || '',
+                    cap_to: $('#f-cap-to').val() || '',
+                    asset_q: $('#f-asset').val() || '',
+                };
+            }
             // Open Adjustment Depreciation modal
             $('#btn-open-adj-depr').on('click', () => {
                 $('#form-adj-depr')[0].reset();
@@ -197,6 +246,22 @@
                 $('#adj-asset').val(null).trigger('change');
                 $('#adj-date').val("{{ Carbon::now()->toDateString() }}");
                 $modalAdj.show();
+            });
+            $('#f-asset-status').select2({
+                placeholder: 'All status',
+                allowClear: true,
+                width: '100%',
+                ajax: {
+                    url: "{{ route('master.status.options') }}",
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        type: 'Asset',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
             });
 
 
@@ -241,7 +306,7 @@
                 ajax: {
                     url: "{{ route('depreciation.dt.monthly') }}",
                     data: d => {
-                        d.period = PERIOD;
+                        Object.assign(d, buildFilters());
                     }
                 },
                 columns: [{
@@ -358,7 +423,25 @@
                     },
                 ]
             });
+            $('#btnFilter').on('click', function() {
+                tbl.ajax.reload();
+                $('#currentMonthText').html($('#f-period').val());
+            });
 
+            $('#btnReset').on('click', function() {
+                $('#f-period').val("{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}");
+                $('#f-asset-status').val('');
+                $('#f-cap-from').val('');
+                $('#f-cap-to').val('');
+                $('#f-asset').val('');
+
+                tbl.ajax.reload();
+            });
+            $('#btnExport').on('click', function(e) {
+                e.preventDefault();
+                const params = $.param(buildFilters());
+                window.location = "{{ route('export.depreciation.monthly') }}" + '?' + params;
+            });
             // Process Current Month
             $form.on('submit', async function(e) {
                 e.preventDefault();
@@ -375,7 +458,7 @@
                     toastr?.success('Processed {{ $currentMonthText }}');
                     tbl.ajax.reload(null, false);
                 } catch (err) {
-                    console.error(err);
+                    // console.error(err);
                     toastr?.error('Failed to process depreciation');
                 } finally {
                     setBusy(false);
