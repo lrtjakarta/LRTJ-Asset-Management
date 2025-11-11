@@ -20,79 +20,83 @@
         </div>
     </div>
 
-    <div class="container-xxl" id="kt_content_container">
-        <div class="card mb-6">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label">PIC</label>
-                        <select id="f-pic" class="form-select"></select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Pajak</label>
-                        <select id="f-pajak" class="form-select">
-                            <option value="">All</option>
-                            <option value="1">Yes</option>
-                            <option value="0">No</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Capitalization From</label>
-                        <input type="date" id="f-cap-from" class="form-control">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Capitalization To</label>
-                        <input type="date" id="f-cap-to" class="form-control">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Asset (code / description)</label>
-                        <input type="text" id="f-asset" class="form-control"
-                            placeholder="e.g. A1101000002-00 / Laptop Dell">
-                    </div>
-                </div>
-            </div>
-            <div class="card-footer">
-                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
-                <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
-                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header align-items-center justify-content-between">
-                <div class="d-flex flex-column">
-                    <h3 class="card-title mb-1">
-                        <span class="fw-semibold">Acquisition Data</span>
-                    </h3>
-                </div>
-                @canAction('ACQUISITION','C')
-                <div class="d-flex align-items-center gap-2 gap-lg-3">
-                    <button id="btn-open-acq" class="btn btn-sm btn-danger">
-                        <i class="ki-duotone ki-plus fs-2"></i>Create or Update
-                    </button>
-                </div>
-                @endcanAction
-            </div>
 
-            <div class="card-body">
-                <table id="tbl-acq-global"
-                    class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="min-w-150px">Transaction Number</th>
-                            <th class="min-w-200px">Asset</th>
-                            <th class="min-w-100px">Qty</th>
-                            <th class="min-w-150px">UOM</th>
-                            <th class="min-w-200px">Price</th>
-                            <th class="min-w-200px">VAT In</th>
-                            <th class="min-w-200px">Total</th>
-                            <th class="min-w-150px">Actual Date</th>
-                            <th class="min-w-200px">Capitalization Date</th>
-                            <th class="min-w-200px">PIC</th>
-                            <th class="min-w-250px">Note</th>
-                            <th class="min-w-150px">Created At</th>
-                        </tr>
-                    </thead>
-                </table>
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">PIC</label>
+                            <select id="f-pic" class="form-select"></select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Pajak</label>
+                            <select id="f-pajak" class="form-select">
+                                <option value="">All</option>
+                                <option value="1">Yes</option>
+                                <option value="0">No</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Capitalization From</label>
+                            <input type="date" id="f-cap-from" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Capitalization To</label>
+                            <input type="date" id="f-cap-to" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="f-asset" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                    <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
+                    <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header align-items-center justify-content-between">
+                    <div class="d-flex flex-column">
+                        <h3 class="card-title mb-1">
+                            <span class="fw-semibold">Acquisition Data</span>
+                        </h3>
+                    </div>
+                    @canAction('ACQUISITION','C')
+                    <div class="d-flex align-items-center gap-2 gap-lg-3">
+                        <button id="btn-open-acq" class="btn btn-sm btn-danger">
+                            <i class="ki-duotone ki-plus fs-2"></i>Create or Update
+                        </button>
+                    </div>
+                    @endcanAction
+                </div>
+
+                <div class="card-body">
+                    <table id="tbl-acq-global"
+                        class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="min-w-150px">Transaction Number</th>
+                                <th class="min-w-200px">Asset</th>
+                                <th class="min-w-100px">Qty</th>
+                                <th class="min-w-150px">UOM</th>
+                                <th class="min-w-200px">Price</th>
+                                <th class="min-w-200px">VAT In</th>
+                                <th class="min-w-200px">Total</th>
+                                <th class="min-w-150px">Actual Date</th>
+                                <th class="min-w-200px">Capitalization Date</th>
+                                <th class="min-w-200px">PIC</th>
+                                <th class="min-w-250px">Note</th>
+                                <th class="min-w-150px">Created At</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -316,7 +320,7 @@
                     asset: $('#f-asset').val() || '',
                 });
 
-                window.location = "{{ route('export.acquisition') }}" +'?' + params;
+                window.location = "{{ route('export.acquisition') }}" + '?' + params;
             });
 
             $('#acq-asset-select').select2({

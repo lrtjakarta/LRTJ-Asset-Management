@@ -32,29 +32,33 @@
         <!--end::Toolbar container-->
     </div>
 
-    <div class="container-xxl" id="kt_content_container">
-        <div class="card">
-            <!--begin::Header-->
-            <div class="card-header border-0 pt-5">
-                <h3 class="card-title align-items-start flex-column">
-                    <span class="card-label fw-bold fs-3 mb-1">Trash Data</span>
-                    <span class="text-muted mt-1 fw-semibold fs-7">Soft-deleted items from all modules</span>
-                </h3>
-            </div>
-            <!--end::Header-->
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table id="tableTrash" class="table table-row-dashed gy-5 align-middle">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Deleted</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
-                    </table>
+
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="card">
+                <!--begin::Header-->
+                <div class="card-header border-0 pt-5">
+                    <h3 class="card-title align-items-start flex-column">
+                        <span class="card-label fw-bold fs-3 mb-1">Trash Data</span>
+                        <span class="text-muted mt-1 fw-semibold fs-7">Soft-deleted items from all modules</span>
+                    </h3>
+                </div>
+                <!--end::Header-->
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="tableTrash" class="table table-row-dashed gy-5 align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Deleted</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>

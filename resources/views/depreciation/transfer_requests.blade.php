@@ -28,106 +28,110 @@
         </div>
     </div>
 
-    <div class="container-xxl" id="kt_content_container">
-        <div class="card mb-6">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label class="form-label">Transfer Type</label>
-                        <select id="f-type" class="form-select">
-                            <option value="">All</option>
-                            <option value="tf-val">1. Partials/Full (Gross only)</option>
-                            <option value="acq_fix">2. Acquisition Fix</option>
-                            <option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>
-                        </select>
-                    </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Requester</label>
-                        <select id="f-requester" class="form-select"></select>
-                    </div>
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">Transfer Type</label>
+                            <select id="f-type" class="form-select">
+                                <option value="">All</option>
+                                <option value="tf-val">1. Partials/Full (Gross only)</option>
+                                <option value="acq_fix">2. Acquisition Fix</option>
+                                <option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>
+                            </select>
+                        </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Status Approval</label>
-                        <select id="f-status" class="form-select">
-                            <option value="">All</option>
-                            <option value="APR">APR - Waiting</option>
-                            <option value="ACC">ACC - Accepted</option>
-                            <option value="REJ">REJ - Rejected</option>
-                        </select>
-                    </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Requester</label>
+                            <select id="f-requester" class="form-select"></select>
+                        </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Request From</label>
-                        <input type="date" id="f-req-from" class="form-control">
-                    </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Status Approval</label>
+                            <select id="f-status" class="form-select">
+                                <option value="">All</option>
+                                <option value="APR">APR - Waiting</option>
+                                <option value="ACC">ACC - Accepted</option>
+                                <option value="REJ">REJ - Rejected</option>
+                            </select>
+                        </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Request To</label>
-                        <input type="date" id="f-req-to" class="form-control">
-                    </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Request From</label>
+                            <input type="date" id="f-req-from" class="form-control">
+                        </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Approve From</label>
-                        <input type="date" id="f-apr-from" class="form-control">
-                    </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Request To</label>
+                            <input type="date" id="f-req-to" class="form-control">
+                        </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Approve To</label>
-                        <input type="date" id="f-apr-to" class="form-control">
-                    </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Approve From</label>
+                            <input type="date" id="f-apr-from" class="form-control">
+                        </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label">Asset (code / description)</label>
-                        <input type="text" id="f-asset" class="form-control"
-                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        <div class="col-md-3">
+                            <label class="form-label">Approve To</label>
+                            <input type="date" id="f-apr-to" class="form-control">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="f-asset" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="card-footer">
-                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
-                <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
-                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header align-items-center justify-content-between">
-                <div class="d-flex flex-column">
-                    <h3 class="card-title mb-1">
-                        <span class="fw-semibold">Transfer Requests Data</span>
-                    </h3>
+                <div class="card-footer">
+                    <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                    <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
+                    <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
                 </div>
-                @canAction('TRANSFER','C')
-                <div class="card-toolbar">
-                    {{-- Transfer Value --}}
-                    <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
-                        <i class="ki-duotone ki-plus fs-2"></i>
-                        Add New
-                    </button>
-                </div>
-                @endcanAction
             </div>
+            <div class="card">
+                <div class="card-header align-items-center justify-content-between">
+                    <div class="d-flex flex-column">
+                        <h3 class="card-title mb-1">
+                            <span class="fw-semibold">Transfer Requests Data</span>
+                        </h3>
+                    </div>
+                    @canAction('TRANSFER','C')
+                    <div class="card-toolbar">
+                        {{-- Transfer Value --}}
+                        <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
+                            <i class="ki-duotone ki-plus fs-2"></i>
+                            Add New
+                        </button>
+                    </div>
+                    @endcanAction
+                </div>
 
-            <div class="card-body">
-                <table id="tbl-transfer-requests"
-                    class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="min-w-150px">Transaction Number</th>
-                            <th class="min-w-150px">From Asset</th>
-                            <th class="min-w-150px">To Asset</th>
-                            <th class="min-w-150px">Type</th>
-                            <th class="min-w-150px">Amount</th>
-                            <th class="min-w-150px">Actual Date</th>
-                            <th class="min-w-150px">Status</th>
-                            <th class="min-w-150px">Requested By</th>
-                            <th class="min-w-150px">Approved By</th>
-                            <th class="min-w-150px">Attachment</th>
-                            <th class="min-w-200px">Note</th>
-                            <th class="min-w-200px ">Actions</th>
-                        </tr>
-                    </thead>
-                </table>
+                <div class="card-body">
+                    <table id="tbl-transfer-requests"
+                        class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="min-w-150px">Transaction Number</th>
+                                <th class="min-w-150px">From Asset</th>
+                                <th class="min-w-150px">To Asset</th>
+                                <th class="min-w-150px">Type</th>
+                                <th class="min-w-150px">Amount</th>
+                                <th class="min-w-150px">Actual Date</th>
+                                <th class="min-w-150px">Status</th>
+                                <th class="min-w-150px">Requested By</th>
+                                <th class="min-w-150px">Approved By</th>
+                                <th class="min-w-150px">Attachment</th>
+                                <th class="min-w-200px">Note</th>
+                                <th class="min-w-200px ">Actions</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

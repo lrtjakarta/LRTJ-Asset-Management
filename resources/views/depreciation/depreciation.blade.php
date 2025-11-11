@@ -28,113 +28,117 @@
         </div>
     </div>
 
-    <div class="container-xxl" id="kt_content_container">
-        <div class="card mb-6">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
 
-                    <div class="col-md-4">
-                        <label class="form-label">Asset Status</label>
-                        <select id="f-asset-status" class="form-select"></select>
-                    </div>
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
+            <div class="card mb-6">
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
 
-                    <div class="col-md-4">
-                        <label class="form-label">Tanggal Masuk From</label>
-                        <input type="date" id="f-cap-from" class="form-control">
-                    </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Asset Status</label>
+                            <select id="f-asset-status" class="form-select"></select>
+                        </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label">Tanggal Masuk To</label>
-                        <input type="date" id="f-cap-to" class="form-control">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Period</label>
-                        <input type="month" id="f-period" class="form-control"
-                            value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
-                    </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tanggal Masuk From</label>
+                            <input type="date" id="f-cap-from" class="form-control">
+                        </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label">Asset (code / description)</label>
-                        <input type="text" id="f-asset" class="form-control"
-                            placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        <div class="col-md-4">
+                            <label class="form-label">Tanggal Masuk To</label>
+                            <input type="date" id="f-cap-to" class="form-control">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Period</label>
+                            <input type="month" id="f-period" class="form-control"
+                                value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Asset (code / description)</label>
+                            <input type="text" id="f-asset" class="form-control"
+                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="card-footer">
-                <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
-                <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
-                <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
-            </div>
-        </div>
-        <div class="card">
-            <div class="card-header align-items-center justify-content-between">
-                <div class="d-flex flex-column">
-                    <h3 class="card-title mb-1">
-                        <span class="fw-semibold" id="currentMonthText">{{ $currentMonthText }}</span>
-                    </h3>
+                <div class="card-footer">
+                    <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
+                    <button id="btnReset" class="btn btn-light-danger btn-sm">Reset</button>
+                    <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
                 </div>
+            </div>
+            <div class="card">
+                <div class="card-header align-items-center justify-content-between">
+                    <div class="d-flex flex-column">
+                        <h3 class="card-title mb-1">
+                            <span class="fw-semibold" id="currentMonthText">{{ $currentMonthText }}</span>
+                        </h3>
+                    </div>
 
-                @canAction('DEPRECIATION','C')
-                <div class="card-toolbar">
-                    {{-- Process Current Month --}}
-                    <form id="form-process-month" method="POST" action="{{ route('depreciation.run.month') }}"
-                        class="d-inline-flex align-items-center gap-2 me-2">
-                        @csrf
-                        <input type="hidden" name="period" id="period" value="{{ $currentMonth }}">
-                        <button type="submit" id="btn-process-month" class="btn btn-danger btn-sm">
-                            <span class="indicator-label">Process Current Month</span>
-                            <span class="indicator-progress">
-                                Processing… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
-                            </span>
+                    @canAction('DEPRECIATION','C')
+                    <div class="card-toolbar">
+                        {{-- Process Current Month --}}
+                        <form id="form-process-month" method="POST" action="{{ route('depreciation.run.month') }}"
+                            class="d-inline-flex align-items-center gap-2 me-2">
+                            @csrf
+                            <input type="hidden" name="period" id="period" value="{{ $currentMonth }}">
+                            <button type="submit" id="btn-process-month" class="btn btn-danger btn-sm">
+                                <span class="indicator-label">Process Current Month</span>
+                                <span class="indicator-progress">
+                                    Processing… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                </span>
+                            </button>
+                        </form>
+
+                        {{-- Build Year button (current year) --}}
+                        <form id="form-build-year" method="POST" action="{{ route('depreciation.build.year') }}"
+                            class="d-inline-flex align-items-center gap-2 me-2">
+                            @csrf
+                            <input type="hidden" name="year" value="{{ $currentYear }}">
+                            <button type="submit" id="btn-build-year" class="btn btn-danger btn-sm">
+                                <span class="indicator-label">Build Year {{ $currentYear }}</span>
+                                <span class="indicator-progress">
+                                    Building… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                                </span>
+                            </button>
+                        </form>
+
+                        {{-- Adjustment Depreciation --}}
+                        <button type="button" id="btn-open-adj-depr" class="btn btn-danger btn-sm">
+                            Adjustment Depreciation
                         </button>
-                    </form>
-
-                    {{-- Build Year button (current year) --}}
-                    <form id="form-build-year" method="POST" action="{{ route('depreciation.build.year') }}"
-                        class="d-inline-flex align-items-center gap-2 me-2">
-                        @csrf
-                        <input type="hidden" name="year" value="{{ $currentYear }}">
-                        <button type="submit" id="btn-build-year" class="btn btn-danger btn-sm">
-                            <span class="indicator-label">Build Year {{ $currentYear }}</span>
-                            <span class="indicator-progress">
-                                Building… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
-                            </span>
-                        </button>
-                    </form>
-
-                    {{-- Adjustment Depreciation --}}
-                    <button type="button" id="btn-open-adj-depr" class="btn btn-danger btn-sm">
-                        Adjustment Depreciation
-                    </button>
+                    </div>
+                    @endcanAction
                 </div>
-                @endcanAction
-            </div>
 
-            <div class="card-body">
-                <table id="tbl-monthly"
-                    class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded ">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="min-w-200px">Asset Code</th>
-                            <th class="min-w-200px">Asset Description</th>
-                            <th class="min-w-150px">Transaction Number</th>
-                            <th class="min-w-150px">Asset Status</th>
-                            <th class="min-w-200px">Tanggal Masuk</th>
-                            <th class="min-w-200px">Depreciation Date</th>
-                            <th class="min-w-200px">Awal</th>
-                            <th class="min-w-200px">Total (Assets Value)</th>
-                            <th class="min-w-200px">Useful Life (Month)</th>
-                            <th class="min-w-200px">Ending Balance {{ $prevYearLabel }}</th>
-                            <th class="min-w-200px">Remaining Useful Life</th>
-                            <th class="min-w-200px">Transfer In</th>
-                            <th class="min-w-200px">Transfer Out</th>
-                            <th class="min-w-200px">Adjusment Depreciation</th>
-                            <th class="min-w-200px">Depreciation</th>
-                            <th class="min-w-200px">Total Addition</th>
-                            <th class="min-w-200px">Ending Balance</th>
-                        </tr>
-                    </thead>
-                </table>
+                <div class="card-body">
+                    <table id="tbl-monthly"
+                        class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded ">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="min-w-200px">Asset Code</th>
+                                <th class="min-w-200px">Asset Description</th>
+                                <th class="min-w-150px">Transaction Number</th>
+                                <th class="min-w-150px">Asset Status</th>
+                                <th class="min-w-200px">Tanggal Masuk</th>
+                                <th class="min-w-200px">Depreciation Date</th>
+                                <th class="min-w-200px">Awal</th>
+                                <th class="min-w-200px">Total (Assets Value)</th>
+                                <th class="min-w-200px">Useful Life (Month)</th>
+                                <th class="min-w-200px">Ending Balance {{ $prevYearLabel }}</th>
+                                <th class="min-w-200px">Remaining Useful Life</th>
+                                <th class="min-w-200px">Transfer In</th>
+                                <th class="min-w-200px">Transfer Out</th>
+                                <th class="min-w-200px">Adjusment Depreciation</th>
+                                <th class="min-w-200px">Depreciation</th>
+                                <th class="min-w-200px">Total Addition</th>
+                                <th class="min-w-200px">Ending Balance</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

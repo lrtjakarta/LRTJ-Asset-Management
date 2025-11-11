@@ -18,8 +18,10 @@
         </div>
     </div>
 
-    <div class="app-content flex-column-fluid">
-        <div class="app-container container-fluid">
+
+    <div id="kt_app_content" class="app-content flex-column-fluid">
+        <!--begin::Content container-->
+        <div id="kt_app_content_container" class="app-container container-fluid">
             <div class="card mb-6">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
