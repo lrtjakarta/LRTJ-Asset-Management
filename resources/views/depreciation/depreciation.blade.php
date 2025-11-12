@@ -18,10 +18,6 @@
                     Depreciation
                 </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                    <li class="breadcrumb-item text-muted">Transaction</li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
                     <li class="breadcrumb-item text-muted">Depreciation</li>
                 </ul>
             </div>
@@ -427,9 +423,27 @@
                     },
                 ]
             });
+
+            function formatPeriodToText(period) {
+                if (!period) return '';
+
+                const [year, month] = period.split('-');
+                const date = new Date(Number(year), Number(month) - 1, 1);
+
+                return date.toLocaleDateString('en-US', {
+                    month: 'long',
+                    year: 'numeric'
+                });
+            }
+
+            function updatePeriodText() {
+                const periodVal = $('#f-period').val();
+                $('#currentMonthText').text(formatPeriodToText(periodVal));
+            }
+
             $('#btnFilter').on('click', function() {
                 tbl.ajax.reload();
-                $('#currentMonthText').html($('#f-period').val());
+                updatePeriodText();
             });
 
             $('#btnReset').on('click', function() {
@@ -440,6 +454,7 @@
                 $('#f-asset').val('');
 
                 tbl.ajax.reload();
+                updatePeriodText();
             });
             $('#btnExport').on('click', function(e) {
                 e.preventDefault();
