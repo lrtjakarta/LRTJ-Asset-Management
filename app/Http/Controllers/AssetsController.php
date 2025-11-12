@@ -281,7 +281,7 @@ class AssetsController extends Controller
                 $seq = 1;
             }
 
-            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+            $upl_code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
             $asset = Assets::create([
                 'uuid'                => $uuid,
@@ -294,7 +294,7 @@ class AssetsController extends Controller
                 'kode_status'         => $v->kode_status,
                 'kode_location'       => $v->kode_location,
                 'kode_sumber'         => $v->kode_sumber,
-                'upload_code'         => $code
+                'upload_code'         => $upl_code
             ]);
 
             AssetsClassification::create([
