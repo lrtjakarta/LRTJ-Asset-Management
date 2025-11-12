@@ -36,10 +36,6 @@
                         name: 'name'
                     },
                     {
-                        data: 'transaction_label',
-                        name: 'transaction_label'
-                    },
-                    {
                         data: 'status_badge',
                         name: 'status',
                         orderable: false,
@@ -76,34 +72,6 @@
                     },
                 ]
             });
-            if ($.fn.select2) {
-                $('#kodeTransaction').select2({
-                    dropdownParent: $('#kt_modal_add'),
-                    placeholder: 'Choose Company',
-                    allowClear: true,
-                    ajax: {
-                        url: "{{ route('master.transaction.options') }}",
-                        data: params => ({
-                            q: params.term || ''
-                        }),
-                        processResults: data => data,
-                        delay: 150
-                    }
-                });
-            } else {
-                fetch("{{ route('master.transaction.options') }}")
-                    .then(r => r.json())
-                    .then(data => {
-                        const sel = document.getElementById('kodeTransaction');
-                        data.results.forEach(o => {
-                            const opt = document.createElement('option');
-                            opt.value = o.id;
-                            opt.textContent = o.text;
-                            sel.appendChild(opt);
-                        });
-                    });
-            }
-
             $(document).on('click', '#btn-export-excel', function() {
                 window.location = "{{ route('export.master_asset_class') }}";
             });
@@ -111,7 +79,6 @@
                 const $f = $('#formMasterAssetClass');
                 $('#formMasterAssetClass')[0].reset();
                 $f.find('[name="uuid"]').val(null);
-                $('#kodeTransaction').val(null).trigger('change');
             });
 
             $(document).on('click', '.btn-edit', function() {
@@ -129,12 +96,6 @@
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
                         $f.find('[name="status"]').val(d.status).change?.();
-                        if ($.fn.select2) {
-                            const opt = new Option(d.kode_transaction, d.kode_transaction, true, true);
-                            $('#kodeTransaction').append(opt).trigger('change');
-                        } else {
-                            $('#kodeTransaction').val(d.kode_transaction);
-                        }
                         $('#kt_modal_add').modal('show');
                     })
                     .fail(function(xhr) {
@@ -298,7 +259,6 @@
                                             <th>UUID</th>
                                             <th>Kode</th>
                                             <th>Name</th>
-                                            <th>Company</th>
                                             <th>Status</th>
                                             <th>Updated</th>
                                             <th class="text-end">Actions</th>
@@ -345,10 +305,6 @@
                         <div class="mb-5">
                             <label class="form-label required">Name</label>
                             <input type="text" name="name" class="form-control" required maxlength="191">
-                        </div>
-                        <div class="mb-5">
-                            <label class="form-label required">Company</label>
-                            <select name="kode_transaction" id="kodeTransaction" class="form-select" required></select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label">Status</label>

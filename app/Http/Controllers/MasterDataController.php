@@ -1068,7 +1068,6 @@ class MasterDataController
         $data = $request->validate([
             'kode'   => ['required', 'string', 'max:50', $kodeRule],
             'name'   => ['required', 'string', 'max:191', $nameRule],
-            'kode_transaction' => ['required', 'string', 'max:50', 'exists:master_transaction,kode'],
             'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
         ]);
 
@@ -1076,7 +1075,6 @@ class MasterDataController
             'kode'   => $data['kode'],
             'name'   => $data['name'],
             'status' => (bool) $data['status'],
-            'kode_transaction' => $data['kode_transaction'],
         ];
 
         if ($uuid) {
@@ -1625,12 +1623,7 @@ class MasterDataController
     public function select_master_asset_class(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
-        $transaction = trim((string) $request->get('kode_transaction'));
         $q = MasterAssetClass::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
-
-        if ($transaction != '') {
-            $q->where('kode_transaction', $transaction);
-        }
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {

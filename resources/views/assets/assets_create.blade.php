@@ -396,15 +396,7 @@
             initSelect2('#sel-sub-category', R.subcat);
             initSelect2('#sel-asset-type', R.type);
             
-
-            initSelect2('#sel-asset-class', R.aclass, () => {
-                const p = {
-                    kode_transaction: $('#sel-transaction').val() || '',
-                    q: ''
-                };
-                console.log('cat->extra', p);
-                return p;
-            });
+            initSelect2('#sel-asset-class', R.aclass);
 
             initSelect2('#sel-category', R.cat, () => {
                 const p = {
@@ -433,11 +425,6 @@
                     e.preventDefault();
                 }
             });
-            $('#sel-asset-class').on('select2:opening', function(e) {
-                if (!$('#sel-transaction').val()) {
-                    e.preventDefault();
-                }
-            });
 
             $('#sel-asset-type').on('change', function() {
                 $('#sel-category').val(null).trigger('change');
@@ -445,9 +432,6 @@
             });
             $('#sel-category').on('change', function() {
                 $('#sel-category-2').val(null).trigger('change');
-            });
-            $('#sel-transaction').on('change', function() {
-                $('#sel-asset-class').val(null).trigger('change');
             });
 
             preloadOld('#sel-sumber', '{{ old('kode_sumber') }}', R.sumber);
@@ -472,8 +456,6 @@
 
                     $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category, #sel-asset-class')
                         .val(null).trigger('change');
-                    // $('#sel-transaction, #sel-asset-class')
-                    //     .prop('required', false).trigger('change');
                 } else {
                     $('#wrap-parent-picker').hide();
                     $('#wrap-classification').show();
