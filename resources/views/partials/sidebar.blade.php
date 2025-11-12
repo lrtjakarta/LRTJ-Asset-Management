@@ -303,6 +303,7 @@
                         $canTfReq = $u && $u->hasAction('TRANSFER', 'R');
 
                         $showTransaction = $canAcq || $canMov || $canDisp || $canRet || $canTfReq;
+                        $showTransfer = $canTfReq || $canMov;
                     @endphp
 
                     @if ($showTransaction)
@@ -333,7 +334,58 @@
                                 </div>
                                 @endcanAction
 
-                                @canAction('TRANSFER','R')
+                                @if ($showTransfer)
+                                    <div data-kt-menu-trigger="click"
+                                        class="menu-item 
+                                {{ request()->segment(1) == 'transaction' && (request()->segment(2) == 'movement' || request()->segment(2) == 'transfer-requests') ? 'show here' : '' }}
+                                     menu-accordion">
+                                        <!--begin:Menu link-->
+                                        <span class="menu-link">
+                                            <span class="menu-bullet">
+                                                <span class="bullet bullet-dot"></span>
+                                            </span>
+                                            <span class="menu-title">Transfer Request</span>
+                                            <span class="menu-arrow"></span>
+                                        </span>
+                                        <!--end:Menu link-->
+                                        <!--begin:Menu sub-->
+                                        <div class="menu-sub menu-sub-accordion">
+                                            @canAction('MOVEMENT','R')
+                                            <!--begin:Menu item-->
+                                            <div class="menu-item">
+                                                <!--begin:Menu link-->
+                                                <a class="menu-link {{ request()->segment(2) == 'movement' ? 'active' : '' }}"
+                                                    href="{{ route('transaction.transfer.index') }}">
+                                                    <span class="menu-bullet">
+                                                        <span class="bullet bullet-dot"></span>
+                                                    </span>
+                                                    <span class="menu-title">Movement</span>
+                                                </a>
+                                                <!--end:Menu link-->
+                                            </div>
+                                            <!--end:Menu item-->
+                                            @endcanAction
+                                            @canAction('TRANSFER','R')
+                                            <!--begin:Menu item-->
+                                            <div class="menu-item">
+                                                <!--begin:Menu link-->
+                                                <a class="menu-link {{ request()->segment(2) == 'transfer-requests' ? 'active' : '' }}"
+                                                    href="{{ route('transaction.transfer-requests.index') }}">
+                                                    <span class="menu-bullet">
+                                                        <span class="bullet bullet-dot"></span>
+                                                    </span>
+                                                    <span class="menu-title">Transfer Value</span>
+                                                </a>
+                                                <!--end:Menu link-->
+                                            </div>
+                                            <!--end:Menu item-->
+                                            @endcanAction
+                                        </div>
+                                        <!--end:Menu sub-->
+                                    </div>
+                                @endif
+
+                                {{-- @canAction('TRANSFER','R')
                                 <div class="menu-item">
                                     <a class="menu-link {{ request()->segment(2) == 'transfer-requests' ? 'active' : '' }}"
                                         href="{{ route('transaction.transfer-requests.index') }}">
@@ -351,7 +403,7 @@
                                         <span class="menu-title">Movement</span>
                                     </a>
                                 </div>
-                                @endcanAction
+                                @endcanAction --}}
 
                                 @canAction('DISPOSAL','R')
                                 <div class="menu-item">
