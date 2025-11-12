@@ -63,8 +63,8 @@
             <div class="card">
                 <div class="card-header align-items-center justify-content-between">
                     <div class="d-flex flex-column">
-                        <h3 class="card-title mb-1">
-                            <span class="fw-semibold">Acquisition Data</span>
+                        <h3 class="card-title align-items-start flex-column">
+                            <span class="card-label fw-bold fs-3 mb-1">Acquisition History</span>
                         </h3>
                     </div>
                     @canAction('ACQUISITION','C')

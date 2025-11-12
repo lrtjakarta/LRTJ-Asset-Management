@@ -45,8 +45,12 @@
                 {{-- Upload file --}}
                 <div class="col-xl-12">
                     <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title fw-bold">Upload Excel</h3>
+                        <div class="card-header align-items-center justify-content-between">
+                            <div class="d-flex flex-column">
+                                <h3 class="card-title align-items-start flex-column">
+                                    <span class="card-label fw-bold fs-3 mb-1">Upload Excel</span>
+                                </h3>
+                            </div>
                         </div>
                         <form action="{{ route('assets.upload.excel') }}" method="POST" enctype="multipart/form-data">
                             @csrf
@@ -87,7 +91,7 @@
                                     </i> Download Template
                                 </a>
                                 @endcanAction
-                                &nbsp; 
+                                &nbsp;
                                 @canAction('ASSETS','C')
                                 <button type="submit" class="btn btn-danger">
                                     <i class="ki-duotone ki-up-square fs-2">
