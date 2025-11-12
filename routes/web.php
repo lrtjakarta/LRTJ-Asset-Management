@@ -23,6 +23,7 @@ Route::post('/ldap-login', [AuthLdapController::class, 'login'])->name('ldap.log
 Route::middleware('ldap.session')->group(function () {
     // DASHBOARD ROUTE
     Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
+    Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
 
     // MASTER DATA ROUTE
     Route::prefix('master-data')->name('master.')->group(function () {

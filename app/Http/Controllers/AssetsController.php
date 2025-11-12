@@ -897,7 +897,7 @@ class AssetsController extends Controller
                     $assetPayload['kode_group_category'] = $parent ? substr($parent, 0, 5) : substr($code, 0, 5);
                 }
                 if (empty($assetPayload['kode_sumber'])) {
-                    $assetPayload['kode_sumber'] = 'KD-1';
+                    $assetPayload['kode_sumber'] = 'EXC';
                 }
 
                 $asset = Assets::where('asset_code', $code)->first();

@@ -480,6 +480,13 @@
                 approve: @json(auth()->user()?->hasAction('TRANSFER', 'APR') ?? false),
                 delete: @json(auth()->user()?->hasAction('TRANSFER', 'D') ?? false),
             };
+
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const statusFromUrl = urlParams.get('status');
+            if (statusFromUrl) {
+                $('#f-status').val(statusFromUrl);
+            }
             const tbl = $('#tbl-transfer-requests').DataTable({
                 processing: true,
                 serverSide: true,

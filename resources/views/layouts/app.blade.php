@@ -138,6 +138,7 @@
     <script src="https://cdn.amcharts.com/lib/5/geodata/usaLow.js"></script>
     <script src="https://cdn.amcharts.com/lib/5/geodata/worldTimeZonesLow.js"></script>
     <script src="https://cdn.amcharts.com/lib/5/geodata/worldTimeZoneAreasLow.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/plugins/exporting.js"></script>
     <script src="{{ asset('metronic/demo1/assets/plugins/custom/datatables/datatables.bundle.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/widgets.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/apps/chat/chat.js') }}"></script>

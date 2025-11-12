@@ -392,6 +392,11 @@
             });
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
+            const urlParams = new URLSearchParams(window.location.search);
+            const statusFromUrl = urlParams.get('status');
+            if (statusFromUrl) {
+                $('#mv-status').val(statusFromUrl);
+            }
             const dt = $('#tbl-transfers-all').DataTable({
                 processing: true,
                 serverSide: true,
