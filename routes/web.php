@@ -24,6 +24,10 @@ Route::middleware('ldap.session')->group(function () {
     // DASHBOARD ROUTE
     Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
     Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
+    Route::get('/dashboard/acquisition-monthly', [DashboardController::class, 'acquisitionMonthly'])
+        ->name('dashboard.acquisition.monthly');
+    Route::get('/dashboard/depr-monthly', [DashboardController::class, 'deprMonthly'])
+        ->name('dashboard.depr.monthly');
 
     // MASTER DATA ROUTE
     Route::prefix('master-data')->name('master.')->group(function () {
