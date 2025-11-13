@@ -337,15 +337,17 @@
 
             {{-- Owner per assets --}}
             <div class="row g-5 g-xl-8 mb-5 mb-xl-8">
-                <div class="card card-flush h-xl-100 shadow-sm mb-7">
-                    <div class="card-header pt-7 pb-3 border-0">
-                        <h3 class="card-title align-items-start flex-column">
-                            <span class="card-label fw-bold text-gray-800 fs-3">Assets Status per Owner</span>
-                            <span class="text-gray-500 mt-1 fw-semibold fs-7">DIS, IDL, OPE, RPR per Owner</span>
-                        </h3>
-                    </div>
-                    <div class="card-body pt-3 pb-7">
-                        <div id="chart-owner-status" style="width:100%;height:420px;"></div>
+                <div class="col-xl-12">
+                    <div class="card card-flush h-xl-100 shadow-sm mb-7">
+                        <div class="card-header pt-7 pb-3 border-0">
+                            <h3 class="card-title align-items-start flex-column">
+                                <span class="card-label fw-bold text-gray-800 fs-3">Assets Status per Owner</span>
+                                <span class="text-gray-500 mt-1 fw-semibold fs-7">DIS, IDL, OPE, RPR per Owner</span>
+                            </h3>
+                        </div>
+                        <div class="card-body pt-3 pb-7">
+                            <div id="chart-owner-status" style="width:100%;height:420px;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
