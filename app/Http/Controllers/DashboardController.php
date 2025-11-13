@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\Models\Asset;
-use App\Models\AssetDeprMonthly;
 use App\Models\AssetDeprTransferRequest;
 use App\Models\Disposal;
 use App\Models\Transfer;
@@ -20,61 +18,76 @@ class DashboardController
 
     public function data(Request $request)
     {
-        $movementAgg = $this->aggregateStatus(Transfer::query());
-        $disposalAgg = $this->aggregateStatus(Disposal::query());
-        $valueAgg    = $this->aggregateStatus(AssetDeprTransferRequest::query());
+        $year  = (int) ($request->input('year') ?: Carbon::now()->year);
+        $month = $request->input('month');
 
-        $movement = [
-            'waiting'  => (int) ($movementAgg->waiting  ?? 0),
-            'rejected' => (int) ($movementAgg->rejected ?? 0),
-        ];
-
-        $transferValue = [
-            'waiting'  => (int) ($valueAgg->waiting  ?? 0),
-            'rejected' => (int) ($valueAgg->rejected ?? 0),
-        ];
-
-        $disposal = [
-            'waiting'  => (int) ($disposalAgg->waiting  ?? 0),
-            'rejected' => (int) ($disposalAgg->rejected ?? 0),
-        ];
+        $movementAgg = $this->aggregateStatus(Transfer::query(), $year, $month, 'created_at');
+        $disposalAgg = $this->aggregateStatus(Disposal::query(), $year, $month, 'created_at');
+        $valueAgg    = $this->aggregateStatus(AssetDeprTransferRequest::query(), $year, $month, 'created_at');
 
         return response()->json([
-            'movement'       => $movement,
-            'transfer_value' => $transferValue,
-            'disposal'       => $disposal,
+            'movement'       => [
+                'waiting'  => (int) ($movementAgg->waiting  ?? 0),
+                'rejected' => (int) ($movementAgg->rejected ?? 0),
+            ],
+            'transfer_value' => [
+                'waiting'  => (int) ($valueAgg->waiting  ?? 0),
+                'rejected' => (int) ($valueAgg->rejected ?? 0),
+            ],
+            'disposal'       => [
+                'waiting'  => (int) ($disposalAgg->waiting  ?? 0),
+                'rejected' => (int) ($disposalAgg->rejected ?? 0),
+            ],
         ]);
     }
 
-    protected function aggregateStatus($query)
+    protected function aggregateStatus($query, int $year, $month = null, string $dateColumn = 'created_at')
     {
-        return $query
-            ->selectRaw("
-                SUM(CASE WHEN kode_status = 'APR' THEN 1 ELSE 0 END)          AS waiting,
-                SUM(CASE WHEN kode_status = 'REJ' THEN 1 ELSE 0 END)          AS rejected
-            ")
-            ->first();
+        $query->whereYear($dateColumn, $year);
+        if ($month !== null && $month !== '') {
+            $query->whereMonth($dateColumn, (int) $month);
+        }
+
+        return $query->selectRaw("
+            SUM(CASE WHEN kode_status = 'APR' THEN 1 ELSE 0 END) AS waiting,
+            SUM(CASE WHEN kode_status = 'REJ' THEN 1 ELSE 0 END) AS rejected
+        ")->first();
     }
 
-    public function acquisitionMonthly()
+    public function acquisitionMonthly(Request $request)
     {
-        $rows = DB::table('assets_value')
-            ->whereNull('deleted_at')
-            ->whereNotNull('capitalization_date')
-            ->selectRaw("DATE_TRUNC('month', capitalization_date)::date as month")
-            ->selectRaw("COUNT(*) as qty")
-            ->selectRaw("SUM(total) as amount")
-            ->groupBy('month')
-            ->orderBy('month')
-            ->get();
+        $year       = (int) ($request->input('year') ?: Carbon::now()->year);
+        $month      = $request->input('month');
+        $owner      = $request->input('owner');
+        $location   = $request->input('location');
+        $assetClass = $request->input('asset_class');
 
-        $months = $rows->map(function ($r) {
-            return [
-                'month'  => Carbon::parse($r->month)->toDateString(),
-                'qty'    => (int) $r->qty,
-                'amount' => (float) $r->amount,
-            ];
-        });
+        $q = DB::table('assets_value as v')
+            ->join('assets as a', 'a.uuid', '=', 'v.asset_uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->whereNull('v.deleted_at')
+            ->whereNotNull('v.capitalization_date')
+            ->whereYear('v.capitalization_date', $year);
+
+        if ($month !== null && $month !== '') {
+            $q->whereMonth('v.capitalization_date', (int) $month);
+        }
+        if ($owner)      $q->where('g.asset_owner', $owner);
+        if ($location)   $q->where('a.kode_location', $location);
+        if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
+
+        $rows = $q->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
+                  ->selectRaw("COUNT(*) as qty")
+                  ->selectRaw("SUM(v.total) as amount")
+                  ->groupBy('month')
+                  ->orderBy('month')
+                  ->get();
+
+        $months = $rows->map(fn($r) => [
+            'month'  => Carbon::parse($r->month)->toDateString(),
+            'qty'    => (int) $r->qty,
+            'amount' => (float) $r->amount,
+        ]);
 
         return response()->json([
             'months'       => $months,
@@ -82,23 +95,90 @@ class DashboardController
             'total_amount' => $months->sum('amount'),
         ]);
     }
+
     public function deprMonthly(Request $request)
     {
-        $rows = DB::table('assets_depr_ledger_monthly')
-            ->selectRaw("date_trunc('month', period)::date AS month")
-            ->selectRaw("SUM(depr_expense + adjustment_depreciation) AS depr")
-            ->selectRaw("SUM(ending_balance) AS nbv")
-            ->groupByRaw("date_trunc('month', period)")
-            ->orderByRaw("date_trunc('month', period)")
-            ->get();
+        $year       = (int) ($request->input('year') ?: Carbon::now()->year);
+        $month      = $request->input('month');
+        $owner      = $request->input('owner');
+        $location   = $request->input('location');
+        $assetClass = $request->input('asset_class');
 
-        $totalDepr = $rows->sum('depr');
-        $latestNbv = optional($rows->last())->nbv ?? 0;
+        $q = DB::table('assets_depr_ledger_monthly as l')
+            ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->whereYear('l.period', $year);
+
+        if ($month !== null && $month !== '') {
+            $q->whereMonth('l.period', (int) $month);
+        }
+        if ($owner)      $q->where('g.asset_owner', $owner);
+        if ($location)   $q->where('a.kode_location', $location);
+        if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
+
+        $rows = $q->selectRaw("date_trunc('month', l.period)::date AS month")
+                  ->selectRaw("SUM(l.depr_expense + l.adjustment_depreciation) AS depr")
+                  ->selectRaw("SUM(l.ending_balance) AS nbv")
+                  ->groupByRaw("date_trunc('month', l.period)")
+                  ->orderByRaw("date_trunc('month', l.period)")
+                  ->get();
 
         return response()->json([
             'months'      => $rows,
-            'total_depr'  => (float) $totalDepr,
-            'total_nbv'   => (float) $latestNbv,
+            'total_depr'  => (float) $rows->sum('depr'),
+            'total_nbv'   => (float) (optional($rows->last())->nbv ?? 0),
         ]);
+    }
+
+    public function ownerStatus(Request $request)
+    {
+        $owner      = $request->input('owner');
+        $location   = $request->input('location');
+        $assetClass = $request->input('asset_class');
+        $year       = $request->input('year');
+        $month      = $request->input('month');
+
+        $q = DB::table('assets as a')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('master_user_code as ou', 'ou.kode', '=', 'g.asset_owner')
+            ->whereNull('a.deleted_at')
+            ->whereIn('a.kode_status', ['DIS', 'IDL', 'OPE', 'RPR']);
+
+        if ($owner)      $q->where('g.asset_owner', $owner);
+        if ($location)   $q->where('a.kode_location', $location);
+        if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
+
+        if ($year || $month) {
+            $q->join('assets_value as v', 'v.asset_uuid', '=', 'a.uuid')
+              ->whereNotNull('v.capitalization_date');
+            if ($year)  $q->whereYear('v.capitalization_date', (int) $year);
+            if ($month) $q->whereMonth('v.capitalization_date', (int) $month);
+        }
+
+        $rows = $q->selectRaw("
+                    COALESCE(g.asset_owner, '-')        AS owner_code,
+                    COALESCE(ou.department, 'Unknown')  AS owner_name,
+                    a.kode_status                       AS status,
+                    COUNT(*)                            AS n
+                ")
+                ->groupBy(
+                    DB::raw("COALESCE(g.asset_owner, '-')"),
+                    DB::raw("COALESCE(ou.department, 'Unknown')"),
+                    'a.kode_status'
+                )
+                ->get();
+
+        $byOwner = [];
+        foreach ($rows as $r) {
+            $key   = $r->owner_code ?: '-';
+            $label = ($r->owner_code ?: '-') . ' - ' . ($r->owner_name ?: 'Unknown');
+
+            if (!isset($byOwner[$key])) {
+                $byOwner[$key] = ['owner' => $label, 'dis' => 0, 'idl' => 0, 'ope' => 0, 'rpr' => 0];
+            }
+            $byOwner[$key][strtolower($r->status)] += (int) $r->n;
+        }
+
+        return response()->json(['data' => array_values(collect($byOwner)->sortBy('owner')->all())]);
     }
 }
