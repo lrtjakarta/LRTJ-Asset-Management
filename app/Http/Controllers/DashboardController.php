@@ -77,11 +77,11 @@ class DashboardController
         if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
 
         $rows = $q->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
-                  ->selectRaw("COUNT(*) as qty")
-                  ->selectRaw("SUM(v.total) as amount")
-                  ->groupBy('month')
-                  ->orderBy('month')
-                  ->get();
+            ->selectRaw("COUNT(*) as qty")
+            ->selectRaw("SUM(v.total) as amount")
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
 
         $months = $rows->map(fn($r) => [
             'month'  => Carbon::parse($r->month)->toDateString(),
@@ -117,11 +117,11 @@ class DashboardController
         if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
 
         $rows = $q->selectRaw("date_trunc('month', l.period)::date AS month")
-                  ->selectRaw("SUM(l.depr_expense + l.adjustment_depreciation) AS depr")
-                  ->selectRaw("SUM(l.ending_balance) AS nbv")
-                  ->groupByRaw("date_trunc('month', l.period)")
-                  ->orderByRaw("date_trunc('month', l.period)")
-                  ->get();
+            ->selectRaw("SUM(l.depr_expense + l.adjustment_depreciation) AS depr")
+            ->selectRaw("SUM(l.ending_balance) AS nbv")
+            ->groupByRaw("date_trunc('month', l.period)")
+            ->orderByRaw("date_trunc('month', l.period)")
+            ->get();
 
         return response()->json([
             'months'      => $rows,
@@ -129,18 +129,16 @@ class DashboardController
             'total_nbv'   => (float) (optional($rows->last())->nbv ?? 0),
         ]);
     }
-
     public function ownerStatus(Request $request)
     {
         $owner      = $request->input('owner');
         $location   = $request->input('location');
         $assetClass = $request->input('asset_class');
-        $year       = $request->input('year');
-        $month      = $request->input('month');
 
         $q = DB::table('assets as a')
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('master_user_code as ou', 'ou.kode', '=', 'g.asset_owner')
+            ->join('assets_value as v', 'v.asset_uuid', '=', 'a.uuid')
             ->whereNull('a.deleted_at')
             ->whereIn('a.kode_status', ['DIS', 'IDL', 'OPE', 'RPR']);
 
@@ -148,25 +146,18 @@ class DashboardController
         if ($location)   $q->where('a.kode_location', $location);
         if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
 
-        if ($year || $month) {
-            $q->join('assets_value as v', 'v.asset_uuid', '=', 'a.uuid')
-              ->whereNotNull('v.capitalization_date');
-            if ($year)  $q->whereYear('v.capitalization_date', (int) $year);
-            if ($month) $q->whereMonth('v.capitalization_date', (int) $month);
-        }
-
         $rows = $q->selectRaw("
-                    COALESCE(g.asset_owner, '-')        AS owner_code,
-                    COALESCE(ou.department, 'Unknown')  AS owner_name,
-                    a.kode_status                       AS status,
-                    COUNT(*)                            AS n
-                ")
-                ->groupBy(
-                    DB::raw("COALESCE(g.asset_owner, '-')"),
-                    DB::raw("COALESCE(ou.department, 'Unknown')"),
-                    'a.kode_status'
-                )
-                ->get();
+                COALESCE(g.asset_owner, '-')        AS owner_code,
+                COALESCE(ou.department, 'Unknown')  AS owner_name,
+                a.kode_status                       AS status,
+                COUNT(*)                            AS n
+            ")
+            ->groupBy(
+                DB::raw("COALESCE(g.asset_owner, '-')"),
+                DB::raw("COALESCE(ou.department, 'Unknown')"),
+                'a.kode_status'
+            )
+            ->get();
 
         $byOwner = [];
         foreach ($rows as $r) {
@@ -179,6 +170,8 @@ class DashboardController
             $byOwner[$key][strtolower($r->status)] += (int) $r->n;
         }
 
-        return response()->json(['data' => array_values(collect($byOwner)->sortBy('owner')->all())]);
+        return response()->json([
+            'data' => array_values(collect($byOwner)->sortBy('owner', SORT_NATURAL | SORT_FLAG_CASE)->all())
+        ]);
     }
 }
