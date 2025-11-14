@@ -48,7 +48,6 @@ class AssetsController extends Controller
     {
         $asset = Assets::with([
             'classification.transaction',
-            'classification.assetType',
             'classification.category',
             'classification.category2',
             'classification.subCategory',

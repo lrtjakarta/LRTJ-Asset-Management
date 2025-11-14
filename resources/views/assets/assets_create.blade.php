@@ -108,31 +108,6 @@
                                                             data-placeholder="Select Company First"
                                                             class="form-select" required></select>
                                                     </div>
-
-                                                    <div class="col-md-3" style="display:none;">
-                                                        <label class="form-label required">Asset Type</label>
-                                                        <select name="kode_asset_type" id="sel-asset-type"
-                                                            class="form-select"></select>
-                                                    </div>
-
-                                                    <div class="col-md-3" style="display:none;">
-                                                        <label class="form-label required">Category</label>
-                                                        <select name="kode_category" id="sel-category" class="form-select"
-                                                            data-placeholder="Select Asset Type First"></select>
-                                                    </div>
-
-                                                    <div class="col-md-3" style="display:none;">
-                                                        <label class="form-label required">Category 2</label>
-                                                        <select name="kode_category_2" id="sel-category-2"
-                                                            class="form-select"
-                                                            data-placeholder="Select Category First"></select>
-                                                    </div>
-
-                                                    <div class="col-md-3" style="display:none;">
-                                                        <label class="form-label required">Sub Category</label>
-                                                        <select name="kode_sub_category" id="sel-sub-category"
-                                                            class="form-select"></select>
-                                                    </div>
                                                 </div>
 
                                             </div>
@@ -278,10 +253,10 @@
                                             <input name="nota_referensi" value="{{ old('nota_referensi') }}"
                                                 class="form-control" required>
                                         </div>
-                                        <div class="col-md-4">
-                                            <label class="form-label required">No Document</label>
+                                        <div class="col-md-4 d-none">
+                                            <label class="form-label">No Document</label>
                                             <input name="no_document" value="{{ old('no_document') }}"
-                                                class="form-control" required>
+                                                class="form-control">
                                         </div>
                                     </div>
 
@@ -368,10 +343,6 @@
             parentMeta: (uuid) => '{{ route('assets.parent.meta', ':id') }}'.replace(':id', uuid),
             sumber: '{{ route('master.sumber.options') }}',
             trx: '{{ route('master.transaction.options') }}',
-            type: '{{ route('master.asset_type.options') }}',
-            cat: '{{ route('master.category.options') }}',
-            cat2: '{{ route('master.category_2.options') }}',
-            subcat: '{{ route('master.sub_category.options') }}',
             location: '{{ route('master.location.options') }}',
             uom: '{{ route('master.uom.options') }}',
             status: '{{ route('master.status.options') }}',
@@ -384,7 +355,6 @@
             initSelect2('#sel-parent', R.parent);
             initSelect2('#sel-sumber', R.sumber);
             initSelect2('#sel-transaction', R.trx);
-            initSelect2('#sel-asset-type', R.type);
             initSelect2('#sel-location', R.location);
             initSelect2('#sel-uom', R.uom);
             initSelect2('#sel-status', R.status, {
@@ -393,53 +363,9 @@
             initSelect2('#sel-owner', R.usercode);
             initSelect2('#sel-user', R.usercode);
             initSelect2('#sel-maintenance', R.usercode);
-            initSelect2('#sel-sub-category', R.subcat);
-            initSelect2('#sel-asset-type', R.type);
-            
             initSelect2('#sel-asset-class', R.aclass);
-
-            initSelect2('#sel-category', R.cat, () => {
-                const p = {
-                    kode_asset_type: $('#sel-asset-type').val() || '',
-                    q: ''
-                };
-                console.log('cat->extra', p);
-                return p;
-            });
-            initSelect2('#sel-category-2', R.cat2, () => {
-                const p = {
-                    kode_category: $('#sel-category').val() || '',
-                    q: ''
-                };
-                console.log('cat2->extra', p);
-                return p;
-            });
-
-            $('#sel-category').on('select2:opening', function(e) {
-                if (!$('#sel-asset-type').val()) {
-                    e.preventDefault();
-                }
-            });
-            $('#sel-category-2').on('select2:opening', function(e) {
-                if (!$('#sel-category').val()) {
-                    e.preventDefault();
-                }
-            });
-
-            $('#sel-asset-type').on('change', function() {
-                $('#sel-category').val(null).trigger('change');
-                $('#sel-category-2').val(null).trigger('change');
-            });
-            $('#sel-category').on('change', function() {
-                $('#sel-category-2').val(null).trigger('change');
-            });
-
             preloadOld('#sel-sumber', '{{ old('kode_sumber') }}', R.sumber);
             preloadOld('#sel-transaction', '{{ old('kode_asset_transaction') }}', R.trx);
-            preloadOld('#sel-asset-type', '{{ old('kode_asset_type') }}', R.type);
-            preloadOld('#sel-category', '{{ old('kode_category') }}', R.cat);
-            preloadOld('#sel-category-2', '{{ old('kode_category_2') }}', R.cat2);
-            preloadOld('#sel-sub-category', '{{ old('kode_sub_category') }}', R.subcat);
             preloadOld('#sel-status', '{{ old('kode_status') }}', R.status);
             preloadOld('#sel-location', '{{ old('kode_location') }}', R.location);
             preloadOld('#sel-uom', '{{ old('kode_uom') }}', R.uom);
@@ -454,7 +380,7 @@
                     $('#wrap-parent-picker').show();
                     $('#wrap-classification').hide();
 
-                    $('#sel-transaction, #sel-asset-type, #sel-category, #sel-category-2, #sel-sub-category, #sel-asset-class')
+                    $('#sel-transaction, #sel-asset-class')
                         .val(null).trigger('change');
                 } else {
                     $('#wrap-parent-picker').hide();
@@ -468,10 +394,6 @@
                 $.getJSON(R.parentMeta(id), function(meta) {
                     const cl = meta.classification || {};
                     setSelectValue('#sel-transaction', cl.kode_asset_transaction);
-                    setSelectValue('#sel-asset-type', cl.kode_asset_type);
-                    setSelectValue('#sel-category', cl.kode_category);
-                    setSelectValue('#sel-category-2', cl.kode_category_2);
-                    setSelectValue('#sel-sub-category', cl.kode_sub_category);
                     setSelectValue('#sel-asset-class', cl.kode_asset_class);
                 });
             });

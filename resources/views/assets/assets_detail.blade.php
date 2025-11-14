@@ -146,51 +146,6 @@
                                         - {{ $asset->assetClass->name }}
                                     @endif
                                 </dd>
-
-                                {{-- <dt class="col-sm-5">Asset Type</dt>
-                                <dd class="col-sm-7"> :
-                                    @php
-                                        $t = $asset->classification?->kode_asset_type;
-                                        $tName = $asset->classification?->assetType?->name ?? null;
-                                    @endphp
-                                    {{ $t }} @if ($tName)
-                                        - {{ $tName }}
-                                    @endif
-                                </dd> --}}
-
-                                {{-- <dt class="col-sm-5">Asset Category</dt>
-                                <dd class="col-sm-7"> :
-                                    @php
-                                        $c = $asset->classification?->kode_category;
-                                        $cName = $asset->classification?->category?->name ?? null;
-                                    @endphp
-                                    {{ $c }} @if ($cName)
-                                        - {{ $cName }}
-                                    @endif
-                                </dd> --}}
-
-                                {{-- <dt class="col-sm-5">Asset Category 2</dt>
-                                <dd class="col-sm-7"> :
-                                    @php
-                                        $c2 = $asset->classification?->kode_category_2;
-                                        $c2Name = $asset->classification?->category2?->name ?? null;
-                                    @endphp
-                                    {{ $c2 }} @if ($c2Name)
-                                        - {{ $c2Name }}
-                                    @endif
-                                </dd> --}}
-
-                                {{-- <dt class="col-sm-5">Asset Sub Category</dt>
-                                <dd class="col-sm-7"> :
-                                    @php
-                                        $sc = $asset->classification?->kode_sub_category;
-                                        $scName = $asset->classification?->subCategory?->name ?? null;
-                                    @endphp
-                                    {{ $sc }} @if ($scName)
-                                        - {{ $scName }}
-                                    @endif
-                                </dd> --}}
-
                                 <dt class="col-sm-5">Sumber Input</dt>
                                 <dd class="col-sm-7"> :
                                     {{ $asset->kode_sumber }}

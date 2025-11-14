@@ -59,7 +59,7 @@ class AssetStoreRequest extends FormRequest
             // document
             'no_po_perjanjian_spk' => ['nullable', 'string', 'max:120'],
             'nota_referensi'       => ['required', 'string', 'max:120'],
-            'no_document'          => ['required', 'string', 'max:120'],
+            'no_document'          => ['nullable', 'string', 'max:120'],
 
         ];
     }
