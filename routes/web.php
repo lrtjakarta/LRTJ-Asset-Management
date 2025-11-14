@@ -180,8 +180,8 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:MOVEMENT,APR')->group(function () {
             Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
             Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
-            Route::post('/{uuid}/approve-location-step', [TransferController::class, 'approveLocationStep'])
-                ->name('approve-location-step');
+            Route::post('/{uuid}/approve-step', [TransferController::class, 'approveStep'])
+                ->name('approve-step');
         });
     });
 

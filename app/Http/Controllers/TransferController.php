@@ -908,21 +908,18 @@ class TransferController extends Controller
 
         return null;
     }
-    public function approveLocationStep(Request $request, string $uuid)
+    public function approveStep(Request $request, string $uuid)
     {
         abort_unless($this->canApproveMovement(), 403);
 
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
-        $now         = now()->toDateTimeString();
-        $signedForm  = $request->file('signed_form'); // may be null
+        $now = now()->toDateTimeString();
 
-        return DB::transaction(function () use ($uuid, $uid, $now, $signedForm) {
-            /** @var \App\Models\Transfer $tf */
+        return DB::transaction(function () use ($uuid, $uid, $now, $request) {
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
 
-            abort_if($tf->type !== 'location', 422, 'Flow approval only supported for location transfers.');
             abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
 
             $flow = $tf->flow ?? $this->buildLocationFlowTemplate($tf->pic_request_uid);
@@ -940,21 +937,58 @@ class TransferController extends Controller
                 $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
                 $val   = data_get($tf->after, 'value');
 
-                // move the asset
-                $asset->kode_location = $val;
-                $asset->save();
+                switch ($tf->type) {
+                    case 'owner':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_owner' => $val]
+                        );
+                        break;
 
-                // optional signed form uploaded by Asset Management
-                if ($signedForm) {
-                    [$path, $orig, $mime, $size] = $this->saveFlowUpload($signedForm, $asset, $tf->transfer_code, $tf);
-                    $tf->flow_file_path = $path;
-                    $tf->flow_file_name = $orig;
-                    $tf->flow_file_mime = $mime;
-                    $tf->flow_file_size = $size;
+                    case 'user':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_user' => $val]
+                        );
+                        break;
+
+                    case 'maintenance':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_maintenance' => $val]
+                        );
+                        break;
+
+                    case 'status':
+                        $asset->kode_status = $val;
+                        $asset->save();
+                        break;
+
+                    case 'location':
+                        $asset->kode_location = $val;
+                        $asset->save();
+                        break;
+
+                    default:
+                        break;
                 }
 
                 $tf->kode_status     = 'ACC';
                 $tf->pic_approve_uid = $uid;
+            }
+    
+            if ($isLastStep && in_array($tf->type, ['owner','user','maintenance'], true)
+                && $request->hasFile('signed_form')) {
+                [$path, $orig, $mime, $size] = $this->saveUpload(
+                    $request->file('signed_form'),
+                    $asset,
+                    $tf->transfer_code,
+                    $tf
+                );
+                $tf->flow_file_path = $path;
+                $tf->flow_file_name = $orig;
+                $tf->flow_file_mime = $mime;
+                $tf->flow_file_size = $size;
             }
 
             $tf->flow = $flow;

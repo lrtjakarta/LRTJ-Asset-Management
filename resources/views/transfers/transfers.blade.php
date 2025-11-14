@@ -87,6 +87,7 @@
                     </button>
                 </div>
             </div>
+
             <div class="card">
                 <div class="card-header align-items-center justify-content-between">
                     <div class="d-flex flex-column">
@@ -148,6 +149,7 @@
                                 <select id="tf-asset" class="form-select" required></select>
                                 <div class="form-text">Search by code or description</div>
                             </div>
+
                             <div id="tf-asset-snapshot" class="mt-4 d-none">
                                 <div class="p-3 border rounded bg-light">
                                     <div class="fw-semibold mb-2">Current Asset Info</div>
@@ -178,6 +180,7 @@
                                     </div>
                                 </div>
                             </div>
+
                             <div class="col-md-6">
                                 <label class="form-label required">Type</label>
                                 <select name="type" id="tf-type" class="form-select" required>
@@ -194,10 +197,12 @@
                                 <input type="hidden" name="after[value]" id="tf-target-hidden">
                                 <div class="form-text" id="tf-target-help">Pick the new value.</div>
                             </div>
+
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
                                 <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
                             </div>
+
                             <div class="col-md-12">
                                 <label class="form-label">Attachment (optional)</label>
                                 <input type="file" name="file" id="tf-file" class="form-control"
@@ -223,7 +228,7 @@
         </div>
     </div>
 
-    {{-- Approve flow modal (owner/user/maintenance/location multi-step) --}}
+    {{-- Approve flow modal (multi-step) --}}
     <div class="modal fade" id="modal-transfer-approve" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
@@ -234,7 +239,7 @@
                 </div>
                 <div class="modal-body">
                     <div id="tf-flow-steps">
-                        {{-- steps will be rendered by JS --}}
+                        {{-- steps rendered by JS --}}
                     </div>
                 </div>
             </div>
@@ -260,7 +265,7 @@
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
                 export: '{{ route('export.movement') }}',
                 usersOptions: '{{ route('users.options') }}',
-                approveLocationStep: '{{ route('transfer.approve-location-step', ':id') }}',
+                approveStep: '{{ route('transfer.approve-step', ':id') }}',
             };
 
             $.ajaxSetup({
@@ -269,11 +274,7 @@
                 }
             });
 
-            function preloadSelectValue($select, id, text) {
-                if (!id) return;
-                const opt = new Option(text ?? String(id), id, true, true);
-                $select.append(opt).trigger('change');
-            }
+            let currentFlowType = null; // owner/user/maintenance/location
 
             function renderSnapshot(d) {
                 const safe = (v) => v || '';
@@ -298,49 +299,6 @@
                 $.getJSON(R.assetBrief(assetUuid))
                     .done(renderSnapshot)
                     .fail(() => clearSnapshot());
-            }
-
-            function resetTransferFormToCreate() {
-                const $form = $('#formTransfer');
-
-                $form.removeData('edit-id');
-                $('#tf-asset').val(null).empty();
-
-                $form[0].reset();
-                $('textarea[name="note"]').val('');
-
-                const fileInput = document.getElementById('tf-file');
-                if (fileInput) fileInput.value = '';
-                $('#tf-current-file').addClass('d-none');
-                $('#tf-current-file-link').attr('href', '').text('');
-                $('#tf-remove-file').val('0');
-
-                $('#tf-type').val('owner');
-
-                if ($('#tf-target').data('select2')) {
-                    $('#tf-target').off('select2:select').select2('destroy');
-                }
-                $('#tf-target').val(null).empty();
-                $('#tf-target-hidden').val('');
-
-                initTargetSelect('owner');
-
-                clearSnapshot();
-            }
-
-            function endpointForType(type) {
-                switch (type) {
-                    case 'owner':
-                    case 'user':
-                    case 'maintenance':
-                        return R.usercode;
-                    case 'status':
-                        return R.status;
-                    case 'location':
-                        return R.location;
-                    default:
-                        return null;
-                }
             }
 
             function initSelect2(el, url, extra = {}) {
@@ -376,6 +334,21 @@
                 });
             }
 
+            function endpointForType(type) {
+                switch (type) {
+                    case 'owner':
+                    case 'user':
+                    case 'maintenance':
+                        return R.usercode;
+                    case 'status':
+                        return R.status;
+                    case 'location':
+                        return R.location;
+                    default:
+                        return null;
+                }
+            }
+
             function initTargetSelect(type) {
                 const $t = $('#tf-target');
                 $t.off('select2:select').empty().trigger('change');
@@ -393,6 +366,33 @@
                     initSelect2('#tf-target', R.location);
                     $('#tf-target-help').text('Pick the new Location.');
                 }
+            }
+
+            function resetTransferFormToCreate() {
+                const $form = $('#formTransfer');
+
+                $form.removeData('edit-id');
+                $('#tf-asset').val(null).empty();
+
+                $form[0].reset();
+                $('textarea[name="note"]').val('');
+
+                const fileInput = document.getElementById('tf-file');
+                if (fileInput) fileInput.value = '';
+                $('#tf-current-file').addClass('d-none');
+                $('#tf-current-file-link').attr('href', '').text('');
+                $('#tf-remove-file').val('0');
+
+                $('#tf-type').val('owner');
+
+                if ($('#tf-target').data('select2')) {
+                    $('#tf-target').off('select2:select').select2('destroy');
+                }
+                $('#tf-target').val(null).empty();
+                $('#tf-target-hidden').val('');
+
+                initTargetSelect('owner');
+                clearSnapshot();
             }
 
             $('#mv-requester').select2({
@@ -436,10 +436,12 @@
                 },
                 order: [
                     [11, 'desc']
-                ], // updated_at column index
-                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                ],
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
-                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 searching: true,
                 scrollX: true,
                 columns: [{
@@ -548,7 +550,7 @@
                 ]
             });
 
-            // filter buttons
+            // filters
             $('#mv-btn-apply').on('click', function() {
                 dt.ajax.reload();
             });
@@ -565,7 +567,7 @@
                 dt.ajax.reload();
             });
 
-            // export button
+            // export
             $('#mv-btn-export').on('click', function(e) {
                 e.preventDefault();
                 const params = $.param({
@@ -581,6 +583,7 @@
                 window.location = R.export+'?' + params;
             });
 
+            // open create
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 resetTransferFormToCreate();
@@ -592,7 +595,6 @@
 
                 initSelect2('#tf-asset', R.assets);
                 initTargetSelect('owner');
-
                 $('#tf-asset').prop('disabled', false);
 
                 $('#modal-transfer').modal('show');
@@ -602,6 +604,7 @@
                 initTargetSelect(this.value);
             });
 
+            // create / update submit
             $('#formTransfer').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
@@ -634,12 +637,10 @@
                 });
 
                 let req;
-
                 if (hasFile) {
                     const fd = new FormData();
                     Object.entries(base).forEach(([k, v]) => fd.append(k, v));
                     fd.append('file', fileEl.files[0]);
-
                     if (isEdit) fd.append('_method', 'PUT');
 
                     req = $.ajax({
@@ -649,10 +650,8 @@
                         processData: false,
                         contentType: false
                     });
-
                 } else {
                     const payload = base;
-
                     req = isEdit ?
                         $.ajax({
                             url: R.update.replace(':id', id),
@@ -662,20 +661,24 @@
                         $.post(R.create, payload);
                 }
 
-                req
-                    .done(() => {
-                        $('#modal-transfer').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success',
-                            isEdit ? 'Transfer updated.' : 'Movement created.', 'success');
-                        $('#tf-asset').prop('disabled', false);
-                        $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
+                req.done(() => {
+                    $('#modal-transfer').modal('hide');
+                    Swal.fire(
+                        isEdit ? 'Updated' : 'Success',
+                        isEdit ? 'Transfer updated.' : 'Movement created.',
+                        'success'
+                    );
+                    $('#tf-asset').prop('disabled', false);
+                    dt.ajax.reload(null, false);
 
-                        if (fileEl) fileEl.value = '';
-                        $('#tf-remove-file').val('0');
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    if (fileEl) fileEl.value = '';
+                    $('#tf-remove-file').val('0');
+                }).fail(x => {
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                });
             });
 
+            // edit
             $('#tbl-transfers-all').on('click', '.btn-tf-edit', function() {
                 const id = $(this).data('id');
                 $('#modal-transfer').modal('show');
@@ -685,7 +688,6 @@
                 $('#tf-target').off().empty().trigger('change');
                 $('#tf-target-hidden').val('');
 
-
                 $.getJSON(R.show.replace(':id', id), function(d) {
                     $('#tf-edit-id').val(d.uuid || id);
                     $('#tf-asset-uuid').val(d.asset_uuid || '');
@@ -693,8 +695,8 @@
 
                     const $asset = $('#tf-asset');
                     const assetText = d.asset_label ??
-                        (d.asset_code ? (d.asset_desc ? `${d.asset_code} - ${d.asset_desc}` : d
-                                .asset_code) :
+                        (d.asset_code ?
+                            (d.asset_desc ? `${d.asset_code} - ${d.asset_desc}` : d.asset_code) :
                             d.asset_uuid);
 
                     $asset.empty();
@@ -752,22 +754,21 @@
                 });
             });
 
-            // Approve button: flow for owner/user/maintenance/location, simple approve for others (status)
+            // approve button – decide flow vs simple
             $('#tbl-transfers-all').on('click', '.btn-tf-approve', function() {
                 const id = $(this).data('id');
-                const row = $('#tbl-transfers-all').DataTable().row($(this).closest('tr')).data();
+                const row = dt.row($(this).closest('tr')).data();
                 const type = (row.type || '').toLowerCase();
 
                 if (['owner', 'user', 'maintenance', 'location'].includes(type)) {
-                    // multi-step flow
                     $('#tf-approve-id').val(id);
 
                     $.get(R.show.replace(':id', id))
                         .done(d => {
+                            currentFlowType = (d.type || '').toLowerCase();
                             const titleType = (d.type || '').toUpperCase();
-                            $('.modal-title', '#modal-transfer-approve').text(
-                                'Approve Movement ' + titleType
-                            );
+                            $('.modal-title', '#modal-transfer-approve')
+                                .text('Approve Movement ' + titleType);
                             renderApproveFlowModal(d);
                             $('#modal-transfer-approve').modal('show');
                         })
@@ -790,13 +791,15 @@
                         });
                         $.post(R.approve(id)).done(() => {
                             Swal.fire('Approved', '', 'success');
-                            $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
-                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed',
-                            'error'));
+                            dt.ajax.reload(null, false);
+                        }).fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        });
                     });
                 }
             });
 
+            // reject
             $('#tbl-transfers-all').on('click', '.btn-tf-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -814,10 +817,13 @@
                     $.post(R.reject(id)).done(() => {
                         Swal.fire('Rejected', '', 'success');
                         dt.ajax.reload(null, false);
-                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    }).fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
                 });
             });
 
+            // delete
             $('#tbl-transfers-all').on('click', '.btn-tf-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -839,15 +845,18 @@
                     }).done(() => {
                         Swal.fire('Deleted', '', 'success');
                         dt.ajax.reload(null, false);
-                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    }).fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
                 });
             });
+
+            // ------- FLOW RENDER / APPROVE (owner/user/maintenance/location) -------
 
             function renderApproveFlowModal(data) {
                 const container = $('#tf-flow-steps').empty();
 
                 let flow = data && data.flow ? data.flow : data;
-
                 if (typeof flow === 'string') {
                     try {
                         flow = JSON.parse(flow);
@@ -857,72 +866,74 @@
                 }
 
                 const steps = Array.isArray(flow?.steps) ? flow.steps : [];
-
                 if (!steps.length) {
                     container.append('<div class="text-muted">No flow defined.</div>');
                     return;
                 }
 
+                // find first pending index
+                let nextIdx = null;
+                steps.forEach((s, idx) => {
+                    if (!s.approved_at && nextIdx === null) {
+                        nextIdx = idx;
+                    }
+                });
+
                 steps.forEach((step, idx) => {
                     const approvedAt = step.approved_at;
                     const approvedBy = step.approved_by;
                     const isPending = !approvedAt;
+                    const isActiveStep = isPending && idx === nextIdx;
                     const stepCode = step.code || '';
+                    const isAssetMgt = (stepCode === 'asset_mgt');
+                    const allowSignedForm =
+                        isAssetMgt && ['owner', 'user', 'maintenance'].includes(currentFlowType);
 
                     const statusBadge = approvedAt ?
                         `<span class="badge badge-light-success">Approved</span>` :
-                        `<span class="badge badge-light-warning">Pending</span>`;
+                        `<span class="badge badge-light-warning">${isActiveStep ? 'Pending (current)' : 'Pending'}</span>`;
 
                     const approverInfo = approvedAt ?
                         `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
                         '';
 
-                    let extraControls = '';
-                    if (isPending && stepCode === 'asset_mgt') {
-                        extraControls = `
-            <div class="mt-3">
-                <label class="form-label">Signed transfer form (optional)</label>
-                <input type="file"
-                       class="form-control tf-signed-form-input"
-                       accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
-                <div class="form-text">Upload signed asset transfer form.</div>
-            </div>
-        `;
-                    }
-
                     const btn = isPending ?
                         `<button type="button"
-                   class="btn btn-sm btn-primary mt-2 btn-flow-approve-step"
-                   data-step-index="${idx}"
-                   data-step-code="${stepCode}">
-                Approved by ${escapeHtml(step.role || step.label || 'Role')}
-           </button>` :
+                                   class="btn btn-sm btn-danger mt-2 btn-flow-approve-step"
+                                   data-step-code="${escapeHtml(stepCode)}"
+                                   ${isActiveStep ? '' : 'disabled'}>
+                               Approved by ${escapeHtml(step.role || step.label || 'Role')}
+                           </button>` :
                         '';
 
-                    container.append(`
-        <div class="border rounded p-3 mb-2">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
-                    <div class="small text-muted">${escapeHtml(step.role || '')}</div>
-                    ${approverInfo}
-                </div>
-                <div>${statusBadge}</div>
-            </div>
-            ${extraControls}
-            ${btn}
-        </div>
-    `);
-                });
-
-
-                let firstPending = true;
-                container.find('.btn-flow-approve-step').each(function() {
-                    if (firstPending) {
-                        firstPending = false;
-                    } else {
-                        $(this).prop('disabled', true);
+                    let extra = '';
+                    if (allowSignedForm) {
+                        extra = `
+                            <div class="mt-3">
+                                <label class="form-label">Signed transfer form (optional)</label>
+                                <input type="file"
+                                       class="form-control tf-signed-form-input"
+                                       accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                                       ${isActiveStep ? '' : 'disabled'}>
+                                <div class="form-text">Upload signed asset transfer form.</div>
+                            </div>
+                        `;
                     }
+
+                    container.append(`
+                        <div class="border rounded p-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
+                                    <div class="small text-muted">${escapeHtml(step.role || '')}</div>
+                                    ${approverInfo}
+                                </div>
+                                <div>${statusBadge}</div>
+                            </div>
+                            ${extra}
+                            ${btn}
+                        </div>
+                    `);
                 });
             }
 
@@ -935,11 +946,14 @@
                 if (!id) return;
 
                 const $btn = $(this).prop('disabled', true);
-                const stepCode = $(this).data('step-code') || '';
+                const stepCode = ($(this).data('step-code') || '').toString();
 
                 const fd = new FormData();
 
-                if (stepCode === 'asset_mgt') {
+                // only asset_mgt step for owner/user/maintenance can send signed_form
+                if (
+                    stepCode === 'asset_mgt' && ['owner', 'user', 'maintenance'].includes(currentFlowType)
+                ) {
                     const fileInput = $(this).closest('.border').find('.tf-signed-form-input')[0];
                     if (fileInput && fileInput.files && fileInput.files.length > 0) {
                         fd.append('signed_form', fileInput.files[0]);
@@ -953,34 +967,31 @@
                 });
 
                 $.ajax({
-                        url: R.approveLocationStep.replace(':id', id),
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
-                    })
-                    .done(res => {
-                        if (res.flow) {
-                            renderApproveFlowModal({
-                                flow: res.flow
-                            });
-                        }
+                    url: R.approveStep.replace(':id', id),
+                    type: 'POST',
+                    data: fd,
+                    processData: false,
+                    contentType: false
+                }).done(res => {
+                    if (res.flow) {
+                        renderApproveFlowModal({
+                            flow: res.flow
+                        });
+                    }
 
-                        if (res.completed) {
-                            $('#modal-transfer-approve').modal('hide');
-                            Swal.fire('Approved', 'Movement location completed.', 'success');
-                        } else {
-                            Swal.fire('Approved', 'Step approved.', 'success');
-                        }
+                    if (res.completed) {
+                        $('#modal-transfer-approve').modal('hide');
+                        Swal.fire('Approved', 'Movement completed.', 'success');
+                    } else {
+                        Swal.fire('Approved', 'Step approved.', 'success');
+                    }
 
-                        $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
-                    })
-                    .fail(x => {
-                        $btn.prop('disabled', false);
-                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
-                    });
+                    dt.ajax.reload(null, false);
+                }).fail(x => {
+                    $btn.prop('disabled', false);
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                });
             });
-
 
         })();
     </script>
