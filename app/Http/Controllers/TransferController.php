@@ -9,6 +9,7 @@ use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterUserCode;
 use App\Models\Transfer;
+use App\Models\User;
 use App\Services\TransferCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -18,6 +19,9 @@ use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\Xlsx as XlsxReader;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 
 class TransferController extends Controller
 {
@@ -27,26 +31,10 @@ class TransferController extends Controller
         return $user && $user->hasAction('MOVEMENT', 'R');
     }
 
-    /**
-     * System admin should always be able to approve movement (in addition to normal MOVEMENT:APR).
-     */
     protected function canApproveMovement(): bool
     {
         $user = auth()->user();
-        if (!$user) {
-            return false;
-        }
-
-        // Adjust to your actual sysadmin flag/method if different
-        if (method_exists($user, 'isSysAdmin') && $user->isSysAdmin()) {
-            return true;
-        }
-
-        if (property_exists($user, 'is_sysadmin') && $user->is_sysadmin) {
-            return true;
-        }
-
-        return $user->hasAction('MOVEMENT', 'APR');
+        return $user && $user->hasAction('MOVEMENT', 'APR');
     }
 
     public function index()
@@ -65,10 +53,10 @@ class TransferController extends Controller
             return DataTables::of(collect())->toJson();
         }
 
-        $user      = $request->user();
-        $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
-        $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
-        $canApr    = $this->canApproveMovement();
+        $user        = $request->user();
+        $canEdit     = $user && $user->hasAction('MOVEMENT', 'U');
+        $canDelete   = $user && $user->hasAction('MOVEMENT', 'D');
+        $canApr      = $this->canApproveMovement();
 
         $type        = trim((string) $request->input('type', ''));
         $status      = trim((string) $request->input('status', ''));
@@ -157,14 +145,31 @@ class TransferController extends Controller
                 $builder->whereRaw('LOWER(CAST(assets_transfers.after AS TEXT)) LIKE ?', [$kw]);
             })
             ->addColumn('file', function ($r) {
-                if (!$r->file_path) return '';
+                $links = [];
 
-                $url  = url('storage/' . ltrim($r->file_path, '/'));
-                $name = $r->file_name ?: 'Attachment';
+                if ($r->file_path) {
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
+                    $name = $r->file_name ?: 'Request Attachment';
 
-                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' .
-                    e($name) . '</a>';
+                    $links[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">'
+                        . e($name) . '</a>';
+                }
+
+                if ($r->flow_file_path) {
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
+                    $name = $r->flow_file_name ?: 'Signed Form';
+
+                    $links[] = '<a class="btn btn-sm btn-light-success" target="_blank" href="' . e($url) . '">'
+                        . e($name) . '</a>';
+                }
+
+                if (! count($links)) {
+                    return '';
+                }
+
+                return implode(' ', $links);
             })
+
             ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
                 $pending = $r->kode_status === 'APR';
                 $id      = e($r->uuid);
@@ -179,6 +184,11 @@ class TransferController extends Controller
                         $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
                         $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
                     }
+                }
+                if (in_array($r->type, ['owner', 'user', 'maintenance'], true)) {
+                    $btns .= '<a href="' . route('transfer.form', $id) . '" class="btn btn-light-primary btn-sm me-1" target="_blank">
+                Form
+              </a>';
                 }
 
                 if ($canDelete) {
@@ -239,9 +249,8 @@ class TransferController extends Controller
         abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
-        $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count(); // currently unused but kept
+        $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count();
 
-        // determine "before" code from asset
         $beforeCode = null;
         switch ($data['type']) {
             case 'owner':
@@ -261,9 +270,9 @@ class TransferController extends Controller
                 break;
         }
 
-        $afterCode   = (string) $data['after']['value'];
-        $beforeLabel = $this->resolveLabel($data['type'], $beforeCode);
-        $afterLabel  = $this->resolveLabel($data['type'], $afterCode);
+        $afterCode       = (string) $data['after']['value'];
+        $beforeLabel     = $this->resolveLabel($data['type'], $beforeCode);
+        $afterLabel      = $this->resolveLabel($data['type'], $afterCode);
         $initialWorkflow = 'APR';
 
         $transfer = DB::transaction(function () use (
@@ -315,9 +324,8 @@ class TransferController extends Controller
                 'file_size'       => $size,
             ];
 
-            // initialize flow for movement location
-            if ($data['type'] === 'location') {
-                $payload['flow'] = $this->buildLocationFlowTemplate($currentUid);
+            if (in_array($data['type'], ['owner', 'user', 'maintenance', 'location'], true)) {
+                $payload['flow'] = $this->buildFlowTemplate($data['type'], $currentUid);
             }
 
             return Transfer::create($payload);
@@ -348,9 +356,7 @@ class TransferController extends Controller
             }
         }
 
-        $isLocation = strtolower((string) $transfer->type) === 'location';
-
-        if ($isLocation) {
+        if (in_array($transfer->type, ['owner', 'user', 'maintenance', 'location'], true)) {
             $needsNewFlow =
                 !is_array($flow) ||
                 !isset($flow['steps']) ||
@@ -359,7 +365,7 @@ class TransferController extends Controller
 
             if ($needsNewFlow) {
                 $creator = $transfer->pic_request_uid ?: (auth()->user()->name ?? null);
-                $flow    = $this->buildLocationFlowTemplate($creator);
+                $flow    = $this->buildFlowTemplate($transfer->type, $creator);
 
                 $transfer->flow = $flow;
                 $transfer->save();
@@ -384,8 +390,6 @@ class TransferController extends Controller
             'file_name'   => $transfer->file_name,
         ]);
     }
-
-
 
     public function update(Request $request, string $uuid)
     {
@@ -455,14 +459,11 @@ class TransferController extends Controller
         abort_if(!$uid, 401, 'No session UID.');
 
         DB::transaction(function () use ($uuid, $uid) {
-            /** @var \App\Models\Transfer $tf */
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
             abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
 
-            // if this is a location transfer that already has flow,
-            // enforce using the multi-step endpoint instead
-            if ($tf->type === 'location' && !empty($tf->flow)) {
-                abort(422, 'Use location flow approval endpoint for this transfer.');
+            if (in_array($tf->type, ['owner', 'user', 'maintenance', 'location'], true) && !empty($tf->flow)) {
+                abort(422, 'Use flow approval endpoint for this transfer.');
             }
 
             $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
@@ -483,7 +484,6 @@ class TransferController extends Controller
                     $asset->save();
                     break;
                 case 'location':
-                    // simple one-step approval for legacy rows without flow
                     $asset->kode_location = $val;
                     $asset->save();
                     break;
@@ -507,8 +507,8 @@ class TransferController extends Controller
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be rejected.');
 
-        if (strtolower((string) $tf->type) === 'location') {
-            $flow = $tf->flow ?? $this->buildLocationFlowTemplate($tf->pic_request_uid);
+        if (in_array(strtolower((string) $tf->type), ['owner', 'user', 'maintenance', 'location'], true)) {
+            $flow = $tf->flow ?? $this->buildFlowTemplate($tf->type, $tf->pic_request_uid);
 
             $now = now()->toDateTimeString();
 
@@ -533,7 +533,6 @@ class TransferController extends Controller
 
         return response()->json(['ok' => true]);
     }
-
 
     public function indexByAsset(Request $req, string $assetUuid)
     {
@@ -572,13 +571,30 @@ class TransferController extends Controller
             ->addColumn('after_display', function (Transfer $t) {
                 return $this->resolveLabel($t->type, data_get($t->after, 'value'));
             })
-            ->addColumn('file', function (Transfer $t) {
-                if (!$t->file_path) return '';
+            ->addColumn('file', function ($r) {
+                $links = [];
 
-                $url  = url('storage/' . ltrim($t->file_path, '/'));
-                $name = $t->file_name ?: 'Attachment';
+                if ($r->file_path) {
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
+                    $name = $r->file_name ?: 'Request Attachment';
 
-                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                    $links[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">'
+                        . e($name) . '</a>';
+                }
+
+                if ($r->flow_file_path) {
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
+                    $name = $r->flow_file_name ?: 'Signed Form';
+
+                    $links[] = '<a class="btn btn-sm btn-light-success" target="_blank" href="' . e($url) . '">'
+                        . e($name) . '</a>';
+                }
+
+                if (! count($links)) {
+                    return '';
+                }
+
+                return implode(' ', $links);
             })
             ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
                 $pending = $r->kode_status === 'APR';
@@ -596,13 +612,20 @@ class TransferController extends Controller
                     }
                 }
 
+                if (in_array($r->type, ['owner', 'user', 'maintenance'], true)) {
+                    $btns .= '<a href="' . route('transfer.form', $id) . '" class="btn btn-light-primary btn-sm me-1" target="_blank">
+                Form
+              </a>';
+                }
+
                 if ($canDelete) {
                     $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
                 }
 
                 $btns .= '</div>';
                 return $btns;
-            })->addColumn('flow_label', function ($r) {
+            })
+            ->addColumn('flow_label', function ($r) {
                 if ($r->kode_status === 'REJ') {
                     $flow = is_array($r->flow) ? $r->flow : [];
                     $by   = $flow['rejected_by'] ?? $r->pic_approve_uid ?? '-';
@@ -769,32 +792,89 @@ class TransferController extends Controller
 
         $path = $file->storeAs($dir, $name, $disk);
 
-        // clean old file if editing
         if ($existing && $existing->file_path) {
             Storage::disk($disk)->delete($existing->file_path);
         }
 
         return [$path, $file->getClientOriginalName(), $file->getClientMimeType(), $file->getSize()];
     }
+    private function saveFlowUpload(?UploadedFile $file, Assets $asset, string $code, ?Transfer $existing = null): array
+    {
+        if (!$file) return [null, null, null, null];
 
-    protected function buildLocationFlowTemplate(?string $creatorName = null): array
+        $disk = 'public';
+        $dir  = 'transfers/' . $asset->uuid . '/flow';
+        $ext  = $file->getClientOriginalExtension();
+        $name = $code . '-FLOW-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+
+        $path = $file->storeAs($dir, $name, $disk);
+
+        if ($existing && $existing->flow_file_path) {
+            Storage::disk($disk)->delete($existing->flow_file_path);
+        }
+
+        return [
+            $path,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            $file->getSize(),
+        ];
+    }
+
+    protected function buildFlowTemplate(string $type, ?string $creatorName = null): array
     {
         $now = now()->toDateTimeString();
 
+        if ($type === 'location') {
+            return [
+                'key'   => 'movement_location',
+                'steps' => [
+                    [
+                        'code'        => 'create',
+                        'label'       => 'Create',
+                        'role'        => 'User Departemen',
+                        'approved_by' => $creatorName,
+                        'approved_at' => $creatorName ? $now : null,
+                    ],
+                    [
+                        'code'        => 'dept_head',
+                        'label'       => 'Approval Dept.Head / Section',
+                        'role'        => 'User - Dept.Head / Section',
+                        'approved_by' => null,
+                        'approved_at' => null,
+                    ],
+                    [
+                        'code'        => 'asset_mgt',
+                        'label'       => 'Completed (Asset Management)',
+                        'role'        => 'Asset Management',
+                        'approved_by' => null,
+                        'approved_at' => null,
+                    ],
+                ],
+            ];
+        }
+
         return [
-            'key'   => 'movement_location',
+            'key'   => 'movement_assignment',
             'steps' => [
                 [
                     'code'        => 'create',
-                    'label'       => 'Create',
-                    'role'        => 'User Departemen',
+                    'label'       => 'Create Request',
+                    'role'        => 'User Departemen (New Owner/User/Maint)',
                     'approved_by' => $creatorName,
                     'approved_at' => $creatorName ? $now : null,
                 ],
                 [
-                    'code'        => 'dept_head',
-                    'label'       => 'Approval Dept.Head / Section',
-                    'role'        => 'User - Dept.Head / Section',
+                    'code'        => 'new_dept_head',
+                    'label'       => 'Approval Dept.Head New Owner/User/Maint',
+                    'role'        => 'User - Dept.Head / Section (New)',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'old_dept_head',
+                    'label'       => 'Approval Dept.Head Old Owner/User/Maint (optional)',
+                    'role'        => 'User - Dept.Head / Section (Old)',
                     'approved_by' => null,
                     'approved_at' => null,
                 ],
@@ -809,6 +889,10 @@ class TransferController extends Controller
         ];
     }
 
+    protected function buildLocationFlowTemplate(?string $creatorName = null): array
+    {
+        return $this->buildFlowTemplate('location', $creatorName);
+    }
 
     protected function getNextPendingFlowIndex(?array $flow): ?int
     {
@@ -824,7 +908,6 @@ class TransferController extends Controller
 
         return null;
     }
-
     public function approveLocationStep(Request $request, string $uuid)
     {
         abort_unless($this->canApproveMovement(), 403);
@@ -832,9 +915,10 @@ class TransferController extends Controller
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
-        $now = now()->toDateTimeString();
+        $now         = now()->toDateTimeString();
+        $signedForm  = $request->file('signed_form'); // may be null
 
-        return DB::transaction(function () use ($uuid, $uid, $now) {
+        return DB::transaction(function () use ($uuid, $uid, $now, $signedForm) {
             /** @var \App\Models\Transfer $tf */
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
 
@@ -856,8 +940,18 @@ class TransferController extends Controller
                 $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
                 $val   = data_get($tf->after, 'value');
 
+                // move the asset
                 $asset->kode_location = $val;
                 $asset->save();
+
+                // optional signed form uploaded by Asset Management
+                if ($signedForm) {
+                    [$path, $orig, $mime, $size] = $this->saveFlowUpload($signedForm, $asset, $tf->transfer_code, $tf);
+                    $tf->flow_file_path = $path;
+                    $tf->flow_file_name = $orig;
+                    $tf->flow_file_mime = $mime;
+                    $tf->flow_file_size = $size;
+                }
 
                 $tf->kode_status     = 'ACC';
                 $tf->pic_approve_uid = $uid;
@@ -873,5 +967,122 @@ class TransferController extends Controller
                 'flow'        => $flow,
             ]);
         });
+    }
+
+
+    public function downloadForm(Request $request, Transfer $transfer)
+    {
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
+
+        if (! in_array($transfer->type, ['owner', 'user', 'maintenance'], true)) {
+            abort(404, 'Form Transfer only available for Owner/User/Maintenance movement.');
+        }
+
+        $transfer->load([
+            'asset.assignment.owner.division',
+            'asset.assignment.user.division',
+            'asset.assignment.maintenance.division',
+            'asset.location',
+        ]);
+
+        $asset      = $transfer->asset;
+        $assign     = $asset?->assignment;
+        $beforeVal  = data_get($transfer->before, 'value');
+        $afterVal   = data_get($transfer->after,  'value');
+        $createdAt  = $transfer->created_at?->timezone('Asia/Jakarta');
+
+        $beforeUc = null;
+
+        switch ($transfer->type) {
+            case 'owner':
+                $beforeUc = $assign?->owner;
+                break;
+            case 'user':
+                $beforeUc = $assign?->user;
+                break;
+            case 'maintenance':
+                $beforeUc = $assign?->maintenance;
+                break;
+        }
+
+        $afterUc = $afterVal
+            ? MasterUserCode::with('division')->where('kode', $afterVal)->first()
+            : null;
+
+        $fromDeptLabel = '';
+        $fromDivLabel  = '';
+        $fromLocLabel  = '';
+
+        $toDeptLabel   = '';
+        $toDivLabel    = '';
+        $toLocLabel    = '';
+
+        if ($beforeUc) {
+            $fromDeptLabel = trim($beforeUc->kode . ' - ' . $beforeUc->department);
+            if ($beforeUc->division) {
+                $fromDivLabel = trim($beforeUc->division->kode . ' - ' . $beforeUc->division->name);
+            }
+        } elseif ($beforeVal !== null && $beforeVal !== '') {
+            $fromDeptLabel = $beforeVal;
+        }
+
+        if ($afterUc) {
+            $toDeptLabel = trim($afterUc->kode . ' - ' . $afterUc->department);
+            if ($afterUc->division) {
+                $toDivLabel = trim($afterUc->division->kode . ' - ' . $afterUc->division->name);
+            }
+        } elseif ($afterVal !== null && $afterVal !== '') {
+            $toDeptLabel = $afterVal;
+        }
+
+        $loc = $asset?->location;
+        $locLabel = $loc ? trim($loc->kode . ' - ' . $loc->name) : '';
+        $fromLocLabel = $locLabel;
+        $toLocLabel   = $locLabel;
+
+        $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
+        $spreadsheet  = IOFactory::load($templatePath);
+
+        $sheet = $spreadsheet->getSheetByName('Form Transfer');
+
+        $sheet->setCellValue('V11', $transfer->transfer_code ?? '');
+
+        $sheet->setCellValue('G15', $fromDeptLabel);
+        $sheet->setCellValue('G16', $fromDivLabel);
+        $sheet->setCellValue('G17', $fromLocLabel);
+        $sheet->setCellValue('G18', $createdAt ? $createdAt->format('d-m-Y') : '');
+
+        $sheet->setCellValue('S15', $toDeptLabel);
+        $sheet->setCellValue('S16', $toDivLabel);
+        $sheet->setCellValue('S17', $toLocLabel);
+        $sheet->setCellValue('S18', $createdAt ? $createdAt->format('d-m-Y') : '');
+
+        $sheet->setCellValue('C23', $asset?->asset_code ?? '');
+        $sheet->setCellValue('D23', $asset?->description ?? '');
+
+        $qty = $asset?->value?->quantity;
+        $sheet->setCellValue('L23', $qty !== null ? $qty : '');
+
+        $uomText = $asset?->value?->uom?->name
+            ?? $asset?->value?->kode_uom
+            ?? '';
+        $sheet->setCellValue('N23', $uomText);
+
+        $sheet->setCellValue('P23', $asset?->notes ?? '');
+
+        $sheet->setCellValue('C37', $fromDeptLabel);
+        $sheet->setCellValue('C38', '');
+
+        $sheet->setCellValue('I37', $toDeptLabel);
+        $sheet->setCellValue('I38', '');
+
+        $fileName = 'Form Transfer Asset - ' . ($transfer->transfer_code ?? 'MOV') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 }

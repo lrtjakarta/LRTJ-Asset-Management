@@ -45,3 +45,7 @@ ADD COLUMN notes text COLLATE pg_catalog."default";
 
 ALTER TABLE IF EXISTS public.assets
 ALTER COLUMN notes SET STORAGE EXTENDED;
+
+
+ALTER TABLE IF EXISTS public.assets_transfers
+    ADD COLUMN flow json;

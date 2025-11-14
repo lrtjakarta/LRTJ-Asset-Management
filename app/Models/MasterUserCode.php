@@ -45,7 +45,7 @@ class MasterUserCode extends Model
         return 'uuid';
     }
     
-    public function assetType()
+    public function division()
     {
         return $this->belongsTo(MasterDivision::class, 'kode_division', 'kode');
     }

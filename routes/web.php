@@ -162,6 +162,7 @@ Route::middleware('ldap.session')->group(function () {
 
         Route::middleware('role.action:MOVEMENT,R')->group(function () {
             Route::get('/show/{uuid}', [TransferController::class, 'show'])->name('show');
+            Route::get('/form/{transfer}', [TransferController::class, 'downloadForm'])->name('form');
         });
 
         Route::middleware('role.action:MOVEMENT,C')->group(function () {

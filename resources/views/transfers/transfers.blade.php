@@ -223,13 +223,13 @@
         </div>
     </div>
 
-    {{-- Approve flow modal --}}
+    {{-- Approve flow modal (owner/user/maintenance/location multi-step) --}}
     <div class="modal fade" id="modal-transfer-approve" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <input type="hidden" id="tf-approve-id">
                 <div class="modal-header">
-                    <h5 class="modal-title">Approve Movement Location</h5>
+                    <h5 class="modal-title">Approve Movement</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -665,8 +665,8 @@
                 req
                     .done(() => {
                         $('#modal-transfer').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Transfer updated.' :
-                            'Movement created.', 'success');
+                        Swal.fire(isEdit ? 'Updated' : 'Success',
+                            isEdit ? 'Transfer updated.' : 'Movement created.', 'success');
                         $('#tf-asset').prop('disabled', false);
                         $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
 
@@ -752,15 +752,22 @@
                 });
             });
 
+            // Approve button: flow for owner/user/maintenance/location, simple approve for others (status)
             $('#tbl-transfers-all').on('click', '.btn-tf-approve', function() {
                 const id = $(this).data('id');
                 const row = $('#tbl-transfers-all').DataTable().row($(this).closest('tr')).data();
+                const type = (row.type || '').toLowerCase();
 
-                if ((row.type || '').toLowerCase() === 'location') {
+                if (['owner', 'user', 'maintenance', 'location'].includes(type)) {
+                    // multi-step flow
                     $('#tf-approve-id').val(id);
 
                     $.get(R.show.replace(':id', id))
                         .done(d => {
+                            const titleType = (d.type || '').toUpperCase();
+                            $('.modal-title', '#modal-transfer-approve').text(
+                                'Approve Movement ' + titleType
+                            );
                             renderApproveFlowModal(d);
                             $('#modal-transfer-approve').modal('show');
                         })
@@ -768,6 +775,7 @@
                             Swal.fire('Error', 'Cannot load transfer', 'error');
                         });
                 } else {
+                    // simple approve (e.g. status)
                     Swal.fire({
                         title: 'Approve?',
                         icon: 'question',
@@ -859,6 +867,7 @@
                     const approvedAt = step.approved_at;
                     const approvedBy = step.approved_by;
                     const isPending = !approvedAt;
+                    const stepCode = step.code || '';
 
                     const statusBadge = approvedAt ?
                         `<span class="badge badge-light-success">Approved</span>` :
@@ -868,26 +877,44 @@
                         `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
                         '';
 
+                    let extraControls = '';
+                    if (isPending && stepCode === 'asset_mgt') {
+                        extraControls = `
+            <div class="mt-3">
+                <label class="form-label">Signed transfer form (optional)</label>
+                <input type="file"
+                       class="form-control tf-signed-form-input"
+                       accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                <div class="form-text">Upload signed asset transfer form.</div>
+            </div>
+        `;
+                    }
+
                     const btn = isPending ?
-                        `<button type="button" class="btn btn-sm btn-primary mt-2 btn-flow-approve-step" data-step-index="${idx}">
-                                Approved by ${escapeHtml(step.role || step.label || 'Role')}
-                           </button>` :
+                        `<button type="button"
+                   class="btn btn-sm btn-primary mt-2 btn-flow-approve-step"
+                   data-step-index="${idx}"
+                   data-step-code="${stepCode}">
+                Approved by ${escapeHtml(step.role || step.label || 'Role')}
+           </button>` :
                         '';
 
                     container.append(`
-                        <div class="border rounded p-3 mb-2">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
-                                    <div class="small text-muted">${escapeHtml(step.role || '')}</div>
-                                    ${approverInfo}
-                                </div>
-                                <div>${statusBadge}</div>
-                            </div>
-                            ${btn}
-                        </div>
-                    `);
+        <div class="border rounded p-3 mb-2">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
+                    <div class="small text-muted">${escapeHtml(step.role || '')}</div>
+                    ${approverInfo}
+                </div>
+                <div>${statusBadge}</div>
+            </div>
+            ${extraControls}
+            ${btn}
+        </div>
+    `);
                 });
+
 
                 let firstPending = true;
                 container.find('.btn-flow-approve-step').each(function() {
@@ -908,8 +935,30 @@
                 if (!id) return;
 
                 const $btn = $(this).prop('disabled', true);
+                const stepCode = $(this).data('step-code') || '';
 
-                $.post(R.approveLocationStep.replace(':id', id))
+                const fd = new FormData();
+
+                if (stepCode === 'asset_mgt') {
+                    const fileInput = $(this).closest('.border').find('.tf-signed-form-input')[0];
+                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                        fd.append('signed_form', fileInput.files[0]);
+                    }
+                }
+
+                Swal.fire({
+                    title: 'Approving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.ajax({
+                        url: R.approveLocationStep.replace(':id', id),
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    })
                     .done(res => {
                         if (res.flow) {
                             renderApproveFlowModal({
@@ -931,6 +980,7 @@
                         Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
                     });
             });
+
 
         })();
     </script>
