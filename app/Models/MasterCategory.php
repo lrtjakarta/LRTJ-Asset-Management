@@ -51,8 +51,8 @@ class MasterCategory extends Model
         return 'uuid';
     }
 
-    public function assetType()
-    {
-        return $this->belongsTo(MasterAssetType::class, 'kode_asset_type', 'kode');
-    }
+    // public function assetType()
+    // {
+    //     return $this->belongsTo(MasterAssetType::class, 'kode_asset_type', 'kode');
+    // }
 }

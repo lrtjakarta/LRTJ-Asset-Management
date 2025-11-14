@@ -40,6 +40,10 @@
                         name: 'description'
                     },
                     {
+                        data: 'division_label',
+                        name: 'kode_division'
+                    },
+                    {
                         data: 'status_badge',
                         name: 'status',
                         orderable: false,
@@ -77,6 +81,35 @@
                 ]
             });
 
+            
+            if ($.fn.select2) {
+                $('#kodeDivision').select2({
+                    dropdownParent: $('#kt_modal_add'),
+                    placeholder: 'Choose division',
+                    allowClear: true,
+                    ajax: {
+                        url: "{{ route('master.division.options') }}",
+                        data: params => ({
+                            q: params.term || ''
+                        }),
+                        processResults: data => data,
+                        delay: 150
+                    }
+                });
+            } else {
+                fetch("{{ route('master.division.options') }}")
+                    .then(r => r.json())
+                    .then(data => {
+                        const sel = document.getElementById('kodeDivision');
+                        data.results.forEach(o => {
+                            const opt = document.createElement('option');
+                            opt.value = o.id;
+                            opt.textContent = o.text;
+                            sel.appendChild(opt);
+                        });
+                    });
+            }
+
             $(document).on('click', '#btn-export-excel', function() {
                 window.location = "{{ route('export.master_user_code') }}";
             });
@@ -102,6 +135,12 @@
                         $f.find('[name="department"]').val(d.department);
                         $f.find('[name="description"]').val(d.description);
                         $f.find('[name="status"]').val(d.status).change?.();
+                        if ($.fn.select2) {
+                            const opt = new Option(d.kode_division, d.kode_division, true, true);
+                            $('#kodeDivision').append(opt).trigger('change');
+                        } else {
+                            $('#kodeDivision').val(d.kode_division);
+                        }
                         $('#kt_modal_add').modal('show');
                     })
                     .fail(function(xhr) {
@@ -264,6 +303,7 @@
                                             <th>Kode</th>
                                             <th>Department</th>
                                             <th>Description</th>
+                                            <th>Division</th>
                                             <th>Status</th>
                                             <th>Updated</th>
                                             <th class="text-end">Actions</th>
@@ -314,6 +354,10 @@
                         <div class="mb-5">
                             <label class="form-label">Description</label>
                             <input type="text" name="description" class="form-control">
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label required">Division</label>
+                            <select name="kode_division" id="kodeDivision" class="form-select" required></select>
                         </div>
                         <div class="mb-5">
                             <label class="form-label">Status</label>

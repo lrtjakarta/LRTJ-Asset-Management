@@ -3,9 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\MasterAssetClass;
-use App\Models\MasterAssetType;
 use App\Models\MasterCategory;
 use App\Models\MasterCategory2;
+use App\Models\MasterDivision;
 use App\Models\MasterGroupCategory;
 use App\Models\MasterLocation;
 use App\Models\MasterStatus;
@@ -30,9 +30,9 @@ class MasterDataController
     {
         return view('master_data.master_transaction');
     }
-    public function master_asset_type()
+    public function master_division()
     {
-        return view('master_data.master_asset_type');
+        return view('master_data.master_division');
     }
     public function master_category()
     {
@@ -159,9 +159,9 @@ class MasterDataController
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
-    public function master_asset_type_data(Request $request)
+    public function master_division_data(Request $request)
     {
-        $q = MasterAssetType::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
+        $q = MasterDivision::query()->select(['uuid', 'kode', 'name', 'status', 'updated_at']);
 
         $user = $request->user();
         $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
@@ -202,57 +202,57 @@ class MasterDataController
             ->rawColumns(['status_badge', 'actions'])
             ->make(true);
     }
-    public function master_category_data(Request $request)
-    {
-        $q = MasterCategory::query()
-            ->select(['uuid', 'kode', 'name', 'kode_asset_type', 'status', 'updated_at']);
+    // public function master_category_data(Request $request)
+    // {
+    //     $q = MasterCategory::query()
+    //         ->select(['uuid', 'kode', 'name', 'kode_asset_type', 'status', 'updated_at']);
 
-        $user = $request->user();
-        $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
-        $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
-        return DataTables::of($q)
-            ->addColumn('asset_type_label', function ($r) {
-                static $cache = [];
-                return $cache[$r->kode_asset_type]
-                    ??= optional(MasterAssetType::where('kode', $r->kode_asset_type)->first())
-                    ?->kode . ' - ' . optional(MasterAssetType::where('kode', $r->kode_asset_type)->first())->name
-                    ?? $r->kode_asset_type;
-            })
-            ->addColumn('status_badge', function ($row) {
-                return $row->status
-                    ? '<span class="badge badge-light-success">Active</span>'
-                    : '<span class="badge badge-light-danger">Inactive</span>';
-            })
-            ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
-                if (! $canEdit && ! $canDelete) {
-                    return '-';
-                }
+    //     $user = $request->user();
+    //     $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
+    //     $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
+    //     return DataTables::of($q)
+    //         ->addColumn('asset_type_label', function ($r) {
+    //             static $cache = [];
+    //             return $cache[$r->kode_asset_type]
+    //                 ??= optional(MasterAssetType::where('kode', $r->kode_asset_type)->first())
+    //                 ?->kode . ' - ' . optional(MasterAssetType::where('kode', $r->kode_asset_type)->first())->name
+    //                 ?? $r->kode_asset_type;
+    //         })
+    //         ->addColumn('status_badge', function ($row) {
+    //             return $row->status
+    //                 ? '<span class="badge badge-light-success">Active</span>'
+    //                 : '<span class="badge badge-light-danger">Inactive</span>';
+    //         })
+    //         ->addColumn('actions', function ($row) use ($canEdit, $canDelete) {
+    //             if (! $canEdit && ! $canDelete) {
+    //                 return '-';
+    //             }
 
-                $html = '<div class="btn-group">';
+    //             $html = '<div class="btn-group">';
 
-                if ($canEdit) {
-                    $html .= '<button type="button"
-                               class="btn btn-sm btn-light-primary btn-edit"
-                               data-uuid="' . $row->uuid . '">
-                               Edit
-                          </button>';
-                }
+    //             if ($canEdit) {
+    //                 $html .= '<button type="button"
+    //                            class="btn btn-sm btn-light-primary btn-edit"
+    //                            data-uuid="' . $row->uuid . '">
+    //                            Edit
+    //                       </button>';
+    //             }
 
-                if ($canDelete) {
-                    $html .= '<button type="button"
-                               class="btn btn-sm btn-light-danger btn-delete"
-                               data-uuid="' . $row->uuid . '">
-                               Delete
-                          </button>';
-                }
+    //             if ($canDelete) {
+    //                 $html .= '<button type="button"
+    //                            class="btn btn-sm btn-light-danger btn-delete"
+    //                            data-uuid="' . $row->uuid . '">
+    //                            Delete
+    //                       </button>';
+    //             }
 
-                $html .= '</div>';
+    //             $html .= '</div>';
 
-                return $html;
-            })
-            ->rawColumns(['status_badge', 'actions'])
-            ->make(true);
-    }
+    //             return $html;
+    //         })
+    //         ->rawColumns(['status_badge', 'actions'])
+    //         ->make(true);
+    // }
     public function master_category_2_data(Request $request)
     {
         $q = MasterCategory2::query()
@@ -551,12 +551,19 @@ class MasterDataController
     }
     public function master_user_code_data(Request $request)
     {
-        $q = MasterUserCode::query()->select(['uuid', 'kode', 'department', 'description', 'status', 'updated_at']);
+        $q = MasterUserCode::query()->select(['uuid', 'kode', 'department', 'kode_division', 'description', 'status', 'updated_at']);
 
         $user = $request->user();
         $canEdit   = $user && $user->hasAction('MASTER_DATA', 'U');
         $canDelete = $user && $user->hasAction('MASTER_DATA', 'D');
         return DataTables::of($q)
+            ->addColumn('division_label', function ($r) {
+                static $cache = [];
+                return $cache[$r->kode_division]
+                    ??= optional(MasterDivision::where('kode', $r->kode_division)->first())
+                    ?->kode . ' - ' . optional(MasterDivision::where('kode', $r->kode_division)->first())->name
+                    ?? $r->kode_division;
+            })
             ->addColumn('status_badge', function ($row) {
                 return $row->status
                     ? '<span class="badge badge-light-success">Active</span>'
@@ -688,13 +695,13 @@ class MasterDataController
             ]);
         }
     }
-    public function master_asset_type_save(Request $request)
+    public function master_division_save(Request $request)
     {
         $uuid = $request->string('uuid')->trim()->toString() ?: null;
 
         // Validation: unique name; ignore current uuid if updating
-        $nameRule = Rule::unique('master_asset_type', 'name')->whereNull('deleted_at');
-        $kodeRule = Rule::unique('master_asset_type', 'kode')->whereNull('deleted_at');
+        $nameRule = Rule::unique('master_division', 'name')->whereNull('deleted_at');
+        $kodeRule = Rule::unique('master_division', 'kode')->whereNull('deleted_at');
         if ($uuid) {
             $nameRule = $nameRule->ignore($uuid, 'uuid');
             $kodeRule = $kodeRule->ignore($uuid, 'uuid');
@@ -715,21 +722,21 @@ class MasterDataController
         if ($uuid) {
             // update
             abort_unless($request->user()?->hasAction('MASTER_DATA', 'U'), 403);
-            $item = MasterAssetType::where('uuid', $uuid)->firstOrFail();
+            $item = MasterDivision::where('uuid', $uuid)->firstOrFail();
             $item->update($payload);
 
             return response()->json([
                 'ok' => true,
-                'message' => 'Asset Type updated.',
+                'message' => 'Division updated.',
                 'uuid' => $item->uuid,
             ]);
         } else {
             // create
             abort_unless($request->user()?->hasAction('MASTER_DATA', 'C'), 403);
-            $item = MasterAssetType::create($payload);
+            $item = MasterDivision::create($payload);
             return response()->json([
                 'ok' => true,
-                'message' => 'Asset Type created.',
+                'message' => 'Division created.',
                 'uuid' => $item->uuid,
             ]);
         }
@@ -748,7 +755,7 @@ class MasterDataController
         $data = $request->validate([
             'kode'            => ['required', 'string', 'max:50',  $kodeRule],
             'name'            => ['required', 'string', 'max:191', $nameRule],
-            'kode_asset_type' => ['required', 'string', 'max:50', 'exists:master_asset_type,kode'],
+            'kode_asset_type' => ['required', 'string', 'max:50', 'exists:master_division,kode'],
             'status'          => ['required', Rule::in(['0', '1', 0, 1, true, false])],
         ]);
 
@@ -1116,6 +1123,7 @@ class MasterDataController
             'kode'   => ['required', 'string', 'max:50', $kodeRule],
             'department'   => ['required', 'string', 'max:191', $departmentRule],
             'description' => ['nullable', 'string'],
+            'kode_division' => ['required', 'string', 'max:50', 'exists:master_division,kode'],
             'status' => ['required', Rule::in(['0', '1', 0, 1, true, false])],
         ]);
 
@@ -1123,6 +1131,7 @@ class MasterDataController
             'kode'   => $data['kode'],
             'department'   => $data['department'],
             'description'   => $data['description'] ?? '',
+            'kode_division' => $data['kode_division'],
             'status' => (bool) $data['status'],
         ];
 
@@ -1177,9 +1186,9 @@ class MasterDataController
             ],
         ]);
     }
-    public function master_asset_type_show(string $uuid)
+    public function master_division_show(string $uuid)
     {
-        $it = MasterAssetType::where('uuid', $uuid)->firstOrFail();
+        $it = MasterDivision::where('uuid', $uuid)->firstOrFail();
         return response()->json([
             'ok' => true,
             'data' => [
@@ -1312,6 +1321,7 @@ class MasterDataController
                 'department'   => $it->department,
                 'description'   => $it->description,
                 'status' => $it->status ? 1 : 0,
+                'kode_division' => $it->kode_division,
             ],
         ]);
     }
@@ -1339,15 +1349,15 @@ class MasterDataController
             'message' => 'Transaction deleted.',
         ]);
     }
-    public function master_asset_type_delete(Request $request, string $uuid)
+    public function master_division_delete(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('MASTER_DATA', 'D'), 403);
-        $it = MasterAssetType::where('uuid', $uuid)->firstOrFail();
+        $it = MasterDivision::where('uuid', $uuid)->firstOrFail();
         $it->delete();
 
         return response()->json([
             'ok' => true,
-            'message' => 'Asset Type deleted.',
+            'message' => 'Division deleted.',
         ]);
     }
     public function master_category_delete(Request $request, string $uuid)
@@ -1484,10 +1494,10 @@ class MasterDataController
 
         return response()->json(['results' => $rows]);
     }
-    public function select_master_asset_type(Request $request)
+    public function select_master_division(Request $request)
     {
         $search = trim((string) $request->get('q', ''));
-        $q = MasterAssetType::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
+        $q = MasterDivision::query()->select(['kode', 'name'])->where('status', true)->orderBy('kode');
 
         if ($search !== '') {
             $q->where(function ($w) use ($search) {

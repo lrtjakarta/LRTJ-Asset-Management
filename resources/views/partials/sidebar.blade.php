@@ -127,6 +127,19 @@
                             <!--begin:Menu item-->
                             <div class="menu-item">
                                 <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(2) == 'master-division' ? 'active' : '' }}"
+                                    href="{{ route('master.division') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Master Division</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(2) == 'master-user-code' ? 'active' : '' }}"
                                     href="{{ route('master.user_code') }}">
                                     <span class="menu-bullet">

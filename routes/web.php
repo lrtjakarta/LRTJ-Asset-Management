@@ -39,7 +39,7 @@ Route::middleware('ldap.session')->group(function () {
             // FRONT END MASTER DATA
             Route::get('/master-sumber',        [MasterDataController::class, 'master_sumber'])->name('sumber');
             Route::get('/master-company',       [MasterDataController::class, 'master_transaction'])->name('company');
-            Route::get('/master-asset-type',    [MasterDataController::class, 'master_asset_type'])->name('asset_type');
+            Route::get('/master-division',    [MasterDataController::class, 'master_division'])->name('division');
             Route::get('/master-category',      [MasterDataController::class, 'master_category'])->name('category');
             Route::get('/master-category-2',    [MasterDataController::class, 'master_category_2'])->name('category_2');
             Route::get('/master-sub-category',  [MasterDataController::class, 'master_sub_category'])->name('sub_category');
@@ -52,7 +52,7 @@ Route::middleware('ldap.session')->group(function () {
             // DATATABLE MASTER DATA
             Route::get('/master-sumber/datatable',        [MasterDataController::class, 'master_sumber_data'])->name('sumber.data');
             Route::get('/master-transaction/datatable',   [MasterDataController::class, 'master_transaction_data'])->name('transaction.data');
-            Route::get('/master-asset-type/datatable',    [MasterDataController::class, 'master_asset_type_data'])->name('asset_type.data');
+            Route::get('/master-division/datatable',    [MasterDataController::class, 'master_division_data'])->name('division.data');
             Route::get('/master-category/datatable',      [MasterDataController::class, 'master_category_data'])->name('category.data');
             Route::get('/master-category-2/datatable',    [MasterDataController::class, 'master_category_2_data'])->name('category_2.data');
             Route::get('/master-sub-category/datatable',  [MasterDataController::class, 'master_sub_category_data'])->name('sub_category.data');
@@ -65,7 +65,7 @@ Route::middleware('ldap.session')->group(function () {
             // SELECT MASTER DATA (AJAX)
             Route::get('/select-master-sumber',        [MasterDataController::class, 'select_master_sumber'])->name('sumber.options');
             Route::get('/select-master-transaction',   [MasterDataController::class, 'select_master_transaction'])->name('transaction.options');
-            Route::get('/select-master-asset-type',    [MasterDataController::class, 'select_master_asset_type'])->name('asset_type.options');
+            Route::get('/select-master-division',    [MasterDataController::class, 'select_master_division'])->name('division.options');
             Route::get('/select-master-category',      [MasterDataController::class, 'select_master_category'])->name('category.options');
             Route::get('/select-master-category-2',    [MasterDataController::class, 'select_master_category_2'])->name('category_2.options');
             Route::get('/select-master-sub-category',  [MasterDataController::class, 'select_master_sub_category'])->name('sub_category.options');
@@ -78,7 +78,7 @@ Route::middleware('ldap.session')->group(function () {
             // SHOW (detail)
             Route::get('/master-sumber/{uuid}',        [MasterDataController::class, 'master_sumber_show'])->name('sumber.show');
             Route::get('/master-transaction/{uuid}',   [MasterDataController::class, 'master_transaction_show'])->name('transaction.show');
-            Route::get('/master-asset-type/{uuid}',    [MasterDataController::class, 'master_asset_type_show'])->name('asset_type.show');
+            Route::get('/master-division/{uuid}',    [MasterDataController::class, 'master_division_show'])->name('division.show');
             Route::get('/master-category/{uuid}',      [MasterDataController::class, 'master_category_show'])->name('category.show');
             Route::get('/master-category-2/{uuid}',    [MasterDataController::class, 'master_category_2_show'])->name('category_2.show');
             Route::get('/master-sub-category/{uuid}',  [MasterDataController::class, 'master_sub_category_show'])->name('sub_category.show');
@@ -91,7 +91,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:MASTER_DATA,C,U')->group(function () {
             Route::post('/master-sumber/save',         [MasterDataController::class, 'master_sumber_save'])->name('sumber.save');
             Route::post('/master-transaction/save',    [MasterDataController::class, 'master_transaction_save'])->name('transaction.save');
-            Route::post('/master-asset-type/save',     [MasterDataController::class, 'master_asset_type_save'])->name('asset_type.save');
+            Route::post('/master-division/save',     [MasterDataController::class, 'master_division_save'])->name('division.save');
             Route::post('/master-category/save',       [MasterDataController::class, 'master_category_save'])->name('category.save');
             Route::post('/master-category-2/save',     [MasterDataController::class, 'master_category_2_save'])->name('category_2.save');
             Route::post('/master-sub-category/save',   [MasterDataController::class, 'master_sub_category_save'])->name('sub_category.save');
@@ -105,7 +105,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:MASTER_DATA,D')->group(function () {
             Route::delete('/master-sumber/{uuid}',         [MasterDataController::class, 'master_sumber_delete'])->name('sumber.delete');
             Route::delete('/master-transaction/{uuid}',    [MasterDataController::class, 'master_transaction_delete'])->name('transaction.delete');
-            Route::delete('/master-asset-type/{uuid}',     [MasterDataController::class, 'master_asset_type_delete'])->name('asset_type.delete');
+            Route::delete('/master-division/{uuid}',     [MasterDataController::class, 'master_division_delete'])->name('division.delete');
             Route::delete('/master-category/{uuid}',       [MasterDataController::class, 'master_category_delete'])->name('category.delete');
             Route::delete('/master-category-2/{uuid}',     [MasterDataController::class, 'master_category_2_delete'])->name('category_2.delete');
             Route::delete('/master-sub-category/{uuid}',   [MasterDataController::class, 'master_sub_category_delete'])->name('sub_category.delete');

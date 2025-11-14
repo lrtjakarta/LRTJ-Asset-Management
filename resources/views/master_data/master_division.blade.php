@@ -3,10 +3,10 @@
 @push('scripts')
     <script>
         (function() {
-            const table = $('#tableMasterAssetType').DataTable({
+            const table = $('#tableMasterDivision').DataTable({
                 processing: true,
                 serverSide: true,
-                ajax: "{{ route('master.asset_type.data') }}",
+                ajax: "{{ route('master.division.data') }}",
                 order: [
                     [4, 'desc']
                 ],
@@ -74,7 +74,7 @@
             });
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
-                $.get("{{ route('master.asset_type.show', ':uuid') }}".replace(':uuid', uuid))
+                $.get("{{ route('master.division.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
                             icon: 'error',
@@ -82,7 +82,7 @@
                             text: 'Failed to load'
                         });
                         const d = res.data;
-                        const $f = $('#formMasterAssetType');
+                        const $f = $('#formMasterDivision');
                         $f.find('[name="uuid"]').val(d.uuid);
                         $f.find('[name="kode"]').val(d.kode);
                         $f.find('[name="name"]').val(d.name);
@@ -98,12 +98,12 @@
                     });
             });
 
-            $('#formMasterAssetType').on('submit', function(e) {
+            $('#formMasterDivision').on('submit', function(e) {
                 e.preventDefault();
                 const $f = $(this);
                 const payload = $f.serialize(); 
 
-                $.post("{{ route('master.asset_type.save') }}", payload)
+                $.post("{{ route('master.division.save') }}", payload)
                     .done(function(res) {
                         $('#kt_modal_add').modal('hide');
                         table.ajax.reload(null, false);
@@ -112,7 +112,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        $('#formMasterAssetType')[0].reset(); 
+                        $('#formMasterDivision')[0].reset(); 
                     })
                     .fail(function(xhr) {
                         let msg = xhr.responseJSON?.message || 'Failed to save';
@@ -142,7 +142,7 @@
                 }).then(function(r) {
                     if (!r.isConfirmed) return;
                     $.ajax({
-                        url: "{{ route('master.asset_type.delete', ':uuid') }}".replace(':uuid',
+                        url: "{{ route('master.division.delete', ':uuid') }}".replace(':uuid',
                             uuid),
                         type: 'DELETE',
                         data: {
@@ -153,7 +153,7 @@
                         Swal.fire({
                             icon: 'success',
                             title: 'Deleted',
-                            text: res.message || 'Asset Type deleted.'
+                            text: res.message || 'Division deleted.'
                         });
                     }).fail(function(xhr) {
                         Swal.fire({
@@ -178,7 +178,7 @@
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
                 <!--begin::Title-->
                 <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
-                    Master Asset Type
+                    Master Division
                 </h1>
                 <!--end::Title-->
                 <!--begin::Breadcrumb-->
@@ -195,7 +195,7 @@
                     <!--end::Item-->
                     <!--begin::Item-->
                     <li class="breadcrumb-item text-muted">
-                        Master Asset Type
+                        Master Division
                     </li>
                     <!--end::Item-->
                 </ul>
@@ -219,7 +219,7 @@
                             <!--begin::Header-->
                             <div class="card-header border-0 pt-5">
                                 <h3 class="card-title align-items-start flex-column">
-                                    <span class="card-label fw-bold fs-3 mb-1">Master Asset Type Data</span>
+                                    <span class="card-label fw-bold fs-3 mb-1">Master Division Data</span>
                                 </h3>
                                 <div class="card-toolbar">
                                     @canAction('MASTER_DATA','C')
@@ -233,7 +233,7 @@
                             <!--begin::Body-->
                             <div class="card-body py-3">
                                 <!--begin::Table container-->
-                                <table id="tableMasterAssetType"
+                                <table id="tableMasterDivision"
                                     class="table table-striped table-row-bordered gy-5 gs-7 border rounded ">
                                     <thead class="table-light">
                                         <tr>
@@ -274,7 +274,7 @@
                     <!--end::Close-->
                 </div>
 
-                <form id="formMasterAssetType">
+                <form id="formMasterDivision">
                     @csrf
                     <div class="modal-body">
                         <input type="hidden" name="uuid">

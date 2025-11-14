@@ -21,6 +21,7 @@ class MasterUserCode extends Model
         'department',
         'description',
         'status',
+        'kode_division'
     ];
 
     protected $casts = [
@@ -42,5 +43,10 @@ class MasterUserCode extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+    
+    public function assetType()
+    {
+        return $this->belongsTo(MasterDivision::class, 'kode_division', 'kode');
     }
 }

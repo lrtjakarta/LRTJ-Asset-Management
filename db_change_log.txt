@@ -27,3 +27,15 @@ ADD COLUMN depr_code character varying COLLATE pg_catalog."default";
 
 ALTER TABLE IF EXISTS public.assets_depr_ledger_monthly
 ALTER COLUMN depr_code SET STORAGE EXTENDED;
+
+ALTER TABLE IF EXISTS public.master_asset_type
+RENAME TO master_division;
+
+ALTER TABLE public.master_asset_type
+RENAME CONSTRAINT master_division_pkey TO master_division_pkey;
+
+ALTER TABLE IF EXISTS public.master_user_code
+ADD COLUMN kode_division character varying(50) COLLATE pg_catalog."default";
+
+ALTER TABLE IF EXISTS public.master_user_code
+ALTER COLUMN kode_division SET STORAGE EXTENDED;

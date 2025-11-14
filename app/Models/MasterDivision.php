@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 
-class MasterAssetType extends Model
+class MasterDivision extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'master_asset_type';
+    protected $table = 'master_division';
     protected $primaryKey = 'uuid';
     public $incrementing = false;
     protected $keyType = 'string';
@@ -23,21 +23,21 @@ class MasterAssetType extends Model
         'status' => 'boolean',
     ];
 
-    public function categories(): HasMany
+    public function usercode(): HasMany
     {
-        return $this->hasMany(MasterCategory::class, 'kode_asset_type', 'kode');
+        return $this->hasMany(MasterUserCode::class, 'kode_division', 'kode');
     }
 
     protected static function booted(): void
     {
         static::deleting(function (self $model) {
-            if (AssetReferenceGuard::isUsed('master_asset_type', $model->kode)) {
+            if (AssetReferenceGuard::isUsed('master_division', $model->kode)) {
                 throw ValidationException::withMessages([
                     'delete' => "Cannot delete '{$model->name}' ({$model->kode}) because it is used by Assets.",
                 ]);
             }
 
-            if ($model->categories()->exists()) {
+            if ($model->usercode()->exists()) {
                 $action = $model->isForceDeleting() ? 'delete' : 'archive';
                 throw ValidationException::withMessages([
                     'delete' => "Cannot {$action} category '{$model->name}' because Category entries still exist.",

@@ -9,9 +9,9 @@ use App\Models\Disposal;
 use App\Models\MasterAssetClass;
 use App\Models\MasterSumber;
 use App\Models\MasterTransaction;
-use App\Models\MasterAssetType;
 use App\Models\MasterCategory;
 use App\Models\MasterCategory2;
+use App\Models\MasterDivision;
 use App\Models\MasterGroupCategory;
 use App\Models\MasterLocation;
 use App\Models\MasterStatus;
@@ -48,9 +48,9 @@ class TrashController extends Controller
                 'pk'        => 'uuid',
                 'label_col' => 'name',
             ],
-            'master_asset_type' => [
-                'table'     => 'master_asset_type',
-                'model'     => MasterAssetType::class,
+            'master_division' => [
+                'table'     => 'master_division',
+                'model'     => MasterDivision::class,
                 'pk'        => 'uuid',
                 'label_col' => 'name',
             ],
