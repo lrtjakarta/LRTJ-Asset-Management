@@ -39,3 +39,9 @@ ADD COLUMN kode_division character varying(50) COLLATE pg_catalog."default";
 
 ALTER TABLE IF EXISTS public.master_user_code
 ALTER COLUMN kode_division SET STORAGE EXTENDED;
+
+ALTER TABLE IF EXISTS public.assets
+ADD COLUMN notes text COLLATE pg_catalog."default";
+
+ALTER TABLE IF EXISTS public.assets
+ALTER COLUMN notes SET STORAGE EXTENDED;

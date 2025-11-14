@@ -219,12 +219,10 @@
 
                                 <dt class="col-sm-5">Nota Referensi</dt>
                                 <dd class="col-sm-7"> : {{ $asset->documents?->nota_referensi }}</dd>
-
-                                <dt class="col-sm-5">No Document</dt>
-                                <dd class="col-sm-7"> : {{ $asset->documents?->no_document }}</dd>
                             </dl>
                         </div>
                     </div>
+
                 </div>
 
                 {{-- RIGHT: Value + Document + QR --}}
@@ -277,6 +275,15 @@
                     </div>
 
 
+                    {{-- Notes --}}
+                    <div class="card mb-6">
+                        <div class="card-header">
+                            <h3 class="card-title fw-bold">Notes</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="col-sm-12">{{ $asset->notes ?? '-' }}</div>
+                        </div>
+                    </div>
 
                     {{-- QR --}}
                     <div class="card">

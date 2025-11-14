@@ -105,8 +105,8 @@
                                                     <div class="col-md-6">
                                                         <label class="form-label required">Asset Class</label>
                                                         <select name="kode_asset_class" id="sel-asset-class"
-                                                            data-placeholder="Select Company First"
-                                                            class="form-select" required></select>
+                                                            data-placeholder="Select Company First" class="form-select"
+                                                            required></select>
                                                     </div>
                                                 </div>
 
@@ -126,12 +126,12 @@
 
                                         <div class="col-md-6">
                                             <label class="form-label required">Description</label>
-                                            <input name="description" value="{{ old('description') }}"
-                                                class="form-control" required>
-                                        </div><div class="col-md-6">
+                                            <input name="description" value="{{ old('description') }}" class="form-control"
+                                                required>
+                                        </div>
+                                        <div class="col-md-6">
                                             <label class="form-label">Alias</label>
-                                            <input name="alias" value="{{ old('alias') }}"
-                                                class="form-control">
+                                            <input name="alias" value="{{ old('alias') }}" class="form-control">
                                         </div>
 
                                         <div class="col-md-4">
@@ -257,6 +257,20 @@
                                             <label class="form-label">No Document</label>
                                             <input name="no_document" value="{{ old('no_document') }}"
                                                 class="form-control">
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-6" />
+                                    
+                                    {{-- Notes (1:1) --}}
+                                    <div class="row g-5">
+                                        <div class="col-12">
+                                            <h5 class="fw-bold">Notes</h5>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label">Notes</label>
+                                            <textarea name="notes" value="{{ old('notes') }}"
+                                                class="form-control"></textarea>
                                         </div>
                                     </div>
 

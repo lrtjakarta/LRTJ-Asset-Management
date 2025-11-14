@@ -97,7 +97,8 @@ class Assets extends Model
         'kode_status',
         'kode_location',
         'kode_sumber',
-        'upload_code'
+        'upload_code',
+        'notes'
     ];
 
     protected $guarded = ['asset_number_parent', 'asset_number_child', 'asset_code'];

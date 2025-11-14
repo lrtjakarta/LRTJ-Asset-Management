@@ -72,11 +72,12 @@
                                             <div class="d-flex gap-6">
                                                 <label class="form-check form-check-custom form-check-solid">
                                                     <input class="form-check-input" type="radio" name="mode"
-                                                        value="new" {{ $defaultMode === 'new' ? 'checked' : 'disabled' }}>
+                                                        value="new"
+                                                        {{ $defaultMode === 'new' ? 'checked' : 'disabled' }}>
                                                     <span class="form-check-label">Create NEW parent</span>
                                                 </label>
                                                 <label class="form-check form-check-custom form-check-solid">
-                                                    <input class="form-check-input" type="radio" name="mode" 
+                                                    <input class="form-check-input" type="radio" name="mode"
                                                         value="existing"
                                                         {{ $defaultMode === 'existing' ? 'checked' : 'disabled' }}>
                                                     <span class="form-check-label">Use EXISTING parent</span>
@@ -89,7 +90,8 @@
                                             <label
                                                 class="form-label  {{ $defaultMode === 'existing' ? 'required' : '' }}">Select
                                                 Parent</label>
-                                            <select name="parent_uuid" id="sel-parent" class="form-select" disabled></select>
+                                            <select name="parent_uuid" id="sel-parent" class="form-select"
+                                                disabled></select>
                                             <div class="form-text">Search by parent asset code / description</div>
                                         </div>
                                         <div class="col-md-12" id="wrap-classification">
@@ -119,14 +121,12 @@
 
                                         <div class="col-md-6">
                                             <label class="form-label required">Description</label>
-                                            <input name="description"
-                                                value="{{ old('description', $asset->description) }}"
+                                            <input name="description" value="{{ old('description', $asset->description) }}"
                                                 class="form-control" required>
                                         </div>
                                         <div class="col-md-6">
                                             <label class="form-label">Alias</label>
-                                            <input name="alias"
-                                                value="{{ old('alias', $asset->alias) }}"
+                                            <input name="alias" value="{{ old('alias', $asset->alias) }}"
                                                 class="form-control">
                                         </div>
 
@@ -144,8 +144,7 @@
 
                                         <div class="col-md-4">
                                             <label class="form-label required">Status</label>
-                                            <select name="kode_status" id="sel-status" class="form-select"
-                                                ></select>
+                                            <select name="kode_status" id="sel-status" class="form-select"></select>
                                         </div>
                                     </div>
 
@@ -210,18 +209,17 @@
                                         <div class="col-md-3 d-none">
                                             <label class="form-label required">Price</label>
                                             <input type="number" step="0.01" name="price"
-                                                value="{{ old('price', $asset->value?->price) }}" class="form-control"
-                                                >
+                                                value="{{ old('price', $asset->value?->price) }}" class="form-control">
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label required">Quantity</label>
                                             <input type="number" name="quantity"
                                                 value="{{ old('quantity', $asset->value?->quantity) }}"
-                                                class="form-control" >
+                                                class="form-control">
                                         </div>
                                         <div class="col-md-3">
                                             <label class="form-label required">UOM</label>
-                                            <select name="kode_uom" id="sel-uom" class="form-select" ></select>
+                                            <select name="kode_uom" id="sel-uom" class="form-select"></select>
                                         </div>
                                         <div class="col-md-3 d-none">
                                             <label class="form-label">Include Tax (VAT-IN)?</label>
@@ -235,7 +233,7 @@
                                             <label class="form-label required">Useful Life (Month)</label>
                                             <input type="number" name="useful_life_month"
                                                 value="{{ old('useful_life_month', $asset->value?->useful_life_month) }}"
-                                                class="form-control" >
+                                                class="form-control">
                                         </div>
                                     </div>
 
@@ -263,6 +261,20 @@
                                             <input name="no_document"
                                                 value="{{ old('no_document', $asset->documents?->no_document) }}"
                                                 class="form-control">
+                                        </div>
+                                    </div>
+
+
+                                    <hr class="my-6" />
+
+                                    {{-- Notes (1:1) --}}
+                                    <div class="row g-5">
+                                        <div class="col-12">
+                                            <h5 class="fw-bold">Notes</h5>
+                                        </div>
+                                        <div class="col-md-12">
+                                            <label class="form-label">Notes</label>
+                                            <textarea name="notes" value="{{ old('notes', $asset->notes) }}" class="form-control"></textarea>
                                         </div>
                                     </div>
 

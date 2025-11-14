@@ -293,7 +293,8 @@ class AssetsController extends Controller
                 'kode_status'         => $v->kode_status,
                 'kode_location'       => $v->kode_location,
                 'kode_sumber'         => $v->kode_sumber,
-                'upload_code'         => $upl_code
+                'upload_code'         => $upl_code,
+                'notes'               => $v->notes,
             ]);
 
             AssetsClassification::create([
@@ -431,6 +432,7 @@ class AssetsController extends Controller
                 'kode_status'      => $v->kode_status,
                 'kode_location'    => $v->kode_location,
                 'kode_sumber'      => $v->kode_sumber,
+                'notes'               => $v->notes,
             ])->save();
 
             // $asset->classification()->updateOrCreate(

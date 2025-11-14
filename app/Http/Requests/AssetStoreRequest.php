@@ -21,6 +21,7 @@ class AssetStoreRequest extends FormRequest
 
             // identity
             'description'             => ['required', 'string', 'max:500'],
+            'notes'                   => ['nullable', 'string', 'max:500'],
 
             // masters on assets
             'kode_sumber'             => ['required', 'string', 'max:50'],
