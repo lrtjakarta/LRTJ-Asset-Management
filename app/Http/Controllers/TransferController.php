@@ -26,6 +26,29 @@ class TransferController extends Controller
         $user = auth()->user();
         return $user && $user->hasAction('MOVEMENT', 'R');
     }
+
+    /**
+     * System admin should always be able to approve movement (in addition to normal MOVEMENT:APR).
+     */
+    protected function canApproveMovement(): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        // Adjust to your actual sysadmin flag/method if different
+        if (method_exists($user, 'isSysAdmin') && $user->isSysAdmin()) {
+            return true;
+        }
+
+        if (property_exists($user, 'is_sysadmin') && $user->is_sysadmin) {
+            return true;
+        }
+
+        return $user->hasAction('MOVEMENT', 'APR');
+    }
+
     public function index()
     {
         $workflows = MasterStatus::query()
@@ -35,6 +58,7 @@ class TransferController extends Controller
 
         return view('transfers.transfers', compact('workflows'));
     }
+
     public function datatable_all(Request $request)
     {
         if (!$this->canReadMovement()) {
@@ -44,7 +68,7 @@ class TransferController extends Controller
         $user      = $request->user();
         $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
         $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
-        $canApr    = $user && $user->hasAction('MOVEMENT', 'APR');
+        $canApr    = $this->canApproveMovement();
 
         $type        = trim((string) $request->input('type', ''));
         $status      = trim((string) $request->input('status', ''));
@@ -53,7 +77,8 @@ class TransferController extends Controller
         $updatedTo   = $request->input('updated_to');
         $createdFrom = $request->input('created_from');
         $createdTo   = $request->input('created_to');
-        $assetQ = trim((string) $request->input('asset_q', ''));
+        $assetQ      = trim((string) $request->input('asset_q', ''));
+
         $q = Transfer::query()
             ->from('assets_transfers')
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
@@ -66,7 +91,6 @@ class TransferController extends Controller
             ->whereNull('assets_transfers.deleted_at')
             ->orderByDesc('assets_transfers.updated_at');
 
-        // apply filters
         if ($type !== '') {
             $q->where('assets_transfers.type', $type);
         }
@@ -97,6 +121,7 @@ class TransferController extends Controller
                     ->orWhere('a.description', 'ilike', "%{$assetQ}%");
             });
         }
+
         return DataTables::of($q)
             ->addColumn('asset_label', function ($r) {
                 $code = $r->asset_code ?? $r->asset_uuid;
@@ -116,7 +141,6 @@ class TransferController extends Controller
                 'after_show',
                 fn($r) => $this->resolveLabel($r->type, data_get($r->after, 'value'))
             )
-
             ->filterColumn('asset_label', function ($builder, $keyword) {
                 $kw = '%' . mb_strtolower($keyword) . '%';
                 $builder->where(function ($w) use ($kw) {
@@ -132,7 +156,6 @@ class TransferController extends Controller
                 $kw = '%' . mb_strtolower($keyword) . '%';
                 $builder->whereRaw('LOWER(CAST(assets_transfers.after AS TEXT)) LIKE ?', [$kw]);
             })
-
             ->addColumn('file', function ($r) {
                 if (!$r->file_path) return '';
 
@@ -142,7 +165,6 @@ class TransferController extends Controller
                 return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' .
                     e($name) . '</a>';
             })
-
             ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
                 $pending = $r->kode_status === 'APR';
                 $id      = e($r->uuid);
@@ -166,6 +188,37 @@ class TransferController extends Controller
                 $btns .= '</div>';
                 return $btns;
             })
+            ->addColumn('flow_label', function ($r) {
+                if ($r->kode_status === 'REJ') {
+                    $flow = is_array($r->flow) ? $r->flow : [];
+                    $by   = $flow['rejected_by'] ?? $r->pic_approve_uid ?? '-';
+                    return 'Rejected (by ' . e($by) . ')';
+                }
+
+                if (!is_array($r->flow)) return '';
+
+                $steps = $r->flow['steps'] ?? [];
+                if (!is_array($steps) || !count($steps)) return '';
+
+                $nextIdx = null;
+                foreach ($steps as $idx => $step) {
+                    if (empty($step['approved_at'])) {
+                        $nextIdx = $idx;
+                        break;
+                    }
+                }
+
+                if ($nextIdx === null) {
+                    $last = end($steps);
+                    $by   = $last['approved_by'] ?? '-';
+                    return 'Completed (by ' . e($by) . ')';
+                }
+
+                $step  = $steps[$nextIdx];
+                $role  = $step['role'] ?? $step['label'] ?? 'Step';
+                return 'Waiting: ' . e($role);
+            })
+
             ->rawColumns(['file', 'actions'])
             ->toJson();
     }
@@ -173,6 +226,7 @@ class TransferController extends Controller
     public function store(Request $request)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'C'), 403);
+
         $data = $request->validate([
             'asset_uuid'   => ['required', 'uuid', 'exists:assets,uuid'],
             'type'         => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
@@ -181,13 +235,13 @@ class TransferController extends Controller
             'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
-
         $currentUid = auth()->user()?->name;
         abort_if(!$currentUid, 401, 'No session UID.');
 
         $asset    = Assets::with(['assignment', 'status', 'location'])->findOrFail($data['asset_uuid']);
-        $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count();
+        $totalRow = Transfer::where('asset_uuid', $data['asset_uuid'])->count(); // currently unused but kept
 
+        // determine "before" code from asset
         $beforeCode = null;
         switch ($data['type']) {
             case 'owner':
@@ -210,7 +264,6 @@ class TransferController extends Controller
         $afterCode   = (string) $data['after']['value'];
         $beforeLabel = $this->resolveLabel($data['type'], $beforeCode);
         $afterLabel  = $this->resolveLabel($data['type'], $afterCode);
-
         $initialWorkflow = 'APR';
 
         $transfer = DB::transaction(function () use (
@@ -225,9 +278,9 @@ class TransferController extends Controller
             $totalRow,
             $request
         ) {
-
             $now    = Carbon::now();
             $prefix = 'MOV' . $now->format('ym');
+
             $last = Transfer::where('transfer_code', 'like', $prefix . '%')
                 ->orderBy('transfer_code', 'desc')
                 ->first();
@@ -238,32 +291,36 @@ class TransferController extends Controller
             } else {
                 $seq = 1;
             }
+
             $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
             [$path, $orig, $mime, $size] = $this->saveUpload($request->file('file'), $asset, $code, null);
 
-
-            return Transfer::create([
-                'uuid'             => (string) Str::uuid(),
-                'asset_uuid'       => $asset->uuid,
-                'transfer_code'    => $code,
-                'type'             => $data['type'],
-
-                'before'           => ['value' => $beforeCode],
-                'after'            => ['value' => $afterCode],
-
-                'before_label'     => $beforeLabel,
-                'after_label'      => $afterLabel,
-
-                'kode_status'      => $initialWorkflow,
-                'note'             => $data['note'] ?? null,
-                'pic_request_uid'  => $currentUid,
-                'pic_approve_uid'  => null,
+            $payload = [
+                'uuid'            => (string) Str::uuid(),
+                'asset_uuid'      => $asset->uuid,
+                'transfer_code'   => $code,
+                'type'            => $data['type'],
+                'before'          => ['value' => $beforeCode],
+                'after'           => ['value' => $afterCode],
+                'before_label'    => $beforeLabel,
+                'after_label'     => $afterLabel,
+                'kode_status'     => $initialWorkflow,
+                'note'            => $data['note'] ?? null,
+                'pic_request_uid' => $currentUid,
+                'pic_approve_uid' => null,
                 'file_path'       => $path,
                 'file_name'       => $orig,
                 'file_mime'       => $mime,
                 'file_size'       => $size,
-            ]);
+            ];
+
+            // initialize flow for movement location
+            if ($data['type'] === 'location') {
+                $payload['flow'] = $this->buildLocationFlowTemplate($currentUid);
+            }
+
+            return Transfer::create($payload);
         });
 
         return response()->json([
@@ -273,37 +330,73 @@ class TransferController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $uuid)
+    public function show(string $id)
     {
-        abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
-        $transfer = Transfer::where('uuid', $uuid)->firstOrFail();
+        $transfer = Transfer::where('uuid', $id)->firstOrFail();
 
-        $asset = Assets::select('uuid', 'asset_code', 'description')->find($transfer->asset_uuid);
+        $asset = Assets::select('uuid', 'asset_code', 'description')
+            ->find($transfer->asset_uuid);
+
+        $flow = $transfer->flow;
+
+        if (is_string($flow) && $flow !== '') {
+            $decoded = json_decode($flow, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flow = $decoded;
+            } else {
+                $flow = null;
+            }
+        }
+
+        $isLocation = strtolower((string) $transfer->type) === 'location';
+
+        if ($isLocation) {
+            $needsNewFlow =
+                !is_array($flow) ||
+                !isset($flow['steps']) ||
+                !is_array($flow['steps']) ||
+                !count($flow['steps']);
+
+            if ($needsNewFlow) {
+                $creator = $transfer->pic_request_uid ?: (auth()->user()->name ?? null);
+                $flow    = $this->buildLocationFlowTemplate($creator);
+
+                $transfer->flow = $flow;
+                $transfer->save();
+            }
+        }
 
         return response()->json([
             'uuid'        => $transfer->uuid,
             'asset_uuid'  => $transfer->asset_uuid,
             'asset_code'  => $asset->asset_code ?? null,
             'asset_desc'  => $asset->description ?? null,
-            'asset_label' => $asset ? $asset->asset_code . ($asset->description ? (' - ' . $asset->description) : '') : null,
+            'asset_label' => $asset
+                ? $asset->asset_code . ($asset->description ? (' - ' . $asset->description) : '')
+                : null,
             'type'        => $transfer->type,
             'before'      => $transfer->before,
             'after'       => $transfer->after,
             'note'        => $transfer->note,
             'kode_status' => $transfer->kode_status,
+            'flow'        => $flow,
             'file_url'    => $transfer->file_url,
-            'file_name'    => $transfer->file_name,
+            'file_name'   => $transfer->file_name,
         ]);
     }
+
+
+
     public function update(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'U'), 403);
+
         $data = $request->validate([
             'asset_uuid'  => ['required', 'uuid', 'exists:assets,uuid'],
             'type'        => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
             'after.value' => ['required', 'string'],
             'note'        => ['nullable', 'string', 'max:1000'],
-            'file'         => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
+            'file'        => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
         ]);
 
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
@@ -331,23 +424,23 @@ class TransferController extends Controller
         }
 
         $tf->fill([
-            'type'        => $data['type'],
-            'before'      => $before,
-            'after'       => $after,
-            'note'        => $data['note'] ?? null,
-            'file_path'       => $file_path ?? $tf->file_path,
-            'file_name'       => $file_name ?? $tf->file_name,
-            'file_mime'       => $file_mime ?? $tf->file_mime,
-            'file_size'       => $file_size ?? $tf->file_size,
+            'type'       => $data['type'],
+            'before'     => $before,
+            'after'      => $after,
+            'note'       => $data['note'] ?? null,
+            'file_path'  => $file_path ?? $tf->file_path,
+            'file_name'  => $file_name ?? $tf->file_name,
+            'file_mime'  => $file_mime ?? $tf->file_mime,
+            'file_size'  => $file_size ?? $tf->file_size,
         ])->save();
 
         return response()->json(['ok' => true]);
     }
 
-    /** Soft delete */
     public function destroy(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'D'), 403);
+
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         $tf->delete();
 
@@ -356,12 +449,21 @@ class TransferController extends Controller
 
     public function approve(Request $request, string $uuid)
     {
-        abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
+        abort_unless($this->canApproveMovement(), 403);
+
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
+
         DB::transaction(function () use ($uuid, $uid) {
+            /** @var \App\Models\Transfer $tf */
             $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
             abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
+
+            // if this is a location transfer that already has flow,
+            // enforce using the multi-step endpoint instead
+            if ($tf->type === 'location' && !empty($tf->flow)) {
+                abort(422, 'Use location flow approval endpoint for this transfer.');
+            }
 
             $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
             $val   = data_get($tf->after, 'value');
@@ -381,13 +483,14 @@ class TransferController extends Controller
                     $asset->save();
                     break;
                 case 'location':
+                    // simple one-step approval for legacy rows without flow
                     $asset->kode_location = $val;
                     $asset->save();
                     break;
             }
 
-            $tf->kode_status      = 'ACC';
-            $tf->pic_approve_uid  = $uid;
+            $tf->kode_status     = 'ACC';
+            $tf->pic_approve_uid = $uid;
             $tf->save();
         });
 
@@ -396,12 +499,33 @@ class TransferController extends Controller
 
     public function reject(Request $request, string $uuid)
     {
-        abort_unless($request->user()?->hasAction('MOVEMENT', 'APR'), 403);
+        abort_unless($this->canApproveMovement(), 403);
+
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $tf = Transfer::where('uuid', $uuid)->firstOrFail();
         abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be rejected.');
+
+        if (strtolower((string) $tf->type) === 'location') {
+            $flow = $tf->flow ?? $this->buildLocationFlowTemplate($tf->pic_request_uid);
+
+            $now = now()->toDateTimeString();
+
+            if (is_array($flow) && isset($flow['steps']) && is_array($flow['steps'])) {
+                $nextIdx = $this->getNextPendingFlowIndex($flow);
+                if ($nextIdx !== null) {
+                    $step = &$flow['steps'][$nextIdx];
+                    $step['rejected_by'] = $uid;
+                    $step['rejected_at'] = $now;
+                }
+            }
+
+            $flow['rejected_by'] = $uid;
+            $flow['rejected_at'] = $now;
+
+            $tf->flow = $flow;
+        }
 
         $tf->kode_status     = 'REJ';
         $tf->pic_approve_uid = $uid;
@@ -409,6 +533,7 @@ class TransferController extends Controller
 
         return response()->json(['ok' => true]);
     }
+
 
     public function indexByAsset(Request $req, string $assetUuid)
     {
@@ -418,16 +543,17 @@ class TransferController extends Controller
 
         return response()->json(['results' => $rows]);
     }
+
     public function datatable(Request $request, string $assetUuid)
     {
         if (!$this->canReadMovement()) {
             return DataTables::of(collect())->toJson();
         }
 
-        $user = $request->user();
+        $user      = $request->user();
         $canEdit   = $user && $user->hasAction('MOVEMENT', 'U');
         $canDelete = $user && $user->hasAction('MOVEMENT', 'D');
-        $canApr    = $user && $user->hasAction('MOVEMENT', 'APR');
+        $canApr    = $this->canApproveMovement();
 
         $q = Transfer::query()
             ->where('asset_uuid', $assetUuid)
@@ -440,7 +566,6 @@ class TransferController extends Controller
             })
             ->addColumn('before_code', fn(Transfer $t) => data_get($t->before, 'value'))
             ->addColumn('after_code',  fn(Transfer $t) => data_get($t->after,  'value'))
-
             ->addColumn('before_display', function (Transfer $t) {
                 return $this->resolveLabel($t->type, data_get($t->before, 'value'));
             })
@@ -477,12 +602,41 @@ class TransferController extends Controller
 
                 $btns .= '</div>';
                 return $btns;
+            })->addColumn('flow_label', function ($r) {
+                if ($r->kode_status === 'REJ') {
+                    $flow = is_array($r->flow) ? $r->flow : [];
+                    $by   = $flow['rejected_by'] ?? $r->pic_approve_uid ?? '-';
+                    return 'Rejected (by ' . e($by) . ')';
+                }
+
+                if (!is_array($r->flow)) return '';
+
+                $steps = $r->flow['steps'] ?? [];
+                if (!is_array($steps) || !count($steps)) return '';
+
+                $nextIdx = null;
+                foreach ($steps as $idx => $step) {
+                    if (empty($step['approved_at'])) {
+                        $nextIdx = $idx;
+                        break;
+                    }
+                }
+
+                if ($nextIdx === null) {
+                    $last = end($steps);
+                    $by   = $last['approved_by'] ?? '-';
+                    return 'Completed (by ' . e($by) . ')';
+                }
+
+                $step  = $steps[$nextIdx];
+                $role  = $step['role'] ?? $step['label'] ?? 'Step';
+                return 'Waiting: ' . e($role);
             })
+
             ->rawColumns(['file', 'actions'])
             ->toJson();
     }
 
-    /** Build BEFORE/AFTER payloads depending on transfer type */
     protected function buildBeforeAfter(Assets $asset, string $type, string $afterValue): array
     {
         $before = ['value' => null, 'label' => null];
@@ -524,8 +678,10 @@ class TransferController extends Controller
                 $after['label'] = $loc ? ($loc->kode . ' - ' . $loc->name) : $afterValue;
                 break;
         }
+
         return [$before, $after];
     }
+
     private function resolveLabel(?string $type, ?string $code): string
     {
         $type = is_string($type) ? trim($type) : '';
@@ -543,7 +699,7 @@ class TransferController extends Controller
             'status'   => [],
             'location' => [],
         ];
-        $k = $code;
+        $k  = $code;
         $ck = mb_strtoupper($code);
 
         switch ($type) {
@@ -584,7 +740,6 @@ class TransferController extends Controller
         }
     }
 
-    /** Helper used by update(): fetch current "before" snapshot */
     private function currentValueForType(Assets $asset, string $type): array
     {
         switch ($type) {
@@ -602,6 +757,7 @@ class TransferController extends Controller
                 return ['value' => null];
         }
     }
+
     private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?Transfer $existing = null): array
     {
         if (!$file) return [null, null, null, null];
@@ -612,13 +768,110 @@ class TransferController extends Controller
         $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
 
         $path = $file->storeAs($dir, $name, $disk);
-        $options = ['disk' => $disk];
-        $options['visibility'] = 'public';
 
+        // clean old file if editing
         if ($existing && $existing->file_path) {
             Storage::disk($disk)->delete($existing->file_path);
         }
 
         return [$path, $file->getClientOriginalName(), $file->getClientMimeType(), $file->getSize()];
+    }
+
+    protected function buildLocationFlowTemplate(?string $creatorName = null): array
+    {
+        $now = now()->toDateTimeString();
+
+        return [
+            'key'   => 'movement_location',
+            'steps' => [
+                [
+                    'code'        => 'create',
+                    'label'       => 'Create',
+                    'role'        => 'User Departemen',
+                    'approved_by' => $creatorName,
+                    'approved_at' => $creatorName ? $now : null,
+                ],
+                [
+                    'code'        => 'dept_head',
+                    'label'       => 'Approval Dept.Head / Section',
+                    'role'        => 'User - Dept.Head / Section',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'asset_mgt',
+                    'label'       => 'Completed (Asset Management)',
+                    'role'        => 'Asset Management',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+            ],
+        ];
+    }
+
+
+    protected function getNextPendingFlowIndex(?array $flow): ?int
+    {
+        if (!is_array($flow) || !isset($flow['steps']) || !is_array($flow['steps'])) {
+            return null;
+        }
+
+        foreach ($flow['steps'] as $idx => $step) {
+            if (empty($step['approved_at'])) {
+                return $idx;
+            }
+        }
+
+        return null;
+    }
+
+    public function approveLocationStep(Request $request, string $uuid)
+    {
+        abort_unless($this->canApproveMovement(), 403);
+
+        $uid = auth()->user()?->name;
+        abort_if(!$uid, 401, 'No session UID.');
+
+        $now = now()->toDateTimeString();
+
+        return DB::transaction(function () use ($uuid, $uid, $now) {
+            /** @var \App\Models\Transfer $tf */
+            $tf = Transfer::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
+
+            abort_if($tf->type !== 'location', 422, 'Flow approval only supported for location transfers.');
+            abort_if($tf->kode_status !== 'APR', 422, 'Only pending transfers can be approved.');
+
+            $flow = $tf->flow ?? $this->buildLocationFlowTemplate($tf->pic_request_uid);
+
+            $nextIdx = $this->getNextPendingFlowIndex($flow);
+            abort_if($nextIdx === null, 422, 'All steps already approved.');
+
+            $step = &$flow['steps'][$nextIdx];
+            $step['approved_by'] = $uid;
+            $step['approved_at'] = $now;
+
+            $isLastStep = ($nextIdx === count($flow['steps']) - 1);
+
+            if ($isLastStep) {
+                $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
+                $val   = data_get($tf->after, 'value');
+
+                $asset->kode_location = $val;
+                $asset->save();
+
+                $tf->kode_status     = 'ACC';
+                $tf->pic_approve_uid = $uid;
+            }
+
+            $tf->flow = $flow;
+            $tf->save();
+
+            return response()->json([
+                'ok'          => true,
+                'completed'   => $isLastStep,
+                'kode_status' => $tf->kode_status,
+                'flow'        => $flow,
+            ]);
+        });
     }
 }

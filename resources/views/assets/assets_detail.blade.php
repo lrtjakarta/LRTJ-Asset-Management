@@ -399,6 +399,7 @@
                                         <th class="min-w-220px">Note</th>
                                         <th class="min-w-160px">Requester</th>
                                         <th class="min-w-180px">Created</th>
+                                        <th class="min-w-150px">Action</th>
                                     </tr>
                                 </thead>
                             </table>
@@ -420,6 +421,7 @@
                                         <th class="min-w-100px">Approver</th>
                                         <th class="min-w-250px">Note</th>
                                         <th class="min-w-100px">Status Movement</th>
+                                        <th class="min-w-160px">Flow</th>
                                         <th class="min-w-200px">File</th>
                                         <th class="min-w-200px">Updated</th>
                                         <th class="min-w-200px">Action</th>
@@ -726,6 +728,23 @@
             </div>
         </div>
     </div>
+    {{-- ===== Approve Movement Location Modal ===== --}}
+    <div class="modal fade" id="modal-transfer-approve" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <input type="hidden" id="tf-approve-id">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approve Movement Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tf-flow-steps">
+                        {{-- steps will be rendered by JS --}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -756,7 +775,10 @@
                 status: '{{ route('master.status.options') }}',
                 location: '{{ route('master.location.options') }}',
                 transfers: '{{ route('transfer.data', $asset->uuid) }}',
-                create: '{{ route('transfer.store') }}'
+                create: '{{ route('transfer.store') }}',
+                show: id => '{{ route('transfer.show', ':id') }}'.replace(':id', id),
+                approveLocationStep: id => '{{ route('transfer.approve-location-step', ':id') }}'.replace(':id',
+                    id),
             };
             const ROUTE = {
                 update: id => '{{ route('transfer.update', ':id') }}'.replace(':id', id),
@@ -887,6 +909,16 @@
                             } else {
                                 return `<span class="badge badge-light-danger">${data||''}</span>`;
                             }
+                        }
+                    },
+                    {
+                        data: 'flow_label',
+                        name: 'flow_label',
+                        orderable: false,
+                        searchable: false,
+                        render: function(data, type, row) {
+                            if (type !== 'display') return data;
+                            return data || '';
                         }
                     },
                     {
@@ -1026,34 +1058,52 @@
 
             $('#tbl-transfers').on('click', '.btn-tf-approve', function() {
                 const id = $(this).data('id');
-                Swal.fire({
-                        title: 'Approve this transfer?',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonText: 'Approve',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6'
-                    })
-                    .then(res => {
-                        if (!res.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Applying…',
-                            didOpen: () => Swal.showLoading(),
-                            allowOutsideClick: false
+                const row = $('#tbl-transfers').DataTable().row($(this).closest('tr')).data();
+
+                if ((row.type || '').toLowerCase() === 'location') {
+                    // Use multi-step flow modal for location
+                    $('#tf-approve-id').val(id);
+
+                    $.get(R.show(id))
+                        .done(d => {
+                            renderApproveFlowModal(d);
+                            $('#modal-transfer-approve').modal('show');
+                        })
+                        .fail(() => {
+                            Swal.fire('Error', 'Cannot load transfer', 'error');
                         });
-                        $.post(ROUTE.approve(id)).done(() => {
+                } else {
+                    // Old simple approve for other types
+                    Swal.fire({
+                            title: 'Approve this transfer?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Approve',
+                            confirmButtonColor: '#EA242A',
+                            cancelButtonColor: '#B5B5B6'
+                        })
+                        .then(res => {
+                            if (!res.isConfirmed) return;
                             Swal.fire({
-                                title: 'Approved',
-                                text: 'Transfer applied to asset.',
-                                icon: 'success',
-                                showConfirmButton: false,
-                                timer: 500,
-                                timerProgressBar: true,
-                            }).then(() => {
-                                location.reload();
+                                title: 'Applying…',
+                                didOpen: () => Swal.showLoading(),
+                                allowOutsideClick: false
                             });
-                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                    });
+                            $.post(ROUTE.approve(id)).done(() => {
+                                Swal.fire({
+                                    title: 'Approved',
+                                    text: 'Transfer applied to asset.',
+                                    icon: 'success',
+                                    showConfirmButton: false,
+                                    timer: 500,
+                                    timerProgressBar: true,
+                                }).then(() => {
+                                    location.reload();
+                                });
+                            }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed',
+                                'error'));
+                        });
+                }
             });
 
             $('#tbl-transfers').on('click', '.btn-tf-reject', function() {
@@ -1109,6 +1159,108 @@
                             .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
+
+            function renderApproveFlowModal(data) {
+                const container = $('#tf-flow-steps').empty();
+
+                let flow = data && data.flow ? data.flow : data;
+
+                if (typeof flow === 'string') {
+                    try {
+                        flow = JSON.parse(flow);
+                    } catch (e) {
+                        flow = {};
+                    }
+                }
+
+                const steps = Array.isArray(flow?.steps) ? flow.steps : [];
+
+                if (!steps.length) {
+                    container.append('<div class="text-muted">No flow defined.</div>');
+                    return;
+                }
+
+                steps.forEach((step, idx) => {
+                    const approvedAt = step.approved_at;
+                    const approvedBy = step.approved_by;
+                    const isPending = !approvedAt;
+
+                    const statusBadge = approvedAt ?
+                        `<span class="badge badge-light-success">Approved</span>` :
+                        `<span class="badge badge-light-warning">Pending</span>`;
+
+                    const approverInfo = approvedAt ?
+                        `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
+                        '';
+
+                    const btn = isPending ?
+                        `<button type="button"
+                      class="btn btn-sm btn-primary mt-2 btn-flow-approve-step"
+                      data-step-index="${idx}">
+                    Approved by ${escapeHtml(step.role || step.label || 'Role')}
+               </button>` :
+                        '';
+
+                    container.append(`
+            <div class="border rounded p-3 mb-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
+                        <div class="small text-muted">${escapeHtml(step.role || '')}</div>
+                        ${approverInfo}
+                    </div>
+                    <div>${statusBadge}</div>
+                </div>
+                ${btn}
+            </div>
+        `);
+                });
+
+                // Only allow clicking the first pending step
+                let firstPending = true;
+                container.find('.btn-flow-approve-step').each(function() {
+                    if (firstPending) {
+                        firstPending = false;
+                    } else {
+                        $(this).prop('disabled', true);
+                    }
+                });
+            }
+
+            function escapeHtml(text) {
+                return $('<div/>').text(text || '').html();
+            }
+
+            // Approve a single flow step
+            $('#tf-flow-steps').on('click', '.btn-flow-approve-step', function() {
+                const id = $('#tf-approve-id').val();
+                if (!id) return;
+
+                const $btn = $(this).prop('disabled', true);
+
+                $.post(R.approveLocationStep(id))
+                    .done(res => {
+                        if (res.flow) {
+                            renderApproveFlowModal({
+                                flow: res.flow
+                            });
+                        }
+
+                        if (res.completed) {
+                            $('#modal-transfer-approve').modal('hide');
+                            Swal.fire('Approved', 'Movement location completed.', 'success');
+                        } else {
+                            Swal.fire('Approved', 'Step approved.', 'success');
+                        }
+
+                        $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                    })
+                    .fail(x => {
+                        $btn.prop('disabled', false);
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
+            });
+
         })();
     </script>
 
@@ -1668,7 +1820,7 @@
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
-            $('#tbl-acq').DataTable({
+            var tbl_acq = $('#tbl-acq').DataTable({
                 processing: true,
                 serverSide: true,
                 ajax: {
@@ -1720,8 +1872,40 @@
                             }).format(d);
                             return `${dateStr} ${timeStr}`;
                         }
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false
                     }
                 ]
+            });
+
+
+            $('#tbl-acq').on('click', '.btn-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Delete?',
+                    text: 'Moved to trash',
+                    icon: 'warning',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading()
+                    });
+                    $.ajax({
+                        url: '{{ route('acquisition.destroy', ':id') }}'.replace(':id', id),
+                        type: 'DELETE'
+                    }).done(() => {
+                        Swal.fire('Deleted', '', 'success');
+                        $('#tbl-acq').DataTable().ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
 
         })();

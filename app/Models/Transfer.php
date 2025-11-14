@@ -23,6 +23,7 @@ class Transfer extends Model
         'type',
         'before',
         'after',
+        'flow', 
         'kode_status',
         'note',
         'pic_request_uid',
@@ -36,6 +37,7 @@ class Transfer extends Model
     protected $casts = [
         'before' => 'array',
         'after'  => 'array',
+        'flow'       => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

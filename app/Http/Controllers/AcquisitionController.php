@@ -21,8 +21,12 @@ class AcquisitionController extends Controller
             return DataTables::of(collect())->toJson();
         }
 
+
+        $user      = $request->user();
+        $canDelete = $user && $user->hasAction('ACQUISITION', 'D');
+
         $pic      = $request->input('pic');
-        $pajak    = $request->input('pajak');      // '1' / '0'
+        $pajak    = $request->input('pajak');
         $capFrom  = $request->input('cap_from');
         $capTo    = $request->input('cap_to');
         $assetLike = $request->input('asset');
@@ -30,6 +34,7 @@ class AcquisitionController extends Controller
         $q = DB::table('assets_value_history as h')
             ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
             ->select(
+                'h.uuid',
                 'h.acq_code',
                 'h.asset_uuid',
                 'h.before_payload',
@@ -40,6 +45,7 @@ class AcquisitionController extends Controller
                 'a.asset_code',
                 'a.description as asset_name',
             )
+            ->whereNull('h.deleted_at')
             ->orderByDesc('h.created_at');
 
         if ($pic) {
@@ -159,6 +165,18 @@ class AcquisitionController extends Controller
                     ->timezone('Asia/Jakarta')
                     ->format('d M Y H:i');
             })
+
+            ->addColumn('actions', function ($r) use ($canDelete) {
+                $id      = e($r->uuid);
+                $btns = '<div class="btn-group btn-group-sm">';
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
+                }
+
+                $btns .= '</div>';
+                return $btns;
+            })
+            ->rawColumns(['actions'])
             ->toJson();
     }
 
@@ -303,6 +321,15 @@ class AcquisitionController extends Controller
         }
     }
 
+    public function destroy(Request $request, string $uuid)
+    {
+        abort_unless($request->user()?->hasAction('ACQUISITION', 'D'), 403);
+
+        $tf = AssetsValueHistory::where('uuid', $uuid)->firstOrFail();
+        $tf->delete();
+
+        return response()->json(['ok' => true]);
+    }
 
     public function dataByAsset(string $assetUuid, Request $request)
     {
@@ -311,10 +338,13 @@ class AcquisitionController extends Controller
             return DataTables::of(collect())->toJson();
         }
 
+        $user      = $request->user();
+        $canDelete = $user && $user->hasAction('ACQUISITION', 'D');
         $q = DB::table('assets_value_history as h')
             ->where('h.asset_uuid', $assetUuid)
+            ->whereNull('h.deleted_at')
             ->orderByDesc('h.created_at')
-            ->select('h.before_payload', 'h.after_payload', 'h.note', 'h.pic_request_uid', 'h.created_at', 'h.acq_code');
+            ->select('h.before_payload', 'h.after_payload', 'h.note', 'h.pic_request_uid', 'h.created_at', 'h.acq_code', 'h.uuid');
 
         $money = fn($v) => is_null($v) ? '—' : number_format((float)$v, 2);
         $num   = fn($v) => is_null($v) ? '—' : rtrim(rtrim(number_format((float)$v, 4, '.', ''), '0'), '.');
@@ -368,7 +398,19 @@ class AcquisitionController extends Controller
             ->addColumn('pic_request_uid', fn($r) => $r->pic_request_uid)
             ->addColumn('created_at', fn($r) => $r->created_at)
             ->addColumn('acq_code', fn($r) => $r->acq_code)
-            ->rawColumns(['detail'])
+
+
+            ->addColumn('actions', function ($r) use ($canDelete) {
+                $id      = e($r->uuid);
+                $btns = '<div class="btn-group btn-group-sm">';
+                if ($canDelete) {
+                    $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
+                }
+
+                $btns .= '</div>';
+                return $btns;
+            })
+            ->rawColumns(['detail', 'actions'])
             ->toJson();
     }
 

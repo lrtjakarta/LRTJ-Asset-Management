@@ -116,6 +116,7 @@
                                 <th class="min-w-200px">Requester</th>
                                 <th class="min-w-200px">Approver</th>
                                 <th class="min-w-200px">Status</th>
+                                <th class="min-w-200px">Flow</th>
                                 <th class="min-w-200px">File</th>
                                 <th class="min-w-200px">Updated</th>
                                 <th class="min-w-200px">Actions</th>
@@ -221,6 +222,24 @@
             </div>
         </div>
     </div>
+
+    {{-- Approve flow modal --}}
+    <div class="modal fade" id="modal-transfer-approve" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <input type="hidden" id="tf-approve-id">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approve Movement Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tf-flow-steps">
+                        {{-- steps will be rendered by JS --}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -241,6 +260,7 @@
                 destroy: id => '{{ route('transfer.destroy', ':id') }}'.replace(':id', id),
                 export: '{{ route('export.movement') }}',
                 usersOptions: '{{ route('users.options') }}',
+                approveLocationStep: '{{ route('transfer.approve-location-step', ':id') }}',
             };
 
             $.ajaxSetup({
@@ -397,6 +417,7 @@
             if (statusFromUrl) {
                 $('#mv-status').val(statusFromUrl);
             }
+
             const dt = $('#tbl-transfers-all').DataTable({
                 processing: true,
                 serverSide: true,
@@ -414,9 +435,9 @@
                     }
                 },
                 order: [
-                    [9, 'desc']
-                ],
-                "dom": "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    [11, 'desc']
+                ], // updated_at column index
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 searching: true,
@@ -473,12 +494,22 @@
                         defaultContent: '',
                         render: function(data, type, row) {
                             if (row.kode_status == 'APR') {
-                                return `<span class="badge badge-light-primary">${data||''}</span>`;
+                                return `<span class="badge badge-light-primary">${data || ''}</span>`;
                             } else if (row.kode_status == 'ACC') {
-                                return `<span class="badge badge-light-success">${data||''}</span>`;
+                                return `<span class="badge badge-light-success">${data || ''}</span>`;
                             } else {
-                                return `<span class="badge badge-light-danger">${data||''}</span>`;
+                                return `<span class="badge badge-light-danger">${data || ''}</span>`;
                             }
+                        }
+                    },
+                    {
+                        data: 'flow_label',
+                        name: 'flow_label',
+                        orderable: false,
+                        searchable: false,
+                        render: function(data, type) {
+                            if (type !== 'display') return data;
+                            return data || '';
                         }
                     },
                     {
@@ -723,74 +754,181 @@
 
             $('#tbl-transfers-all').on('click', '.btn-tf-approve', function() {
                 const id = $(this).data('id');
-                Swal.fire({
+                const row = $('#tbl-transfers-all').DataTable().row($(this).closest('tr')).data();
+
+                if ((row.type || '').toLowerCase() === 'location') {
+                    $('#tf-approve-id').val(id);
+
+                    $.get(R.show.replace(':id', id))
+                        .done(d => {
+                            renderApproveFlowModal(d);
+                            $('#modal-transfer-approve').modal('show');
+                        })
+                        .fail(() => {
+                            Swal.fire('Error', 'Cannot load transfer', 'error');
+                        });
+                } else {
+                    Swal.fire({
                         title: 'Approve?',
                         icon: 'question',
                         confirmButtonColor: '#EA242A',
                         cancelButtonColor: '#B5B5B6',
                         showCancelButton: true
-                    })
-                    .then(r => {
+                    }).then(r => {
                         if (!r.isConfirmed) return;
                         Swal.fire({
                             title: 'Applying…',
                             didOpen: () => Swal.showLoading()
                         });
                         $.post(R.approve(id)).done(() => {
-                                Swal.fire('Approved', '', 'success');
-                                dt.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                            Swal.fire('Approved', '', 'success');
+                            $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed',
+                            'error'));
                     });
+                }
             });
 
             $('#tbl-transfers-all').on('click', '.btn-tf-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Reject?',
-                        icon: 'warning',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6',
-                        showCancelButton: true
-                    })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Updating…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.post(R.reject(id)).done(() => {
-                                Swal.fire('Rejected', '', 'success');
-                                dt.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    title: 'Reject?',
+                    icon: 'warning',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Updating…',
+                        didOpen: () => Swal.showLoading()
                     });
+                    $.post(R.reject(id)).done(() => {
+                        Swal.fire('Rejected', '', 'success');
+                        dt.ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
 
             $('#tbl-transfers-all').on('click', '.btn-tf-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Delete?',
-                        text: 'Moved to trash',
-                        icon: 'warning',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6',
-                        showCancelButton: true
+                    title: 'Delete?',
+                    text: 'Moved to trash',
+                    icon: 'warning',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading()
+                    });
+                    $.ajax({
+                        url: R.destroy(id),
+                        type: 'DELETE'
+                    }).done(() => {
+                        Swal.fire('Deleted', '', 'success');
+                        dt.ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+            function renderApproveFlowModal(data) {
+                const container = $('#tf-flow-steps').empty();
+
+                let flow = data && data.flow ? data.flow : data;
+
+                if (typeof flow === 'string') {
+                    try {
+                        flow = JSON.parse(flow);
+                    } catch (e) {
+                        flow = {};
+                    }
+                }
+
+                const steps = Array.isArray(flow?.steps) ? flow.steps : [];
+
+                if (!steps.length) {
+                    container.append('<div class="text-muted">No flow defined.</div>');
+                    return;
+                }
+
+                steps.forEach((step, idx) => {
+                    const approvedAt = step.approved_at;
+                    const approvedBy = step.approved_by;
+                    const isPending = !approvedAt;
+
+                    const statusBadge = approvedAt ?
+                        `<span class="badge badge-light-success">Approved</span>` :
+                        `<span class="badge badge-light-warning">Pending</span>`;
+
+                    const approverInfo = approvedAt ?
+                        `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
+                        '';
+
+                    const btn = isPending ?
+                        `<button type="button" class="btn btn-sm btn-primary mt-2 btn-flow-approve-step" data-step-index="${idx}">
+                                Approved by ${escapeHtml(step.role || step.label || 'Role')}
+                           </button>` :
+                        '';
+
+                    container.append(`
+                        <div class="border rounded p-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
+                                    <div class="small text-muted">${escapeHtml(step.role || '')}</div>
+                                    ${approverInfo}
+                                </div>
+                                <div>${statusBadge}</div>
+                            </div>
+                            ${btn}
+                        </div>
+                    `);
+                });
+
+                let firstPending = true;
+                container.find('.btn-flow-approve-step').each(function() {
+                    if (firstPending) {
+                        firstPending = false;
+                    } else {
+                        $(this).prop('disabled', true);
+                    }
+                });
+            }
+
+            function escapeHtml(text) {
+                return $('<div/>').text(text || '').html();
+            }
+
+            $('#tf-flow-steps').on('click', '.btn-flow-approve-step', function() {
+                const id = $('#tf-approve-id').val();
+                if (!id) return;
+
+                const $btn = $(this).prop('disabled', true);
+
+                $.post(R.approveLocationStep.replace(':id', id))
+                    .done(res => {
+                        if (res.flow) {
+                            renderApproveFlowModal({
+                                flow: res.flow
+                            });
+                        }
+
+                        if (res.completed) {
+                            $('#modal-transfer-approve').modal('hide');
+                            Swal.fire('Approved', 'Movement location completed.', 'success');
+                        } else {
+                            Swal.fire('Approved', 'Step approved.', 'success');
+                        }
+
+                        $('#tbl-transfers-all').DataTable().ajax.reload(null, false);
                     })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Deleting…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.ajax({
-                                url: R.destroy(id),
-                                type: 'DELETE'
-                            }).done(() => {
-                                Swal.fire('Deleted', '', 'success');
-                                dt.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    .fail(x => {
+                        $btn.prop('disabled', false);
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
                     });
             });
 

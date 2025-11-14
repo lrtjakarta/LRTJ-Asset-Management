@@ -93,6 +93,7 @@
                                 <th class="min-w-200px">PIC</th>
                                 <th class="min-w-250px">Note</th>
                                 <th class="min-w-150px">Created At</th>
+                                <th class="min-w-150px">Action</th>
                             </tr>
                         </thead>
                     </table>
@@ -213,6 +214,13 @@
                     processResults: d => d
                 }
             });
+            
+            $.ajaxSetup({
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                }
+            });
+
 
             var tbl = $('#tbl-acq-global').DataTable({
                 processing: true,
@@ -292,6 +300,12 @@
                         data: 'created_at_fmt',
                         name: 'h.created_at'
                     },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false
+                    }
                 ]
             });
             $('#btnFilter').on('click', function(e) {
@@ -455,6 +469,31 @@
                         text: msg
                     });
                 }).always(() => setBusy(false));
+            });
+
+            $('#tbl-acq-global').on('click', '.btn-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Delete?',
+                    text: 'Moved to trash',
+                    icon: 'warning',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading()
+                    });
+                    $.ajax({
+                        url:'{{ route('acquisition.destroy', ':id') }}'.replace(':id', id),
+                        type: 'DELETE'
+                    }).done(() => {
+                        Swal.fire('Deleted', '', 'success');
+                        tbl.ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
         })();
     </script>

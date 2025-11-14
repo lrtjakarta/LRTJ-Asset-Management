@@ -179,6 +179,8 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:MOVEMENT,APR')->group(function () {
             Route::post('/approve/{uuid}', [TransferController::class, 'approve'])->name('approve');
             Route::post('/reject/{uuid}', [TransferController::class, 'reject'])->name('reject');
+            Route::post('/{uuid}/approve-location-step', [TransferController::class, 'approveLocationStep'])
+                ->name('approve-location-step');
         });
     });
 
@@ -243,6 +245,9 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:ACQUISITION,C,U')->group(function () {
             Route::post('{asset}',       [AcquisitionController::class, 'store'])->name('store');
             Route::post('/global/save',  [AcquisitionController::class, 'storeGlobal'])->name('global.save');
+        });
+        Route::middleware('role.action:ACQUISITION,D')->group(function () {
+            Route::delete('/{uuid}', [AcquisitionController::class, 'destroy'])->name('destroy');
         });
     });
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AssetDeprTransferRequest;
 use App\Models\Assets;
+use App\Models\AssetsValueHistory;
 use App\Models\Disposal;
 use App\Models\MasterAssetClass;
 use App\Models\MasterSumber;
@@ -136,6 +137,12 @@ class TrashController extends Controller
                 'model'      => AssetDeprTransferRequest::class,
                 'pk'         => 'uuid',
                 'label_col'  => 'transfer_code',
+            ],
+            'acquisition' => [
+                'table'      => 'assets_value_history',
+                'model'      => AssetsValueHistory::class,
+                'pk'         => 'uuid',
+                'label_col'  => 'acq_code',
             ],
         ];
     }
