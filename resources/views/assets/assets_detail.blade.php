@@ -1298,239 +1298,231 @@
             });
 
         })();
-    </script>
-    <script>
-        (function() {
-            const DS = {
-                data: '{{ route('disposal.data', $asset->uuid) }}',
-                create: '{{ route('disposal.store') }}',
-                show: '{{ route('disposal.show', ':id') }}',
-                update: '{{ route('disposal.update', ':id') }}',
-                destroy: '{{ route('disposal.destroy', ':id') }}',
-                approve: '{{ route('disposal.approve', ':id') }}', // simple approve (fallback, unused in flow)
-                reject: '{{ route('disposal.reject', ':id') }}',
-                approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
-                form: id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
+    </script>@push('scripts')
+<script>
+    (function () {
+        const DS = {
+            data:    '{{ route('disposal.data', $asset->uuid) }}',
+            create:  '{{ route('disposal.store') }}',
+            show:    '{{ route('disposal.show', ':id') }}',
+            update:  '{{ route('disposal.update', ':id') }}',
+            destroy: '{{ route('disposal.destroy', ':id') }}',
+            approve: '{{ route('disposal.approve', ':id') }}', // simple fallback (not used by buttons now)
+            reject:  '{{ route('disposal.reject', ':id') }}',
 
-                assets: '{{ route('assets.options') }}',
-                exportUrl: '{{ route('export.disposal') }}',
+            approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
+            formRoute:   id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
+            baRoute:     id => '{{ route('disposal.ba', ':id') }}'.replace(':id', id),
+        };
+
+        const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
+        const BA_URL_TPL   = @json(route('disposal.ba', '__UUID__'));
+
+        // ----------------------------
+        // Basic create / edit modal
+        // ----------------------------
+        $('#btnOpenDisposal').on('click', function (e) {
+            e.preventDefault();
+            resetDisposalForm();
+            $('#modal-disposal').modal('show');
+        });
+
+        function resetDisposalForm() {
+            $('#ds-edit-id').val('');
+            $('#ds-note').val('');
+            $('#ds-file').val('');
+            $('#ds-remove-file').val('0');
+            $('#ds-current-file').addClass('d-none');
+            $('#ds-current-file-link').attr('href', '#').text('');
+        }
+
+        $('#ds-btn-remove-file').off('click').on('click', function () {
+            $('#ds-remove-file').val('1');
+            $('#ds-current-file').addClass('d-none');
+        });
+
+        $('#formDisposal').off('submit').on('submit', function (e) {
+            e.preventDefault();
+
+            const isEdit = !!$('#ds-edit-id').val();
+            const id     = $('#ds-edit-id').val();
+            const fileEl = document.getElementById('ds-file');
+            const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+
+            const base = {
+                asset_uuid: '{{ $asset->uuid }}',
+                note: $('#ds-note').val() || '',
+                remove_file: $('#ds-remove-file').val() || 0,
             };
 
-            const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
-            const BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
-
-            // =========================================================
-            // BASIC CREATE / EDIT MODAL (modal-disposal)
-            // =========================================================
-            $('#btnOpenDisposal').on('click', function(e) {
-                e.preventDefault();
-                resetDisposalForm();
-                $('#modal-disposal').modal('show');
+            Swal.fire({
+                title: 'Saving…',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false
             });
 
-            function resetDisposalForm() {
-                $('#ds-edit-id').val('');
-                $('#ds-note').val('');
-                $('#ds-file').val('');
-                $('#ds-remove-file').val('0');
-                $('#ds-current-file').addClass('d-none');
-                $('#ds-current-file-link').attr('href', '#').text('');
+            let req;
+            if (hasFile) {
+                const fd = new FormData();
+                Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                fd.append('file', fileEl.files[0]);
+                if (isEdit) fd.append('_method', 'PUT');
+
+                req = $.ajax({
+                    url:  isEdit ? DS.update.replace(':id', id) : DS.create,
+                    type: 'POST',
+                    data: fd,
+                    processData: false,
+                    contentType: false
+                });
+            } else {
+                req = isEdit
+                    ? $.ajax({ url: DS.update.replace(':id', id), type: 'PUT', data: base })
+                    : $.post(DS.create, base);
             }
 
-            $('#ds-btn-remove-file').off('click').on('click', function() {
-                $('#ds-remove-file').val('1');
-                $('#ds-current-file').addClass('d-none');
+            req.done(() => {
+                $('#modal-disposal').modal('hide');
+                Swal.fire('Success', isEdit ? 'Disposal updated.' : 'Disposal created.', 'success');
+                $('#tbl-disposal').DataTable().ajax.reload(null, false);
+            }).fail(x => {
+                Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
             });
+        });
 
-            $('#formDisposal').off('submit').on('submit', function(e) {
-                e.preventDefault();
-
-                const isEdit = !!$('#ds-edit-id').val();
-                const id = $('#ds-edit-id').val();
-                const fileEl = document.getElementById('ds-file');
-                const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
-
-                const base = {
-                    asset_uuid: '{{ $asset->uuid }}',
-                    note: $('#ds-note').val() || '',
-                    remove_file: $('#ds-remove-file').val() || 0,
-                };
-
-                Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
-
-                let req;
-                if (hasFile) {
-                    const fd = new FormData();
-                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    fd.append('file', fileEl.files[0]);
-                    if (isEdit) fd.append('_method', 'PUT');
-
-                    req = $.ajax({
-                        url: isEdit ? DS.update.replace(':id', id) : DS.create,
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
-                    });
-                } else {
-                    req = isEdit ?
-                        $.ajax({
-                            url: DS.update.replace(':id', id),
-                            type: 'PUT',
-                            data: base
-                        }) :
-                        $.post(DS.create, base);
-                }
-
-                req.done(() => {
-                        $('#modal-disposal').modal('hide');
-                        Swal.fire('Success', isEdit ? 'Disposal updated.' : 'Disposal created.', 'success');
-                        $('#tbl-disposal').DataTable().ajax.reload(null, false);
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-            });
-
-            // =========================================================
-            // DISPOSAL HISTORY DATATABLE
-            // =========================================================
-            const dsTable = $('#tbl-disposal').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: {
-                    url: DS.data,
-                    type: 'GET'
+        // ----------------------------
+        // DataTable (asset history)
+        // ----------------------------
+        const dsTable = $('#tbl-disposal').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: DS.data,
+                type: 'GET'
+            },
+            order: [[7, 'desc']],
+            dom:
+                "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                "<'table-responsive'tr>" +
+                "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+            columns: [
+                { data: 'disposal_code', name: 'disposal_code' },
+                {
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    render: () => 'DISPOSAL'
                 },
-                order: [
-                    [7, 'desc']
-                ],
-                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
-                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
-                    "<'table-responsive'tr>" +
-                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
-                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
-                columns: [{
-                        data: 'disposal_code',
-                        name: 'disposal_code'
-                    },
-                    {
-                        data: null,
-                        orderable: false,
-                        searchable: false,
-                        render: () => 'DISPOSAL'
-                    },
-                    {
-                        data: 'pic_request_uid',
-                        name: 'pic_request_uid'
-                    },
-                    {
-                        data: 'pic_approve_uid',
-                        name: 'pic_approve_uid',
-                        defaultContent: ''
-                    },
-                    {
-                        data: 'note',
-                        name: 'note',
-                        render: d => d ? $('<div>').text(d).html() : ''
-                    },
-                    {
-                        data: 'workflow_label',
-                        name: 'workflow_label',
-                        render: (d, t, row) => {
-                            if (row.kode_status === 'APR')
-                                return `<span class="badge badge-light-primary">${d || ''}</span>`;
-                            if (row.kode_status === 'ACC')
-                                return `<span class="badge badge-light-success">${d || ''}</span>`;
-                            return `<span class="badge badge-light-danger">${d || ''}</span>`;
+                { data: 'pic_request_uid', name: 'pic_request_uid' },
+                {
+                    data: 'pic_approve_uid',
+                    name: 'pic_approve_uid',
+                    defaultContent: ''
+                },
+                {
+                    data: 'note',
+                    name: 'note',
+                    render: d => d ? $('<div>').text(d).html() : ''
+                },
+                {
+                    data: 'workflow_label',
+                    name: 'workflow_label',
+                    render: (d, t, row) => {
+                        if (row.kode_status === 'APR') {
+                            return `<span class="badge badge-light-primary">${d || ''}</span>`;
+                        } else if (row.kode_status === 'ACC') {
+                            return `<span class="badge badge-light-success">${d || ''}</span>`;
                         }
-                    },
-                    {
-                        data: 'file',
-                        name: 'file',
-                        orderable: false,
-                        searchable: false,
-                        defaultContent: ''
-                    },
-                    {
-                        data: 'updated_at',
-                        name: 'updated_at',
-                        render: (iso, type) => {
-                            if (!iso) return '';
-                            if (type === 'sort' || type === 'type') return iso;
-                            const d = new Date(iso);
-                            const dateStr = new Intl.DateTimeFormat('en-GB', {
-                                timeZone: 'Asia/Jakarta',
-                                day: '2-digit',
-                                month: 'long',
-                                year: 'numeric'
-                            }).format(d);
-                            const timeStr = new Intl.DateTimeFormat('en-GB', {
-                                timeZone: 'Asia/Jakarta',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                                hour12: false
-                            }).format(d);
-                            return `${dateStr} ${timeStr}`;
-                        }
-                    },
-                    {
-                        data: 'actions',
-                        name: 'actions',
-                        orderable: false,
-                        searchable: false
+                        return `<span class="badge badge-light-danger">${d || ''}</span>`;
                     }
-                ],
-                rowCallback: function(row, data) {
-                    const $actions = $('td:last', row);
-                    const $group = $actions.find('.btn-group');
-                    if (!$group.length) return;
-
-                    const formUrl = data.form_file_url && data.form_file_url.length ?
-                        data.form_file_url :
-                        FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
-
-                    const baUrl = data.ba_file_url && data.ba_file_url.length ?
-                        data.ba_file_url :
-                        BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
-
-                    if (!$group.find('.btn-ds-form').length) {
-                        const formBtnLabel = data.form_file_name || 'Form';
-                        const formBtn = `
-                        <button type="button"
-                            class="btn btn-light-info btn-sm btn-ds-form"
-                            onclick="window.open('${formUrl}','_blank')">
-                            ${escapeHtml(formBtnLabel)}
-                        </button>`;
-                        $group.prepend(formBtn);
+                },
+                {
+                    data: 'file',
+                    name: 'file',
+                    orderable: false,
+                    searchable: false,
+                    defaultContent: ''
+                },
+                {
+                    data: 'updated_at',
+                    name: 'updated_at',
+                    render: (iso, type) => {
+                        if (!iso) return '';
+                        if (type === 'sort' || type === 'type') return iso;
+                        const d = new Date(iso);
+                        const dateStr = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Jakarta',
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric'
+                        }).format(d);
+                        const timeStr = new Intl.DateTimeFormat('en-GB', {
+                            timeZone: 'Asia/Jakarta',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        }).format(d);
+                        return `${dateStr} ${timeStr}`;
                     }
-
-                    if (!$group.find('.btn-ds-ba').length && baUrl) {
-                        const baLabel = data.ba_file_name || 'BA';
-                        const baBtn = `
-                        <button type="button"
-                            class="btn btn-light-warning btn-sm btn-ds-ba"
-                            onclick="window.open('${baUrl}','_blank')">
-                            ${escapeHtml(baLabel)}
-                        </button>`;
-                        $group.prepend(baBtn);
-                    }
+                },
+                {
+                    data: 'actions',
+                    name: 'actions',
+                    orderable: false,
+                    searchable: false
                 }
-            });
+            ],
+            rowCallback: function (row, data) {
+                const $actions = $('td:last', row);
+                const $group   = $actions.find('.btn-group');
+                if (!$group.length) return;
 
-            // =========================================================
-            // SIMPLE EDIT / REJECT / DELETE HANDLERS
-            // =========================================================
+                const formUrl = data.form_file_url && data.form_file_url.length
+                    ? data.form_file_url
+                    : FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
 
-            // Edit Disposal (open basic modal)
-            $(document).on('click', '.btn-ds-edit', function() {
-                const id = $(this).data('id');
-                $.getJSON(DS.show.replace(':id', id), function(d) {
+                const baUrl = data.ba_file_url && data.ba_file_url.length
+                    ? data.ba_file_url
+                    : BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
+
+                if (!$group.find('.btn-ds-form').length) {
+                    const label = data.flow_file_name || 'Form';
+                    const btn = `
+                        <button type="button"
+                                class="btn btn-light-info btn-sm btn-ds-form"
+                                onclick="window.open('${formUrl}','_blank')">
+                            ${escapeHtml(label)}
+                        </button>`;
+                    $group.prepend(btn);
+                }
+
+                if (!$group.find('.btn-ds-ba').length) {
+                    const label = data.ba_file_name || 'BA';
+                    const btn = `
+                        <button type="button"
+                                class="btn btn-light-warning btn-sm btn-ds-ba"
+                                onclick="window.open('${baUrl}','_blank')">
+                            ${escapeHtml(label)}
+                        </button>`;
+                    $group.prepend(btn);
+                }
+            }
+        });
+
+        // ----------------------------
+        // Row actions (edit / reject / delete)
+        // ----------------------------
+        $(document).on('click', '.btn-ds-edit', function () {
+            const id = $(this).data('id');
+
+            $.getJSON(DS.show.replace(':id', id))
+                .done(d => {
                     resetDisposalForm();
                     $('#ds-edit-id').val(d.uuid);
                     $('#ds-note').val(d.note || '');
+
                     if (d.file_url) {
                         $('#ds-current-file-link')
                             .attr('href', d.file_url)
@@ -1541,310 +1533,289 @@
                         $('#ds-current-file').addClass('d-none');
                         $('#ds-remove-file').val('0');
                     }
+
                     $('#modal-disposal').modal('show');
+                })
+                .fail(() => {
+                    Swal.fire('Error', 'Cannot load disposal.', 'error');
                 });
-            });
+        });
 
-            // Reject Disposal
-            $(document).on('click', '.btn-ds-reject', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                    title: 'Reject?',
-                    icon: 'warning',
-                    showCancelButton: true
-                }).then(res => {
-                    if (!res.isConfirmed) return;
-                    Swal.fire({
-                        title: 'Updating…',
-                        didOpen: () => Swal.showLoading(),
-                        allowOutsideClick: false
-                    });
-                    $.post(DS.reject.replace(':id', id), {})
-                        .done(() => {
-                            Swal.fire('Rejected', 'Disposal rejected.', 'success');
-                            dsTable.ajax.reload(null, false);
-                        })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                });
-            });
-
-            // Delete Disposal
-            $(document).on('click', '.btn-ds-delete', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                    title: 'Delete?',
-                    text: 'Move to trash.',
-                    icon: 'warning',
-                    showCancelButton: true
-                }).then(res => {
-                    if (!res.isConfirmed) return;
-                    Swal.fire({
-                        title: 'Deleting…',
-                        didOpen: () => Swal.showLoading(),
-                        allowOutsideClick: false
-                    });
-                    $.ajax({
-                            url: DS.destroy.replace(':id', id),
-                            type: 'DELETE'
-                        })
-                        .done(() => {
-                            Swal.fire('Deleted', 'Disposal deleted.', 'success');
-                            dsTable.ajax.reload(null, false);
-                        })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                });
-            });
-
-            // =========================================================
-            // NEW APPROVAL FLOW MODAL (modal-disposal-flow)
-            // =========================================================
-
-            const $flowModal = $('#modal-disposal-flow');
-            const $flowSteps = $('#flow-steps');
-            const $flowBaInput = $('#flow-ba-file-input');
-            const $flowBaWrapper = $('#flow-wrap-ba-upload');
-            const $flowFormInput = $('#flow-form-file-input');
-            const $flowFormWrapper = $('#flow-wrap-form-upload');
-
-            const $flowAsset = $('#flow-asset');
-            const $flowCode = $('#flow-code');
-            const $flowStatus = $('#flow-status');
-            const $flowFormOut = $('#flow-form-file'); // span for form URL
-            const $flowBaOut = $('#flow-ba-file'); // span for BA URL
-
-            const $btnNextStep = $('#btn-flow-approve');
-
-            function resetFlowModal() {
-                $('#flow-disposal-id').val('');
-                if ($flowBaInput.length) $flowBaInput.val('');
-                if ($flowFormInput.length) $flowFormInput.val('');
-
-                if ($flowBaWrapper.length) $flowBaWrapper.addClass('d-none');
-                if ($flowFormWrapper.length) $flowFormWrapper.addClass('d-none');
-
-                if ($flowAsset.length) $flowAsset.text('');
-                if ($flowCode.length) $flowCode.text('');
-                if ($flowStatus.length) $flowStatus.text('');
-                if ($flowFormOut.length) $flowFormOut.html('—');
-                if ($flowBaOut.length) $flowBaOut.html('—');
-
-                $flowSteps.empty();
-                $flowModal.data('require-ba', false);
-            }
-
-            function renderFlowSteps(flow) {
-                $flowSteps.empty();
-                let steps = flow && Array.isArray(flow.steps) ? flow.steps : [];
-
-                if (!steps.length) {
-                    $flowSteps.append('<div class="text-muted">No flow defined.</div>');
-                    $flowModal.data('require-ba', false);
-                    return;
-                }
-
-                const firstPendingIndex = steps.findIndex(s => !s.approved_at);
-                const lastIndex = steps.length - 1;
-                const requireBa = (firstPendingIndex === lastIndex && firstPendingIndex !== -1);
-
-                $flowModal.data('require-ba', requireBa);
-
-                steps.forEach((step, idx) => {
-                    const approvedAt = step.approved_at;
-                    const approvedBy = step.approved_by;
-
-                    const statusBadge = approvedAt ?
-                        '<span class="badge badge-light-success">Approved</span>' :
-                        (idx === firstPendingIndex ?
-                            '<span class="badge badge-light-warning">Pending (Next)</span>' :
-                            '<span class="badge badge-light-secondary">Waiting</span>');
-
-                    const approverInfo = approvedAt ?
-                        `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
-                        '';
-
-                    $flowSteps.append(`
-                    <div class="border rounded p-3 mb-2">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
-                                <div class="small text-muted">${escapeHtml(step.role || '')}</div>
-                                ${approverInfo}
-                            </div>
-                            <div>${statusBadge}</div>
-                        </div>
-                    </div>
-                `);
-                });
-
-                // BA upload is required only on the final step
-                if ($flowBaWrapper.length) {
-                    if (requireBa) {
-                        $flowBaWrapper.removeClass('d-none');
-                    } else {
-                        $flowBaWrapper.addClass('d-none');
-                    }
-                }
-
-                // Form disposal upload is always optional → always show
-                if ($flowFormWrapper.length) {
-                    $flowFormWrapper.removeClass('d-none');
-                }
-            }
-
-            // Click Approve in disposal table → open flow modal
-            $(document).on('click', '.btn-ds-approve', function() {
-                const id = $(this).data('id');
-                if (!id) return;
-
-                resetFlowModal();
+        $(document).on('click', '.btn-ds-reject', function () {
+            const id = $(this).data('id');
+            Swal.fire({
+                title: 'Reject?',
+                icon: 'warning',
+                showCancelButton: true
+            }).then(res => {
+                if (!res.isConfirmed) return;
 
                 Swal.fire({
-                    title: 'Loading flow…',
+                    title: 'Updating…',
                     didOpen: () => Swal.showLoading(),
                     allowOutsideClick: false
                 });
 
-                $.getJSON(DS.show.replace(':id', id))
-                    .done(d => {
-                        $('#flow-disposal-id').val(id);
-                        $flowModal.data('disposal-id', id);
-
-                        // header info (safe even if keys are missing)
-                        if ($flowAsset.length) {
-                            $flowAsset.text(d.asset_label || d.asset_code || '{{ $asset->asset_code }}');
-                        }
-                        if ($flowCode.length) {
-                            $flowCode.text(d.disposal_code || '');
-                        }
-                        if ($flowStatus.length) {
-                            $flowStatus.text(d.workflow_label || d.kode_status || '');
-                        }
-
-                        // Form Disposal link
-                        if ($flowFormOut.length) {
-                            let html = '—';
-                            if (d.form_file_url) {
-                                html =
-                                    `<a href="${d.form_file_url}" target="_blank">${escapeHtml(d.form_file_name || 'Download Form')}</a>`;
-                            }
-                            $flowFormOut.html(html);
-                        }
-
-                        // BA link
-                        if ($flowBaOut.length) {
-                            let html = '—';
-                            if (d.ba_file_url) {
-                                html =
-                                    `<a href="${d.ba_file_url}" target="_blank">${escapeHtml(d.ba_file_name || 'Download BA')}</a>`;
-                            }
-                            $flowBaOut.html(html);
-                        }
-
-                        let flowData = d.flow || d.flow_json || null;
-                        if (typeof flowData === 'string') {
-                            try {
-                                flowData = JSON.parse(flowData);
-                            } catch (e) {
-                                flowData = null;
-                            }
-                        }
-                        renderFlowSteps(flowData || {});
-
-                        Swal.close();
-                        $flowModal.modal('show');
+                $.post(DS.reject.replace(':id', id))
+                    .done(() => {
+                        Swal.fire('Rejected', 'Disposal rejected.', 'success');
+                        dsTable.ajax.reload(null, false);
                     })
-                    .fail(() => {
-                        Swal.fire('Error', 'Cannot load disposal flow.', 'error');
+                    .fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
                     });
             });
+        });
 
-            // Approve NEXT step (with BA required on last step)
-            if ($btnNextStep.length) {
-                $btnNextStep.off('click').on('click', function(e) {
-                    e.preventDefault();
+        $(document).on('click', '.btn-ds-delete', function () {
+            const id = $(this).data('id');
+            Swal.fire({
+                title: 'Delete?',
+                text: 'Move to trash.',
+                icon: 'warning',
+                showCancelButton: true
+            }).then(res => {
+                if (!res.isConfirmed) return;
 
-                    const id = $('#flow-disposal-id').val();
-                    if (!id) return;
+                Swal.fire({
+                    title: 'Deleting…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
 
-                    const requireBa = !!$flowModal.data('require-ba');
-                    const baEl = $flowBaInput.length ? $flowBaInput[0] : null;
-                    const hasBa = baEl && baEl.files && baEl.files.length > 0;
+                $.ajax({
+                    url: DS.destroy.replace(':id', id),
+                    type: 'DELETE'
+                }).done(() => {
+                    Swal.fire('Deleted', 'Disposal deleted.', 'success');
+                    dsTable.ajax.reload(null, false);
+                }).fail(x => {
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                });
+            });
+        });
 
-                    if (requireBa && !hasBa) {
-                        Swal.fire('Required', 'Berita Acara must be uploaded on the last step.', 'warning');
-                        return;
+        // ----------------------------
+        // NEW: Approval Flow Modal
+        // ----------------------------
+        const $flowModal       = $('#modal-disposal-flow');
+        const $flowSteps       = $('#flow-steps');
+        const $flowBaInput     = $('#flow-ba-file-input');
+        const $flowFormInput   = $('#flow-form-file-input');
+        const $flowBaWrapper   = $('#flow-wrap-ba-upload');
+        const $flowFormWrapper = $('#flow-wrap-form-upload');
+        const $flowAsset       = $('#flow-asset');
+        const $flowCode        = $('#flow-code');
+        const $flowStatus      = $('#flow-status');
+        const $flowFormOut     = $('#flow-form-file');
+        const $flowBaOut       = $('#flow-ba-file');
+
+        function resetFlowModal() {
+            const form = document.getElementById('formDisposalFlow');
+            if (form) form.reset();
+
+            $('#flow-disposal-id').val('');
+
+            $flowSteps.empty();
+            $flowAsset.text('');
+            $flowCode.text('');
+            $flowStatus.text('');
+            $flowFormOut.html('—');
+            $flowBaOut.html('—');
+
+            if ($flowBaWrapper.length)   $flowBaWrapper.removeClass('d-none');
+            if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
+
+            $flowModal.data('require-ba', false);
+        }
+
+        function openDisposalFlow(id) {
+            if (!id) return;
+
+            resetFlowModal();
+            $('#flow-disposal-id').val(id);
+
+            Swal.fire({
+                title: 'Loading flow…',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false
+            });
+
+            $.getJSON(DS.show.replace(':id', id))
+                .done(d => {
+                    Swal.close();
+
+                    const assetLabel =
+                        ((d.asset_code || '') +
+                            (d.asset_name ? ' - ' + d.asset_name : '')) || d.asset_uuid || '';
+                    $flowAsset.text(assetLabel);
+                    $flowCode.text(d.disposal_code || '');
+                    $flowStatus.text(d.kode_status || '');
+
+                    // Form summary section
+                    if (d.flow_file_url) {
+                        $flowFormOut.html(
+                            `<a href="${d.flow_file_url}" target="_blank">${escapeHtml(d.flow_file_name || 'Download Form')}</a>`
+                        );
+                    } else {
+                        const url = FORM_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+                        $flowFormOut.html(
+                            `<a href="${url}" target="_blank">Download auto-filled form</a>`
+                        );
                     }
 
-                    const fd = new FormData($('#formDisposalFlow')[0]);
+                    // BA summary section
+                    if (d.ba_file_url) {
+                        $flowBaOut.html(
+                            `<a href="${d.ba_file_url}" target="_blank">${escapeHtml(d.ba_file_name || 'Download BA')}</a>`
+                        );
+                    } else {
+                        const url = BA_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+                        $flowBaOut.html(
+                            `<a href="${url}" target="_blank">Download auto-filled BA</a>`
+                        );
+                    }
 
-                    Swal.fire({
-                        title: 'Applying…',
-                        didOpen: () => Swal.showLoading(),
-                        allowOutsideClick: false
-                    });
-
-                    $.ajax({
-                            url: DS.approveStep(id),
-                            type: 'POST',
-                            data: fd,
-                            processData: false,
-                            contentType: false
-                        })
-                        .done(res => {
-                            if (res.flow) {
-                                let flowData = res.flow;
-                                if (typeof flowData === 'string') {
-                                    try {
-                                        flowData = JSON.parse(flowData);
-                                    } catch (e) {
-                                        flowData = null;
-                                    }
-                                }
-                                renderFlowSteps(flowData || {});
-                            }
-
-                            if (res.ba_file_url && $flowBaOut.length) {
-                                const html =
-                                    `<a href="${res.ba_file_url}" target="_blank">${escapeHtml(res.ba_file_name || 'Download BA')}</a>`;
-                                $flowBaOut.html(html);
-                            }
-
-                            if (res.form_file_url && $flowFormOut.length) {
-                                const html =
-                                    `<a href="${res.form_file_url}" target="_blank">${escapeHtml(res.form_file_name || 'Download Form')}</a>`;
-                                $flowFormOut.html(html);
-                            }
-
-                            if (res.completed) {
-                                $flowModal.modal('hide');
-                                Swal.fire({
-                                    title: 'Approved',
-                                    text: 'Disposal flow completed.',
-                                    icon: 'success',
-                                    showConfirmButton: false,
-                                    timer: 600,
-                                    timerProgressBar: true
-                                }).then(() => {
-                                    dsTable.ajax.reload(null, false);
-                                    location.reload();
-                                });
-                            } else {
-                                Swal.fire('Approved', 'Step approved.', 'success');
-                                dsTable.ajax.reload(null, false);
-                            }
-                        })
-                        .fail(x => {
-                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
-                        });
+                    let flow = d.flow;
+                    if (typeof flow === 'string') {
+                        try { flow = JSON.parse(flow); } catch (e) { flow = null; }
+                    }
+                    renderFlowSteps(flow || {});
+                    $flowModal.modal('show');
+                })
+                .fail(x => {
+                    Swal.fire('Error', x.responseJSON?.message || 'Cannot load flow', 'error');
                 });
+        }
+
+        function renderFlowSteps(flow) {
+            $flowSteps.empty();
+
+            const steps = Array.isArray(flow.steps) ? flow.steps : [];
+            if (!steps.length) {
+                $flowSteps.append('<div class="text-muted">No flow defined.</div>');
+                $flowModal.data('require-ba', false);
+                return;
             }
 
-            function escapeHtml(text) {
-                return $('<div/>').text(text || '').html();
+            const firstPendingIndex = steps.findIndex(s => !s.approved_at);
+            const lastIndex         = steps.length - 1;
+            const requireBa         = firstPendingIndex !== -1 && firstPendingIndex === lastIndex;
+
+            // BA required only on last step; both upload blocks are always visible
+            $flowModal.data('require-ba', requireBa);
+
+            if ($flowBaWrapper.length)   $flowBaWrapper.removeClass('d-none');
+            if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
+
+            steps.forEach((st, idx) => {
+                const isApproved = !!st.approved_at;
+                const isNext     = !isApproved && idx === firstPendingIndex;
+
+                const statusBadge = isApproved
+                    ? '<span class="badge badge-light-success">Approved</span>'
+                    : (isNext
+                        ? '<span class="badge badge-light-warning">Pending (Next)</span>'
+                        : '<span class="badge badge-light-secondary">Waiting</span>');
+
+                const info = isApproved
+                    ? `<div class="small text-muted">by ${escapeHtml(st.approved_by || '-')} at ${escapeHtml(st.approved_at || '')}</div>`
+                    : '';
+
+                const li = `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">${escapeHtml(st.label || st.code || '')}</div>
+                            <div class="text-muted small">${escapeHtml(st.role || '')}</div>
+                            ${info}
+                        </div>
+                        <div>${statusBadge}</div>
+                    </li>
+                `;
+                $flowSteps.append(li);
+            });
+        }
+
+        // open flow from table action
+        $(document).on('click', '.btn-ds-approve', function () {
+            const id = $(this).data('id');
+            openDisposalFlow(id);
+        });
+
+        // Approve next step (submit flow form)
+        $('#formDisposalFlow').off('submit').on('submit', function (e) {
+            e.preventDefault();
+
+            const id = $('#flow-disposal-id').val();
+            if (!id) return;
+
+            const requireBa = !!$flowModal.data('require-ba');
+            const baEl = $flowBaInput.length ? $flowBaInput[0] : null;
+            const hasBa = baEl && baEl.files && baEl.files.length > 0;
+
+            if (requireBa && !hasBa) {
+                Swal.fire('Required', 'Berita Acara must be uploaded on the last step.', 'warning');
+                return;
             }
 
-        })();
-    </script>
+            const fd = new FormData(this);
+
+            Swal.fire({
+                title: 'Approving…',
+                didOpen: () => Swal.showLoading(),
+                allowOutsideClick: false
+            });
+
+            $.ajax({
+                url: DS.approveStep(id),
+                type: 'POST',
+                data: fd,
+                processData: false,
+                contentType: false
+            }).done(res => {
+                Swal.close();
+
+                if (res.flow) {
+                    let flow = res.flow;
+                    if (typeof flow === 'string') {
+                        try { flow = JSON.parse(flow); } catch (e) { flow = null; }
+                    }
+                    renderFlowSteps(flow || {});
+                }
+
+                if (res.flow_file_url && $flowFormOut.length) {
+                    $flowFormOut.html(
+                        `<a href="${res.flow_file_url}" target="_blank">${escapeHtml(res.flow_file_name || 'Download Form')}</a>`
+                    );
+                }
+
+                if (res.ba_file_url && $flowBaOut.length) {
+                    $flowBaOut.html(
+                        `<a href="${res.ba_file_url}" target="_blank">${escapeHtml(res.ba_file_name || 'Download BA')}</a>`
+                    );
+                }
+
+                dsTable.ajax.reload(null, false);
+
+                if (res.completed || res.kode_status === 'ACC') {
+                    $('#modal-disposal-flow').modal('hide');
+                    Swal.fire('Approved', 'Disposal flow completed.', 'success')
+                        .then(() => { location.reload(); });
+                } else {
+                    Swal.fire('Approved', 'Step approved.', 'success');
+                }
+            }).fail(x => {
+                Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+            });
+        });
+
+        function escapeHtml(text) {
+            return $('<div/>').text(text || '').html();
+        }
+    })();
+</script>
+@endpush
+
 
     <script>
         (function() {
