@@ -23,6 +23,8 @@ class AssetsValue extends Model
         'total',
         'useful_life_month',
         'useful_life_year',
+        'actual_date',
+        'capitalization_date'
     ];
 
     protected $casts = [
@@ -35,6 +37,8 @@ class AssetsValue extends Model
         'useful_life_year'  => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'actual_date' => 'datetime',
+        'capitalization_date' => 'datetime',
     ];
 
     public function asset()   { return $this->belongsTo(Assets::class, 'asset_uuid'); }

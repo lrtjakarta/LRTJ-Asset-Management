@@ -263,6 +263,16 @@
                                     {{ is_null($asset->value?->total) ? '' : number_format($asset->value->total, 2) }}
                                 </dd>
 
+                                <dt class="col-sm-5">Acquisition Date</dt>
+                                <dd class="col-sm-7"> :
+                                    {{ is_null($asset->value?->actual_date) ? '' : $asset->value->actual_date->format('d F Y') }}
+                                </dd>
+
+                                <dt class="col-sm-5">Capitalization Date</dt>
+                                <dd class="col-sm-7"> :
+                                    {{ is_null($asset->value?->capitalization_date) ? '' : $asset->value->capitalization_date->format('d F Y') }}
+                                </dd>
+
                                 <dt class="col-sm-5">Useful Life</dt>
                                 <dd class="col-sm-7"> :
                                     {{ $asset->value?->useful_life_month }} Month(s)
@@ -667,6 +677,12 @@
                                     <option value="0">No</option>
                                 </select>
                             </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label required">Nilai Pajak (%)</label>
+                                <input type="number" class="form-control" id="nilai_pajak" name="nilai_pajak" value = "{{ ENV('NILAI_PAJAK') }}">
+                            </div>
+
                             <div class="col-md-4">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" name="actual_date" required>
@@ -739,7 +755,7 @@
                 transfers: '{{ route('transfer.data', $asset->uuid) }}',
                 create: '{{ route('transfer.store') }}',
                 show: id => '{{ route('transfer.show', ':id') }}'.replace(':id', id),
-                approveLocationStep: id => '{{ route('transfer.approve-location-step', ':id') }}'.replace(':id',
+                approveLocationStep: id => '{{ route('transfer.approve-step', ':id') }}'.replace(':id',
                     id),
             };
             const ROUTE = {
@@ -1714,8 +1730,10 @@
                         $('input[name="price"]').val(res.value.price ?? '');
                         $('input[name="useful_life_month"]').val(res.value.useful_life_month ?? '');
                         $('select[name="is_pajak"]').val((res.value.is_pajak ?? 0) ? '1' : '0');
-                        $('input[name="actual_date"]').val(res.value.actual_date ?? '');
-                        $('input[name="capitalization_date"]').val(res.value.capitalization_date ?? '');
+                        
+                        const today = new Date().toISOString().slice(0, 10);
+                        $('input[name="actual_date"]').val(res.value.actual_date ?? today);
+                        $('input[name="capitalization_date"]').val(res.value.capitalization_date ?? today);
 
                         const kode = res.value.kode_uom;
                         const text = res.value.uom_text ||
@@ -1762,6 +1780,7 @@
                     is_pajak: $('select[name="is_pajak"]').val(), // '0' or '1'
                     actual_date: $('input[name="actual_date"]').val(),
                     capitalization_date: $('input[name="capitalization_date"]').val(),
+                    nilai_pajak: $('input[name="nilai_pajak"]').val(),
                     note: $('textarea[name="note"]').val(),
                     _token: $('meta[name="csrf-token"]').attr('content')
                 };

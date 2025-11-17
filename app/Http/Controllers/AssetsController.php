@@ -55,7 +55,7 @@ class AssetsController extends Controller
             'assignment.owner',
             'assignment.user',
             'assignment.maintenance',
-            'value.uom',
+            'value',
             'documents',
             'assetClass',
             'status',

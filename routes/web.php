@@ -209,6 +209,18 @@ Route::middleware('ldap.session')->group(function () {
             ->name('approve')
             ->middleware('role.action:DISPOSAL,APR');
 
+        Route::post('/{uuid}/approve-step', [DisposalController::class, 'approveStep'])
+            ->name('approve-step')
+            ->middleware('role.action:DISPOSAL,APR');
+
+        Route::get('/{disposal}/form', [DisposalController::class, 'downloadForm'])
+            ->name('form')
+            ->middleware('role.action:DISPOSAL,C');
+        Route::get('/{disposal}/ba', [DisposalController::class, 'downloadBa'])
+            ->name('ba')
+            ->middleware('role.action:DISPOSAL,C');
+
+
         Route::post('/reject/{uuid}', [DisposalController::class, 'reject'])
             ->name('reject')
             ->middleware('role.action:DISPOSAL,APR');

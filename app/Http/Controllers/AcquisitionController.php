@@ -21,17 +21,30 @@ class AcquisitionController extends Controller
             return DataTables::of(collect())->toJson();
         }
 
-
         $user      = $request->user();
         $canDelete = $user && $user->hasAction('ACQUISITION', 'D');
 
-        $pic      = $request->input('pic');
-        $pajak    = $request->input('pajak');
-        $capFrom  = $request->input('cap_from');
-        $capTo    = $request->input('cap_to');
+        $pic       = $request->input('pic');
+        $pajak     = $request->input('pajak');
+        $capFrom   = $request->input('cap_from');
+        $capTo     = $request->input('cap_to');
         $assetLike = $request->input('asset');
 
+        // 1) Subquery: latest created_at per asset
+        $latestPerAsset = DB::table('assets_value_history')
+            ->select(
+                'asset_uuid',
+                DB::raw('MAX(created_at) AS max_created_at')
+            )
+            ->whereNull('deleted_at')
+            ->groupBy('asset_uuid');
+
+        // 2) Join main history with that subquery
         $q = DB::table('assets_value_history as h')
+            ->joinSub($latestPerAsset, 'lh', function ($join) {
+                $join->on('h.asset_uuid', '=', 'lh.asset_uuid')
+                    ->on('h.created_at', '=', 'lh.max_created_at');
+            })
             ->join('assets as a', 'a.uuid', '=', 'h.asset_uuid')
             ->select(
                 'h.uuid',
@@ -46,8 +59,9 @@ class AcquisitionController extends Controller
                 'a.description as asset_name',
             )
             ->whereNull('h.deleted_at')
-            ->orderByDesc('h.created_at');
+            ->orderByDesc('h.created_at'); // latest snapshot first
 
+        // 3) Apply filters on the *latest* row of each asset
         if ($pic) {
             $q->where('h.pic_request_uid', $pic);
         }
@@ -165,20 +179,19 @@ class AcquisitionController extends Controller
                     ->timezone('Asia/Jakarta')
                     ->format('d M Y H:i');
             })
-
             ->addColumn('actions', function ($r) use ($canDelete) {
                 $id      = e($r->uuid);
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($canDelete) {
                     $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
                 }
-
                 $btns .= '</div>';
                 return $btns;
             })
             ->rawColumns(['actions'])
             ->toJson();
     }
+
 
 
     private function parseDate(?string $v): ?string
@@ -211,6 +224,7 @@ class AcquisitionController extends Controller
             'actual_date'         => ['nullable', 'string'],
             'capitalization_date' => ['nullable', 'string'],
             'note'                => ['nullable', 'string', 'max:1000'],
+            'nilai_pajak'         => ['nullable', 'numeric', 'min:0'],
         ]);
 
         return $this->store($data['asset_uuid'], $request);
@@ -226,6 +240,7 @@ class AcquisitionController extends Controller
             'actual_date'         => ['nullable', 'string'],
             'capitalization_date' => ['nullable', 'string'],
             'note'                => ['nullable', 'string', 'max:1000'],
+            'nilai_pajak'         => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $existsUom = DB::table('master_uom')
@@ -234,14 +249,14 @@ class AcquisitionController extends Controller
             ->exists();
         abort_unless($existsUom, 422, 'Invalid UOM.');
 
-        $rate = (float) env('NILAI_PAJAK', 12) / 100;
+        $rate = (float) $data['nilai_pajak'] / 100;
 
         $qty       = (float) $data['quantity'];
         $price     = (float) $data['price'];
         $subtotal  = $qty * $price;
         $isPajak   = (bool) ($data['is_pajak'] ?? false);
-        $vat       = $isPajak ? round($subtotal * $rate, 2) : 0.0;
-        $total     = round($subtotal + $vat, 2);
+        $vat       = $isPajak ? round($price * $rate, 2) : 0.0;
+        $total     = round($price + $vat, 2);
 
         $values = [
             'quantity'          => (float) $data['quantity'],
@@ -333,21 +348,44 @@ class AcquisitionController extends Controller
 
     public function dataByAsset(string $assetUuid, Request $request)
     {
-
         if (!$this->canReadAcquisition()) {
             return DataTables::of(collect())->toJson();
         }
 
         $user      = $request->user();
         $canDelete = $user && $user->hasAction('ACQUISITION', 'D');
+
+        $latestByAcq = DB::table('assets_value_history')
+            ->select(
+                'asset_uuid',
+                'acq_code',
+                DB::raw('MAX(created_at) AS max_created_at')
+            )
+            ->whereNull('deleted_at')
+            ->where('asset_uuid', $assetUuid)
+            ->groupBy('asset_uuid', 'acq_code');
+
         $q = DB::table('assets_value_history as h')
+            ->joinSub($latestByAcq, 'lh', function ($join) {
+                $join->on('h.asset_uuid', '=', 'lh.asset_uuid')
+                    ->on('h.acq_code', '=', 'lh.acq_code')
+                    ->on('h.created_at', '=', 'lh.max_created_at');
+            })
             ->where('h.asset_uuid', $assetUuid)
             ->whereNull('h.deleted_at')
             ->orderByDesc('h.created_at')
-            ->select('h.before_payload', 'h.after_payload', 'h.note', 'h.pic_request_uid', 'h.created_at', 'h.acq_code', 'h.uuid');
+            ->select(
+                'h.before_payload',
+                'h.after_payload',
+                'h.note',
+                'h.pic_request_uid',
+                'h.created_at',
+                'h.acq_code',
+                'h.uuid'
+            );
 
-        $money = fn($v) => is_null($v) ? '—' : number_format((float)$v, 2);
-        $num   = fn($v) => is_null($v) ? '—' : rtrim(rtrim(number_format((float)$v, 4, '.', ''), '0'), '.');
+        $money = fn($v) => is_null($v) ? '—' : number_format((float) $v, 2);
+        $num   = fn($v) => is_null($v) ? '—' : rtrim(rtrim(number_format((float) $v, 4, '.', ''), '0'), '.');
         $dstr  = fn($v) => $v ? e(\Illuminate\Support\Str::of($v)->limit(32)) : '—';
 
         return datatables()->of($q)
@@ -379,17 +417,8 @@ class AcquisitionController extends Controller
                 $html .= $row('Useful Life (mo)', data_get($before, 'useful_life_month'), data_get($after, 'useful_life_month'), 'num');
                 $html .= $row('Useful Life (yr)', data_get($before, 'useful_life_year'),  data_get($after, 'useful_life_year'),  'num');
 
-                $html .= $row('Actual Date',       data_get($before, 'actual_date'),       data_get($after, 'actual_date'));
-                $html .= $row('Capitalization',    data_get($before, 'capitalization_date'), data_get($after, 'capitalization_date'));
-
-                $aqty = (float) (data_get($after, 'quantity') ?? 0);
-                $aprc = (float) (data_get($after, 'price') ?? 0);
-                $avat = (float) (data_get($after, 'vat_in') ?? 0);
-                $calc = $aqty > 0 || $aprc > 0 || $avat > 0;
-                // if ($calc) {
-                //     $calcStr = number_format($aqty, 2) . ' × ' . $money($aprc) . ' + ' . $money($avat) . ' = <span class="fw-bold">' . $money(($aqty * $aprc) + $avat) . '</span>';
-                //     $html .= "<div class='mt-1 text-muted fst-italic'>{$calcStr}</div>";
-                // }
+                $html .= $row('Actual Date',    data_get($before, 'actual_date'),        data_get($after, 'actual_date'));
+                $html .= $row('Capitalization', data_get($before, 'capitalization_date'), data_get($after, 'capitalization_date'));
 
                 $html .= "</div>";
                 return $html;
@@ -398,21 +427,19 @@ class AcquisitionController extends Controller
             ->addColumn('pic_request_uid', fn($r) => $r->pic_request_uid)
             ->addColumn('created_at', fn($r) => $r->created_at)
             ->addColumn('acq_code', fn($r) => $r->acq_code)
-
-
             ->addColumn('actions', function ($r) use ($canDelete) {
-                $id      = e($r->uuid);
+                $id   = e($r->uuid);
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($canDelete) {
                     $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
                 }
-
                 $btns .= '</div>';
                 return $btns;
             })
             ->rawColumns(['detail', 'actions'])
             ->toJson();
     }
+
 
     public function latest(string $assetUuid)
     {

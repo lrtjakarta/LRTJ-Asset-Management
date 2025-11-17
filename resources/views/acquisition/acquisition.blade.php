@@ -155,6 +155,11 @@
                             </div>
 
                             <div class="col-md-4">
+                                <label class="form-label required">Nilai Pajak (%)</label>
+                                <input type="number" class="form-control" id="nilai_pajak" name="nilai_pajak" value = "{{ ENV('NILAI_PAJAK') }}">
+                            </div>
+
+                            <div class="col-md-4">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="acq-actual-date" name="actual_date">
                             </div>
@@ -214,7 +219,7 @@
                     processResults: d => d
                 }
             });
-            
+
             $.ajaxSetup({
                 headers: {
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
@@ -379,8 +384,8 @@
                 $('#acq-price').val('');
                 $('#acq-life-month').val('');
                 $('#acq-is-pajak').val('0');
-                $('#acq-actual-date').val('');
-                $('#acq-cap-date').val('');
+                // $('#acq-actual-date').val('');
+                // $('#acq-cap-date').val('');
                 $('#acq-note').val('');
                 $('#acq-uom').val(null).trigger('change');
             }
@@ -421,6 +426,11 @@
                 $('#acq-asset-uuid').val('');
                 $('#acq-asset-select').val(null).trigger('change');
                 $('#acq-uom').val(null).trigger('change');
+
+                const today = new Date().toISOString().slice(0, 10);
+                $('#acq-actual-date').val(today);
+                $('#acq-cap-date').val(today);
+
                 clearFormValues();
                 $modal.show();
             });
@@ -487,7 +497,7 @@
                         didOpen: () => Swal.showLoading()
                     });
                     $.ajax({
-                        url:'{{ route('acquisition.destroy', ':id') }}'.replace(':id', id),
+                        url: '{{ route('acquisition.destroy', ':id') }}'.replace(':id', id),
                         type: 'DELETE'
                     }).done(() => {
                         Swal.fire('Deleted', '', 'success');

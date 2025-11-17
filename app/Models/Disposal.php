@@ -29,30 +29,66 @@ class Disposal extends Model
         'file_name',
         'file_mime',
         'file_size',
-        'before_status'
+        'before_status',
+        'flow_file_path',
+        'flow_file_name',
+        'flow_file_mime',
+        'flow_file_size',
+        'flow',
+        'ba_file_path',
+        'ba_file_name',
+        'ba_file_mime',
+        'ba_file_size',
     ];
 
     protected $casts = [
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',
+        'flow'       => 'array',
     ];
-    protected $appends = ['file_url'];
+    protected $appends = ['file_url', 'ba_file_url', 'flow_file_url'];
 
     public function getFileUrlAttribute(): ?string
     {
-        return $this->file_path ? Storage::disk('public')->url($this->file_path) : null;
+        return $this->file_path
+            ? Storage::disk('public')->url($this->file_path)
+            : null;
     }
 
+    public function getBaFileUrlAttribute(): ?string
+    {
+        return $this->ba_file_path
+            ? Storage::disk('public')->url($this->ba_file_path)
+            : null;
+    }
+    public function getFlowFileUrlAttribute(): ?string
+    {
+        return $this->flow_file_path
+            ? Storage::disk('public')->url($this->flow_file_path)
+            : null;
+    }
     protected static function booted(): void
     {
         static::creating(function (self $m) {
-            if (! $m->uuid) $m->uuid = (string) Str::uuid();
+            if (!$m->uuid) {
+                $m->uuid = (string) Str::uuid();
+            }
         });
+
         static::forceDeleted(function (self $t) {
-            if ($t->file_path) Storage::disk('public')->delete($t->file_path);
+            if ($t->file_path) {
+                Storage::disk('public')->delete($t->file_path);
+            }
+            if ($t->ba_file_path) {
+                Storage::disk('public')->delete($t->ba_file_path);
+            }
+            if ($t->flow_file_path) {
+                Storage::disk('public')->delete($t->flow_file_path);
+            }
         });
     }
+
     public function getRouteKeyName()
     {
         return 'uuid';
@@ -62,10 +98,12 @@ class Disposal extends Model
     {
         return $this->belongsTo(Assets::class, 'asset_uuid', 'uuid');
     }
+
     public function status()
     {
         return $this->belongsTo(MasterStatus::class, 'kode_status', 'kode');
     }
+
     public function target()
     {
         return $this->belongsTo(MasterStatus::class, 'target_status', 'kode');

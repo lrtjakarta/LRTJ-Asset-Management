@@ -12,6 +12,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.9",
         "phpoffice/phpspreadsheet": "^5.1",
+        "phpoffice/phpword": "^1.4",
         "predis/predis": "^3.2",
         "simplesoftwareio/simple-qrcode": "*",
         "yajra/laravel-datatables-oracle": "11.0"

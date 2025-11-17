@@ -13,6 +13,8 @@ use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Yajra\DataTables\Facades\DataTables;
 use Carbon\Carbon;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpWord\TemplateProcessor;
 
 class DisposalController extends Controller
 {
@@ -24,6 +26,7 @@ class DisposalController extends Controller
 
     public function index()
     {
+        // KEEP: using type = 'Transfer' (your original behavior)
         $workflows = MasterStatus::query()
             ->where('type', 'Transfer')
             ->orderBy('kode')
@@ -99,6 +102,9 @@ class DisposalController extends Controller
             'file_mime'       => $mime,
             'file_size'       => $size,
             'before_status'   => $asset->kode_status,
+
+            // NEW: initial flow (User -> Dept Head -> Asset Mgt)
+            'flow'            => $this->buildFlowTemplate($uid),
         ]);
 
         return response()->json([
@@ -111,15 +117,36 @@ class DisposalController extends Controller
     public function show(string $uuid)
     {
         $d = Disposal::with(['asset'])->findOrFail($uuid);
+
+        // NEW: normalize flow for frontend (optional, backward-compatible)
+        $flow = $d->flow ?? null;
+        if (is_string($flow) && $flow !== '') {
+            $decoded = json_decode($flow, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flow = $decoded;
+            } else {
+                $flow = null;
+            }
+        }
+        if (!$flow) {
+            // If you open old record without flow, build default one (do NOT change kode_status here)
+            $flow = $this->buildFlowTemplate($d->pic_request_uid ?? null);
+        }
+
         return response()->json([
-            'uuid' => $d->uuid,
-            'asset_uuid' => $d->asset_uuid,
-            'asset_code' => $d->asset?->asset_code,
-            'note' => $d->note,
+            'uuid'          => $d->uuid,
+            'asset_uuid'    => $d->asset_uuid,
+            'asset_code'    => $d->asset?->asset_code,
+            'note'          => $d->note,
             'target_status' => $d->target_status,
-            'kode_status' => $d->kode_status,
-            'file_url'    => $d->file_url,
-            'file_name'    => $d->file_name,
+            'kode_status'   => $d->kode_status,
+            'file_url'      => $d->file_url,
+            'file_name'     => $d->file_name,
+
+            // NEW extra info for flow UI (safe even if columns not there yet)
+            'ba_file_url'   => $d->ba_file_url ?? null,
+            'ba_file_name'  => $d->ba_file_name ?? null,
+            'flow'          => $flow,
         ]);
     }
 
@@ -239,13 +266,41 @@ class DisposalController extends Controller
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
             ->addColumn('target_label',   fn($t) => $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status)
             ->addColumn('file', function ($r) {
-                if (!$r->file_path) return '';
+                $btns = [];
 
-                $url  = url('storage/' . ltrim($r->file_path, '/'));
-                $name = $r->file_name ?: 'Attachment';
+                // 1) Original attachment from create/edit
+                if ($r->file_url) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="%s">%s</a>',
+                        e($r->file_url),
+                        e($r->file_name ?: 'Attachment')
+                    );
+                }
 
-                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                // 2) Uploaded Form Disposal (only if there is an uploaded file)
+                if (!empty($r->flow_file_url)) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-info me-1" target="_blank" href="%s">%s</a>',
+                        e($r->flow_file_url),
+                        e($r->flow_file_name ?: 'Form Disposal')
+                    );
+                }
+
+                // 3) Uploaded Berita Acara (only if there is an uploaded file)
+                if (!empty($r->ba_file_url)) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-warning" target="_blank" href="%s">%s</a>',
+                        e($r->ba_file_url),
+                        e($r->ba_file_name ?: 'Berita Acara')
+                    );
+                }
+
+                // If no file at all → return empty string so the column looks empty
+                return $btns ? implode(' ', $btns) : '';
             })
+
+
+
             ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
                 $pending = $t->kode_status === 'APR';
                 $btns = '<div class="btn-group btn-group-sm">';
@@ -330,11 +385,40 @@ class DisposalController extends Controller
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
             ->addColumn('target_label',   fn($t) => $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status)
             ->addColumn('file', function ($r) {
-                if (!$r->file_path) return '';
-                $url  = url('storage/' . ltrim($r->file_path, '/'));
-                $name = $r->file_name ?: 'Attachment';
-                return '<a class="btn btn-sm btn-light-primary" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                $btns = [];
+
+                // 1) Original attachment from create/edit
+                if ($r->file_url) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="%s">%s</a>',
+                        e($r->file_url),
+                        e($r->file_name ?: 'Attachment')
+                    );
+                }
+
+                // 2) Uploaded Form Disposal (only if there is an uploaded file)
+                if (!empty($r->flow_file_url)) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-info me-1" target="_blank" href="%s">%s</a>',
+                        e($r->flow_file_url),
+                        e($r->flow_file_name ?: 'Form Disposal')
+                    );
+                }
+
+                // 3) Uploaded Berita Acara (only if there is an uploaded file)
+                if (!empty($r->ba_file_url)) {
+                    $btns[] = sprintf(
+                        '<a class="btn btn-sm btn-light-warning" target="_blank" href="%s">%s</a>',
+                        e($r->ba_file_url),
+                        e($r->ba_file_name ?: 'Berita Acara')
+                    );
+                }
+
+                // If no file at all → return empty string so the column looks empty
+                return $btns ? implode(' ', $btns) : '';
             })
+
+
             ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
                 $pending = $t->kode_status === 'APR';
                 $btns = '<div class="btn-group btn-group-sm">';
@@ -376,5 +460,335 @@ class DisposalController extends Controller
         }
 
         return [$path, $file->getClientOriginalName(), $file->getClientMimeType(), $file->getSize()];
+    }
+
+    /* ======================================================================
+     |  NEW: FLOW APPROVAL STEP (User -> Dept.Head -> Asset Mgt + BA upload)
+     | ======================================================================*/
+
+    public function approveStep(Request $request, string $uuid)
+    {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'APR'), 403);
+
+        $uid = auth()->user()?->name;
+        abort_if(!$uid, 401, 'No session UID.');
+
+        return DB::transaction(function () use ($uuid, $uid, $request) {
+            $d = Disposal::where('uuid', $uuid)->lockForUpdate()->firstOrFail();
+            abort_if($d->kode_status !== 'APR', 422, 'Only pending disposals can be approved.');
+
+            $flow = $d->flow ?? null;
+            if (is_string($flow) && $flow !== '') {
+                $decoded = json_decode($flow, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $flow = $decoded;
+                } else {
+                    $flow = null;
+                }
+            }
+            if (!$flow) {
+                $flow = $this->buildFlowTemplate($d->pic_request_uid ?: $uid);
+            }
+
+            $idx = $this->getNextPendingFlowIndex($flow);
+            abort_if($idx === null, 422, 'All steps already approved.');
+
+            $step     = &$flow['steps'][$idx];
+            $stepCode = $step['code'] ?? null;
+            $now      = now()->toDateTimeString();
+            $isLast   = ($idx === count($flow['steps']) - 1);
+
+            if ($isLast && $stepCode === 'asset_mgt') {
+                $request->validate([
+                    'ba_file'   => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,bmp', 'max:20480'],
+                    'flow_file' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,bmp', 'max:20480'],
+                ]);
+
+                // Save BA
+                [$baPath, $baOrig, $baMime, $baSize] = $this->saveBaUpload(
+                    $request->file('ba_file'),
+                    $d,
+                    $d->disposal_code
+                );
+
+                $d->ba_file_path = $baPath;
+                $d->ba_file_name = $baOrig;
+                $d->ba_file_mime = $baMime;
+                $d->ba_file_size = $baSize;
+
+                if ($request->hasFile('flow_file')) {
+                    [$formPath, $formOrig, $formMime, $formSize] = $this->saveFormUpload(
+                        $request->file('flow_file'),
+                        $d,
+                        $d->disposal_code
+                    );
+
+                    $d->flow_file_path = $formPath;
+                    $d->flow_file_name = $formOrig;
+                    $d->flow_file_mime = $formMime;
+                    $d->flow_file_size = $formSize;
+                }
+
+                Assets::where('uuid', $d->asset_uuid)->update([
+                    'kode_status' => $d->target_status,
+                ]);
+
+                $d->kode_status     = 'ACC';
+                $d->pic_approve_uid = $uid;
+            }
+
+            $step['approved_by'] = $uid;
+            $step['approved_at'] = $now;
+
+            $d->flow = $flow;
+            $d->save();
+
+            return response()->json([
+                'ok'          => true,
+                'id'          => $d->uuid,
+                'kode_status' => $d->kode_status,
+                'flow'        => $flow,
+                'ba_file_url' => $d->ba_file_url ?? null,
+            ]);
+        });
+    }
+    private function saveFormUpload(UploadedFile $file, Disposal $d, string $code): array
+    {
+        $disk = 'public';
+        $dir  = 'disposals_form/' . $d->asset_uuid;
+        $ext  = $file->getClientOriginalExtension();
+        $name = $code . '-form-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+
+        $path = $file->storeAs($dir, $name, $disk);
+
+        if ($d->flow_file_path) {
+            Storage::disk($disk)->delete($d->flow_file_path);
+        }
+
+        return [
+            $path,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            $file->getSize(),
+        ];
+    }
+
+    /* ======================================================================
+     |  NEW: DOWNLOAD EXCEL "FORM DISPOSAL ASET TETAP" (auto-fill)
+     | ======================================================================*/
+
+    public function downloadForm(Request $request, Disposal $disposal)
+    {
+        abort_unless($this->canReadDisposal(), 403);
+
+        $disposal->load([
+            'asset.value',
+            'asset.location',
+            'asset.assignment.owner.division',
+        ]);
+
+        $asset    = $disposal->asset;
+        $assign   = $asset?->assignment;
+        $owner    = $assign?->owner;
+        $ownerDiv = $owner?->division;
+
+        $createdAt   = $disposal->created_at?->timezone('Asia/Jakarta');
+        $companyName = config('app.company_name', 'PT LRT Jakarta');
+
+        $deptLabel = $owner?->department ?: '';
+        $divLabel  = $ownerDiv?->name ?? '';
+
+        $assetCode = $asset?->asset_code ?? '';
+        $assetName = $asset?->asset_name ?? $asset?->description ?? '';
+
+        $acqDate = null;
+        if ($asset?->value?->actual_date) {
+            $acqDate = $asset->value->actual_date instanceof \Carbon\Carbon
+                ? $asset->value->actual_date
+                : \Carbon\Carbon::parse($asset->value->actual_date);
+        }
+
+        $comCost = $asset?->value?->total ?? 0;
+
+        $ledger = DB::table('assets_depr_ledger_monthly')
+            ->selectRaw('COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
+            ->where('asset_uuid', $asset?->uuid)
+            ->first();
+
+        $comAcc = $ledger?->acc_sum ?? 0; // Commercial Accumulated Depreciation (IDR)
+        $comNbv = $ledger?->nbv_sum ?? 0; // Commercial Net Book Value (IDR)
+
+        $taxNbv = $asset?->value?->tax_nbv ?? 0;
+
+        $justification = $disposal->note ?? '';
+
+        $templatePath = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
+        $spreadsheet  = IOFactory::load($templatePath);
+        $sheet        = $spreadsheet->getSheetByName('Form Disposal Aset Tetap')
+            ?: $spreadsheet->getActiveSheet();
+
+        $sheet->setCellValue('H7',  $companyName);
+        $sheet->setCellValue('H8',  $disposal->disposal_code ?? '');
+        $sheet->setCellValue('H9',  $createdAt ? $createdAt->format('d-m-Y') : '');
+        $sheet->setCellValue('H10', $deptLabel);
+        $sheet->setCellValue('H11', $divLabel);
+
+        $sheet->setCellValue('H14', '');
+
+        $sheet->setCellValue('H15', $assetCode);
+        $sheet->setCellValue('H16', $assetName);
+        $sheet->setCellValue('H17', $acqDate ? $acqDate->format('d-m-Y') : '');
+
+        $sheet->setCellValue('H18', $comCost); // Commercial Acquisition Cost (IDR)
+        $sheet->setCellValue('H19', $comAcc);  // Commercial Accumulated Depreciation (IDR)
+        $sheet->setCellValue('H20', $comNbv);  // Commercial Net Book Value (IDR)
+        $sheet->setCellValue('H21', $taxNbv);  // Tax Net Book Value (IDR)
+
+        $sheet->setCellValue('H22', '');
+        $sheet->setCellValue('H23', '');
+
+        $sheet->setCellValue('H24', $justification);
+
+        $fileName = 'Form Disposal Aset Tetap - ' . ($disposal->disposal_code ?? 'DSP') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+
+    /* ======================================================================
+     |  NEW: FLOW + FILE HELPERS
+     | ======================================================================*/
+
+    /**
+     * Build default disposal flow:
+     * 1. Create (User Departemen)
+     * 2. Approval Dept.Head / Section
+     * 3. Pelaksanaan & BA Disposal (Asset Management)
+     */
+    protected function buildFlowTemplate(?string $creatorName = null): array
+    {
+        $now = now()->toDateTimeString();
+
+        return [
+            'key'   => 'disposal_request',
+            'steps' => [
+                [
+                    'code'        => 'create',
+                    'label'       => 'Create Disposal Request',
+                    'role'        => 'User Departemen',
+                    'approved_by' => $creatorName,
+                    'approved_at' => $creatorName ? $now : null,
+                ],
+                [
+                    'code'        => 'dept_head',
+                    'label'       => 'Approval Dept.Head / Section',
+                    'role'        => 'Dept.Head / Section',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'asset_mgt',
+                    'label'       => 'Pelaksanaan & BA Disposal (Asset Management)',
+                    'role'        => 'Asset Management',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+            ],
+        ];
+    }
+
+    protected function getNextPendingFlowIndex(?array $flow): ?int
+    {
+        if (!is_array($flow) || !isset($flow['steps']) || !is_array($flow['steps'])) {
+            return null;
+        }
+        foreach ($flow['steps'] as $i => $step) {
+            if (empty($step['approved_at'])) {
+                return $i;
+            }
+        }
+        return null;
+    }
+
+    private function saveBaUpload(UploadedFile $file, Disposal $d, string $code): array
+    {
+        $disk = 'public';
+        $dir  = 'disposals_ba/' . $d->asset_uuid;
+        $ext  = $file->getClientOriginalExtension();
+        $name = $code . '-ba-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+
+        $path = $file->storeAs($dir, $name, $disk);
+
+        if ($d->ba_file_path) {
+            Storage::disk($disk)->delete($d->ba_file_path);
+        }
+
+        return [
+            $path,
+            $file->getClientOriginalName(),
+            $file->getClientMimeType(),
+            $file->getSize(),
+        ];
+    }
+
+    public function downloadBa(Request $request, Disposal $disposal)
+    {
+        abort_unless($this->canReadDisposal(), 403);
+
+        $disposal->load([
+            'asset.location',
+            'asset.assignment.owner',
+        ]);
+
+        $asset    = $disposal->asset;
+        $location = $asset?->location;
+        $owner    = $asset?->assignment?->owner;
+
+        $assetName   = $asset?->asset_name ?? $asset?->description ?? '';
+        $assetCode   = $asset?->asset_code ?? '';
+        $formNumber  = $disposal->disposal_code ?? '';
+        $locationLbl = $location
+            ? trim(($location->kode ?? '') . ' ' . ($location->name ?? ''))
+            : '';
+
+        $keterangan  = $disposal->note ?? '';
+
+        // tanggal BA: pakai updated_at jika sudah ACC, kalau tidak pakai now()
+        $date = $disposal->updated_at
+            ? $disposal->updated_at->copy()->timezone('Asia/Jakarta')
+            : now('Asia/Jakarta');
+
+        Carbon::setLocale('id'); // so translatedFormat uses Indonesian
+
+        $hari   = $date->translatedFormat('l');        // Senin, Selasa, ...
+        $tglBT  = $date->translatedFormat('d F Y');    // 17 November 2025
+
+        $templatePath = storage_path('app/public/template/berita_acara_disposal_asset_tetap.docx');
+        $template     = new TemplateProcessor($templatePath);
+
+        // these KEYS must match the placeholders inside the DOCX (without ${})
+        $template->setValues([
+            'HARI'                     => $hari,
+            'TANGGAL_BULAN_TAHUN'      => $tglBT,
+            'TANGGAL_BULAN_TAHUN_FOOTER' => $tglBT,
+            'NAMA_ASET'                => $assetName,
+            'NOMOR_ASET'               => $assetCode,
+            'NOMOR_FORM'               => $formNumber,
+            'LOKASI'                   => $locationLbl,
+            'KETERANGAN'               => $keterangan,
+        ]);
+
+        $fileName = 'BA Disposal - ' . ($disposal->disposal_code ?? 'DSP') . '.docx';
+
+        return response()->streamDownload(function () use ($template) {
+            $template->saveAs('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ]);
     }
 }

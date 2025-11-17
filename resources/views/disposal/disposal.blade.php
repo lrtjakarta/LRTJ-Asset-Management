@@ -226,6 +226,65 @@
             </div>
         </div>
     </div>
+
+    {{-- NEW: Flow / Approval / BA Upload Modal --}}
+    <div class="modal fade" id="modal-disposal-flow" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formDisposalFlow" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" id="flow-disposal-id" name="uuid" value="">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Disposal Approval Flow</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="mb-4">
+                            <div><strong>Asset:</strong> <span id="flow-asset"></span></div>
+                            <div><strong>Transaction:</strong> <span id="flow-code"></span></div>
+                            <div><strong>Status:</strong> <span id="flow-status"></span></div>
+                            <div class="mt-2">
+                                <strong>Form Disposal:</strong>
+                                <span id="flow-form-file"></span>
+                            </div>
+                            <div class="mt-2">
+                                <strong>Berita Acara:</strong>
+                                <span id="flow-ba-file"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Flow Steps</label>
+                            <ul class="list-group" id="flow-steps"></ul>
+                        </div>
+
+                        <div class="mb-4 d-none" id="flow-wrap-ba-upload">
+                            <label class="form-label">Upload Berita Acara Disposal</label>
+                            <input type="file" name="ba_file" id="flow-ba-file-input" class="form-control"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.bmp">
+                            <div class="form-text">Required on final step by Asset Management.</div>
+                        </div>
+                        <div class="mb-4 d-none" id="flow-wrap-form-upload">
+                            <label class="form-label">Upload Form Disposal</label>
+                            <input type="file" name="flow_file" id="flow-form-file-input" class="form-control"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.bmp">
+                            <div class="form-text">Optional: upload signed / scanned form disposal.</div>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-danger" id="btn-flow-approve">
+                            Approve Next Step
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -240,6 +299,10 @@
                 assetBrief: id => '{{ route('assets.brief', ':id') }}'.replace(':id', id),
                 approve: id => '{{ route('disposal.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
+
+                // NEW
+                approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
+                form: id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
 
                 assets: '{{ route('assets.options') }}',
                 exportUrl: '{{ route('export.disposal') }}',
@@ -316,6 +379,7 @@
                 $('#ds-asset').empty();
                 initSelect2('#ds-asset', R.assets);
                 $('#ds-asset').prop('disabled', false);
+                clearSnapshot();
             }
 
             $('#btnOpenCreate').on('click', function(e) {
@@ -349,7 +413,8 @@
             }
 
             function clearSnapshot() {
-                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location').text('');
+                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life')
+                    .text('');
                 $('#ds-asset-snapshot').addClass('d-none');
             }
 
@@ -364,7 +429,10 @@
             }
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
-            
+            const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
+            const BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
+
+
             const urlParams = new URLSearchParams(window.location.search);
             const statusFromUrl = urlParams.get('status');
             if (statusFromUrl) {
@@ -472,7 +540,46 @@
                         orderable: false,
                         searchable: false
                     }
-                ]
+                ],
+                rowCallback: function(row, data) {
+                    const $actions = $('td:last', row);
+                    const $group = $actions.find('.btn-group');
+
+                    if (!$group.length) return;
+
+                    const formUrl = (data.form_file_url && data.form_file_url.length) ?
+                        data.form_file_url :
+                        FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
+
+                    const baUrl = (data.ba_file_url && data.ba_file_url.length) ?
+                        data.ba_file_url :
+                        BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
+
+                    const formBtn = `
+        <button type="button"
+           class="btn btn-light-info btn-sm btn-ds-form"
+           onclick="window.open('${formUrl}','_blank')">
+           Form
+        </button>
+    `;
+
+                    const baBtn = `
+        <button type="button"
+           class="btn btn-light-warning btn-sm btn-ds-ba"
+           onclick="window.open('${baUrl}','_blank')">
+           BA
+        </button>
+    `;
+
+                    if (!$group.find('.btn-ds-form').length) {
+                        $group.prepend(formBtn);
+                    }
+                    if (!$group.find('.btn-ds-ba').length) {
+                        $group.prepend(baBtn);
+                    }
+                }
+
+
             });
             $('#ds-btn-apply').on('click', function(e) {
                 e.preventDefault();
@@ -597,6 +704,11 @@
                         $('#ds-current-file').addClass('d-none');
                         $('#ds-remove-file').val('0');
                     }
+
+                    // also fetch snapshot
+                    if (d.asset_uuid) {
+                        fetchAssetSnapshot(d.asset_uuid);
+                    }
                 }).fail(() => {
                     Swal.fire('Error', 'Cannot load disposal', 'error');
                     $('#ds-edit-id').val('');
@@ -604,26 +716,10 @@
                 });
             });
 
+            // Replace old direct approve with FLOW-based approval
             $('#tbl-disposals-all').on('click', '.btn-ds-approve', function() {
                 const id = $(this).data('id');
-                Swal.fire({
-                        title: 'Approve?',
-                        icon: 'question',
-                        showCancelButton: true,
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6'
-                    })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Applying…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.post(R.approve(id)).done(() => {
-                            Swal.fire('Approved', '', 'success');
-                            dt.ajax.reload(null, false);
-                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                    });
+                openDisposalFlow(id);
             });
 
             $('#tbl-disposals-all').on('click', '.btn-ds-reject', function() {
@@ -674,6 +770,145 @@
                             })
                             .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
+            });
+
+            // ===============================
+            // NEW: FLOW MODAL JS
+            // ===============================
+
+            function openDisposalFlow(id) {
+                $('#formDisposalFlow')[0].reset();
+                $('#flow-steps').empty();
+                $('#flow-wrap-ba-upload').addClass('d-none');
+                $('#flow-wrap-form-upload').addClass('d-none');
+                $('#flow-disposal-id').val(id);
+                $('#flow-form-file').html('');
+                $('#flow-ba-file').html('');
+                $('#flow-asset').text('');
+                $('#flow-code').text('');
+                $('#flow-status').text('');
+
+                Swal.fire({
+                    title: 'Loading flow…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.getJSON(R.show.replace(':id', id))
+                    .done(function(d) {
+                        Swal.close();
+                        $('#flow-asset').text(((d.asset_code || '') + (d.asset_name ? (' - ' + d.asset_name) :
+                            '')) || d.asset_uuid);
+                        $('#flow-code').text(d.disposal_code || '');
+                        $('#flow-status').text(d.kode_status || '');
+                        const formDownloadUrl = FORM_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+                        const baDownloadUrl = BA_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+
+                        if (d.flow_file_url) {
+                            $('#flow-form-file').html(
+                                `<a href="${d.flow_file_url}" target="_blank">${d.flow_file_name || 'Download Form'}</a>`
+                            );
+                        } else {
+                            $('#flow-form-file').html(
+                                `<a href="${formDownloadUrl}" target="_blank">Download auto-filled form</a>`
+                            );
+                        }
+
+                        if (d.ba_file_url) {
+                            $('#flow-ba-file').html(
+                                `<a href="${d.ba_file_url}" target="_blank">${d.ba_file_name || 'Download BA'}</a>`
+                            );
+                        } else {
+                            $('#flow-ba-file').html(
+                                `<a href="${baDownloadUrl}" target="_blank">Download auto-filled BA</a>`
+                            );
+                        }
+
+                        renderFlowSteps(d.flow);
+                        $('#modal-disposal-flow').modal('show');
+                    })
+                    .fail(function(x) {
+                        Swal.fire('Error', x.responseJSON?.message || 'Cannot load flow', 'error');
+                    });
+            }
+
+            function renderFlowSteps(flow) {
+                $('#flow-steps').empty();
+                $('#flow-wrap-ba-upload').addClass('d-none');
+                if (!flow || !flow.steps) return;
+
+                let pendingIndex = null;
+                flow.steps.forEach(function(st, idx) {
+                    if (!st.approved_at && pendingIndex === null) {
+                        pendingIndex = idx;
+                    }
+                });
+
+                flow.steps.forEach(function(st, idx) {
+                    let li = $(
+                        '<li class="list-group-item d-flex justify-content-between align-items-center"></li>'
+                    );
+                    let left = $('<div></div>');
+                    let right = $('<div class="text-end"></div>');
+
+                    left.append('<div class="fw-bold">' + (st.label || st.code || '') + '</div>');
+                    left.append('<div class="text-muted small">' + (st.role || '') + '</div>');
+
+                    if (st.approved_at) {
+                        right.append('<span class="badge badge-light-success mb-1">Approved</span><br>');
+                        right.append('<span class="small text-muted">' + (st.approved_by || '') +
+                            '</span><br>');
+                        right.append('<span class="small text-muted">' + st.approved_at + '</span>');
+                    } else if (pendingIndex === idx) {
+                        right.append('<span class="badge badge-light-warning">Pending (Next)</span>');
+                        if (st.code === 'asset_mgt') {
+                            $('#flow-wrap-ba-upload').removeClass('d-none');
+                            $('#flow-wrap-form-upload').removeClass('d-none');
+                        }
+                    } else {
+                        right.append('<span class="badge badge-light-secondary">Pending</span>');
+                    }
+
+                    li.append(left).append(right);
+                    $('#flow-steps').append(li);
+                });
+            }
+
+            $('#formDisposalFlow').on('submit', function(e) {
+                e.preventDefault();
+
+                const id = $('#flow-disposal-id').val();
+                if (!id) return;
+
+                const fd = new FormData(this);
+
+                Swal.fire({
+                    title: 'Approving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.ajax({
+                    url: R.approveStep(id),
+                    type: 'POST',
+                    data: fd,
+                    processData: false,
+                    contentType: false
+                }).done(function(res) {
+                    Swal.close();
+                    if (res.flow) {
+                        renderFlowSteps(res.flow);
+                    }
+                    dt.ajax.reload(null, false);
+                    if (res.kode_status === 'ACC') {
+                        Swal.fire('Approved', 'Disposal fully approved.', 'success');
+                        $('#modal-disposal-flow').modal('hide');
+                    } else {
+                        Swal.fire('Approved', 'Step approved.', 'success');
+                    }
+                }).fail(function(x) {
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                });
             });
 
         })();
