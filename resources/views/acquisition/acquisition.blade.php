@@ -156,7 +156,8 @@
 
                             <div class="col-md-4">
                                 <label class="form-label required">Nilai Pajak (%)</label>
-                                <input type="number" class="form-control" id="nilai_pajak" name="nilai_pajak" value = "{{ ENV('NILAI_PAJAK') }}">
+                                <input type="number" class="form-control" id="nilai_pajak" name="nilai_pajak"
+                                    value = "{{ ENV('NILAI_PAJAK') }}">
                             </div>
 
                             <div class="col-md-4">
@@ -225,6 +226,30 @@
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
+
+            function setExistingMode(isExisting) {
+                const lockInputs = [
+                    '#acq-price',
+                    '#acq-life-month',
+                    '#acq-actual-date',
+                    '#acq-cap-date',
+                    '#nilai_pajak'
+                ];
+
+                lockInputs.forEach(sel => {
+                    const $el = $(sel);
+                    $el.prop('readonly', isExisting);
+                    $el.toggleClass('bg-light', isExisting);
+                });
+
+                $('#acq-is-pajak')
+                    .prop('disabled', isExisting)
+                    .toggleClass('bg-light', isExisting);
+
+                $('#acq-quantity').prop('readonly', false).removeClass('bg-light');
+                $('#acq-note').prop('readonly', false).removeClass('bg-light');
+                $('#acq-uom').prop('disabled', false);
+            }
 
 
             var tbl = $('#tbl-acq-global').DataTable({
@@ -384,11 +409,12 @@
                 $('#acq-price').val('');
                 $('#acq-life-month').val('');
                 $('#acq-is-pajak').val('0');
-                // $('#acq-actual-date').val('');
-                // $('#acq-cap-date').val('');
                 $('#acq-note').val('');
                 $('#acq-uom').val(null).trigger('change');
+
+                setExistingMode(false);
             }
+
 
             function loadLatest(assetUuid) {
                 if (!assetUuid) {
@@ -399,7 +425,11 @@
                 $.getJSON("{{ route('acquisition.latest', ':uuid') }}".replace(':uuid', assetUuid))
                     .done(res => {
                         clearFormValues();
-                        if (!res || !res.exists || !res.value) return;
+
+                        if (!res || !res.exists || !res.value) {
+                            setExistingMode(false);
+                            return;
+                        }
 
                         const v = res.value;
 
@@ -415,11 +445,14 @@
                             const opt = new Option(v.kode_uom, v.kode_uom, true, true);
                             $('#acq-uom').append(opt).trigger('change');
                         }
+
+                        setExistingMode(true);
                     })
                     .fail(() => {
                         clearFormValues();
                     });
             }
+
 
             $('#btn-open-acq').on('click', function() {
                 $form[0].reset();

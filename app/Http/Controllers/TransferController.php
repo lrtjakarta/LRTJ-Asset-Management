@@ -596,6 +596,7 @@ class TransferController extends Controller
 
                 return implode(' ', $links);
             })
+
             ->addColumn('actions', function ($r) use ($canEdit, $canDelete, $canApr) {
                 $pending = $r->kode_status === 'APR';
                 $id      = e($r->uuid);
@@ -611,7 +612,6 @@ class TransferController extends Controller
                         $btns .= '<button class="btn btn-light-warning btn-tf-reject" data-id="' . $id . '">Reject</button>';
                     }
                 }
-
                 if (in_array($r->type, ['owner', 'user', 'maintenance'], true)) {
                     $btns .= '<a href="' . route('transfer.form', $id) . '" class="btn btn-light-primary btn-sm me-1" target="_blank">
                 Form
@@ -976,9 +976,11 @@ class TransferController extends Controller
                 $tf->kode_status     = 'ACC';
                 $tf->pic_approve_uid = $uid;
             }
-    
-            if ($isLastStep && in_array($tf->type, ['owner','user','maintenance'], true)
-                && $request->hasFile('signed_form')) {
+
+            if (
+                $isLastStep && in_array($tf->type, ['owner', 'user', 'maintenance'], true)
+                && $request->hasFile('signed_form')
+            ) {
                 [$path, $orig, $mime, $size] = $this->saveUpload(
                     $request->file('signed_form'),
                     $asset,

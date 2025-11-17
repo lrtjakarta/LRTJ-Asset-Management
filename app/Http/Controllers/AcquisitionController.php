@@ -229,6 +229,7 @@ class AcquisitionController extends Controller
 
         return $this->store($data['asset_uuid'], $request);
     }
+
     public function store(string $assetUuid, Request $request)
     {
         $data = $request->validate([
@@ -249,25 +250,35 @@ class AcquisitionController extends Controller
             ->exists();
         abort_unless($existsUom, 422, 'Invalid UOM.');
 
-        $rate = (float) $data['nilai_pajak'] / 100;
+        $tableValues = DB::getSchemaBuilder()->hasTable('assets_values') ? 'assets_values' : 'assets_value';
 
-        $qty       = (float) $data['quantity'];
-        $price     = (float) $data['price'];
-        $subtotal  = $qty * $price;
-        $isPajak   = (bool) ($data['is_pajak'] ?? false);
-        $vat       = $isPajak ? round($price * $rate, 2) : 0.0;
-        $total     = round($price + $vat, 2);
+        $existing = DB::table($tableValues)->where('asset_uuid', $assetUuid)->first();
+
+        $nilaiPajak = isset($data['nilai_pajak']) ? (float) $data['nilai_pajak'] : 0.0;
+        $rate       = $nilaiPajak / 100.0;
+
+        $qty   = (float) $data['quantity'];
+        $price = (float) $data['price'];
+
+        $existingIsPajak = $existing ? (bool) $existing->is_pajak : false;
+        $isPajak = array_key_exists('is_pajak', $data)
+            ? (bool) $data['is_pajak']
+            : $existingIsPajak;
+
+        $subtotal = $qty * $price;
+        $vat      = $isPajak ? round($price * $rate, 2) : 0.0;
+        $total    = round($price + $vat, 2);
 
         $values = [
             'quantity'          => (float) $data['quantity'],
             'kode_uom'          => $data['kode_uom'],
             'price'             => (float) $data['price'],
-            'is_pajak'          => !empty($data['is_pajak']) ? 1 : 0,
+            'is_pajak'          => $isPajak ? 1 : 0,
             'vat_in'            => $vat,
             'total'             => $total,
             'useful_life_month' => $data['useful_life_month'] ?? null,
             'useful_life_year'  => isset($data['useful_life_month'])
-                ? round(((float)$data['useful_life_month']) / 12, 2)
+                ? round(((float) $data['useful_life_month']) / 12, 2)
                 : null,
             'actual_date'         => $this->parseDate($data['actual_date'] ?? null),
             'capitalization_date' => $this->parseDate($data['capitalization_date'] ?? null),
@@ -278,15 +289,14 @@ class AcquisitionController extends Controller
 
         DB::beginTransaction();
         try {
-            $tableValues = DB::getSchemaBuilder()->hasTable('assets_values') ? 'assets_values' : 'assets_value';
-
-            $existing = DB::table($tableValues)->where('asset_uuid', $assetUuid)->first();
-            $action   = $existing ? 'update' : 'create';
+            $action = $existing ? 'update' : 'create';
 
             if ($existing) {
-                DB::table($tableValues)->where('asset_uuid', $assetUuid)->update(array_merge($values, [
-                    'updated_at' => now(),
-                ]));
+                DB::table($tableValues)
+                    ->where('asset_uuid', $assetUuid)
+                    ->update(array_merge($values, [
+                        'updated_at' => now(),
+                    ]));
             } else {
                 DB::table($tableValues)->insert(array_merge($values, [
                     'asset_uuid' => $assetUuid,
@@ -297,7 +307,7 @@ class AcquisitionController extends Controller
 
             $now    = Carbon::now();
             $prefix = 'ACQ' . $now->format('ym');
-            $last = AssetsValueHistory::where('acq_code', 'like', $prefix . '%')
+            $last   = AssetsValueHistory::where('acq_code', 'like', $prefix . '%')
                 ->orderBy('acq_code', 'desc')
                 ->first();
 
@@ -309,23 +319,26 @@ class AcquisitionController extends Controller
             }
             $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
+            // Log history
             AssetsValueHistory::create([
-                'uuid'            => (string) Str::uuid(),
-                'asset_uuid'      => $assetUuid,
-                'before_payload'  => $existing ? [
-                    'quantity' => $existing->quantity,
-                    'kode_uom' => $existing->kode_uom,
-                    'price'    => $existing->price,
-                    'is_pajak' => $existing->is_pajak ?? null,
-                    'vat_in'   => $existing->vat_in,
-                    'total'    => $existing->total,
-                    'useful_life_month' => $existing->useful_life_month,
-                    'useful_life_year'  => $existing->useful_life_year,
+                'uuid'       => (string) Str::uuid(),
+                'asset_uuid' => $assetUuid,
+                'before_payload' => $existing ? [
+                    'quantity'           => (float) $existing->quantity,
+                    'kode_uom'           => $existing->kode_uom,
+                    'price'              => (float) $existing->price,
+                    'is_pajak'           => $existing->is_pajak ?? null,
+                    'vat_in'             => (float) $existing->vat_in,
+                    'total'              => (float) $existing->total,
+                    'useful_life_month'  => $existing->useful_life_month,
+                    'useful_life_year'   => $existing->useful_life_year,
+                    'actual_date'        => $existing->actual_date,
+                    'capitalization_date' => $existing->capitalization_date,
                 ] : null,
                 'after_payload'   => $values,
                 'pic_request_uid' => $uid,
                 'note'            => $data['note'] ?? null,
-                'acq_code' => $code,
+                'acq_code'        => $code,
             ]);
 
             DB::commit();
@@ -335,6 +348,7 @@ class AcquisitionController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
     }
+
 
     public function destroy(Request $request, string $uuid)
     {
