@@ -300,7 +300,6 @@
                 approve: id => '{{ route('disposal.approve', ':id') }}'.replace(':id', id),
                 reject: id => '{{ route('disposal.reject', ':id') }}'.replace(':id', id),
 
-                // NEW
                 approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
                 form: id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
 

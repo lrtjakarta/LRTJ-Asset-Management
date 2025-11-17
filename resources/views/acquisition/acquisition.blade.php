@@ -93,7 +93,6 @@
                                 <th class="min-w-200px">PIC</th>
                                 <th class="min-w-250px">Note</th>
                                 <th class="min-w-150px">Created At</th>
-                                <th class="min-w-150px">Action</th>
                             </tr>
                         </thead>
                     </table>
@@ -329,12 +328,6 @@
                     {
                         data: 'created_at_fmt',
                         name: 'h.created_at'
-                    },
-                    {
-                        data: 'actions',
-                        name: 'actions',
-                        orderable: false,
-                        searchable: false
                     }
                 ]
             });
@@ -419,6 +412,7 @@
             function loadLatest(assetUuid) {
                 if (!assetUuid) {
                     clearFormValues();
+                    setExistingMode(false);
                     return;
                 }
 
@@ -426,7 +420,7 @@
                     .done(res => {
                         clearFormValues();
 
-                        if (!res || !res.exists || !res.value) {
+                        if (!res || !res.value) {
                             setExistingMode(false);
                             return;
                         }
@@ -437,21 +431,33 @@
                         $('#acq-price').val(v.price ?? '');
                         $('#acq-life-month').val(v.useful_life_month ?? '');
                         $('#acq-is-pajak').val(v.is_pajak ? '1' : '0');
-                        if (v.actual_date) $('#acq-actual-date').val(String(v.actual_date).substring(0, 10));
-                        if (v.capitalization_date) $('#acq-cap-date').val(String(v.capitalization_date).substring(0,
-                            10));
+
+                        if (v.actual_date) {
+                            $('#acq-actual-date').val(String(v.actual_date).substring(0, 10));
+                        }
+                        if (v.capitalization_date) {
+                            $('#acq-cap-date').val(String(v.capitalization_date).substring(0, 10));
+                        }
 
                         if (v.kode_uom) {
                             const opt = new Option(v.kode_uom, v.kode_uom, true, true);
                             $('#acq-uom').append(opt).trigger('change');
                         }
 
-                        setExistingMode(true);
+                        const totalRaw = v.total;
+                        const shouldLock =
+                            totalRaw !== null &&
+                            totalRaw !== undefined &&
+                            Number(totalRaw) !== 0;
+
+                        setExistingMode(shouldLock);
                     })
                     .fail(() => {
                         clearFormValues();
+                        setExistingMode(false);
                     });
             }
+
 
 
             $('#btn-open-acq').on('click', function() {

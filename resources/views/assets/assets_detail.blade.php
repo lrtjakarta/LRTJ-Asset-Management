@@ -88,6 +88,9 @@
                         </div>
                         <div class="card-body">
                             <dl class="row mb-0">
+                                {{-- <dt class="col-sm-5">Group Category</dt>
+                                <dd class="col-sm-7"> : {{ $asset->kode_group_category }}</dd> --}}
+
                                 <dt class="col-sm-5">Asset Number Parent</dt>
                                 <dd class="col-sm-7"> : {{ $asset->asset_number_parent }}</dd>
 
@@ -281,6 +284,7 @@
                         </div>
                     </div>
 
+
                     {{-- Notes --}}
                     <div class="card mb-6">
                         <div class="card-header">
@@ -367,7 +371,6 @@
                                         <th class="min-w-220px">Note</th>
                                         <th class="min-w-160px">Requester</th>
                                         <th class="min-w-180px">Created</th>
-                                        <th class="min-w-150px">Action</th>
                                     </tr>
                                 </thead>
                             </table>
@@ -469,8 +472,315 @@
     </div>
 
     {{-- ===== Transfer Modal ===== --}}
-    {{-- ... (unchanged modals: transfer, disposal, return, acquisition, transfer-approve) ... --}}
-    {{-- I’m leaving all your modal markup exactly the same as you pasted above --}}
+    <div class="modal fade" id="modal-transfer" tabindex="-1" aria-labelledby="modalTransferLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formTransfer" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalTransferLabel">Request Movement — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-4">
+                                <label class="form-label required">Transfer Type</label>
+                                <select name="type" id="tf-type" class="form-select" required>
+                                    <option value="owner">Owner</option>
+                                    <option value="user">User</option>
+                                    <option value="maintenance">Maintenance</option>
+                                    <option value="status">Status</option>
+                                    <option value="location">Location</option>
+                                </select>
+                                <div class="form-text">Select Movement Type</div>
+                            </div>
+
+                            <div class="col-md-8">
+                                <label class="form-label required">Move To</label>
+                                <select id="tf-target" class="form-select" required></select>
+                                <input type="hidden" name="after[value]" id="tf-target-hidden">
+                                <div class="form-text" id="tf-target-help">Select the new target.</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (optional)</label>
+                                <input type="file" name="file" id="tf-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">PDF / image / office docs (max 20MB).</div>
+
+                                {{-- visible only when editing and a file exists --}}
+                                <div id="tf-current-file" class="mt-2 d-none">
+                                    <a id="tf-current-file-link" href="#" target="_blank"></a>
+                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
+                                        id="btn-remove-file">Remove</button>
+                                    <input type="hidden" name="remove_file" id="tf-remove-file" value="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    {{-- ===== Disposal Modal ===== --}}
+    <div class="modal fade" id="modal-disposal" tabindex="-1" aria-labelledby="modalDisposalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formDisposal" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" id="ds-edit-id">
+                    <input type="hidden" name="asset_uuid" value="{{ $asset->uuid }}">
+                    <input type="hidden" name="remove_file" id="ds-remove-file" value="0">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalDisposalLabel">Request Disposal — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" id="ds-note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Attachment (optional)</label>
+                                <input type="file" name="file" id="ds-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">PDF / image / office docs (max 20MB).</div>
+
+                                {{-- visible only when editing and a file exists --}}
+                                <div id="ds-current-file" class="mt-2 d-none">
+                                    <a id="ds-current-file-link" href="#" target="_blank"></a>
+                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
+                                        id="ds-btn-remove-file">Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    {{-- ===== Return Modal ===== --}}
+    <div class="modal fade" id="modal-return" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formReturn">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create Return</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-5">
+                            <div class="col-md-12">
+                                <label class="form-label required">Select Transfer/Disposal</label>
+                                <select id="ret-source" class="form-select" required></select>
+                                <div class="form-text">Shows only latest accepted per asset (transfer-by-type, disposal)
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <div class="p-3 border rounded bg-light" id="ret-preview" style="display:none">
+                                    <div><strong>Asset:</strong> <span id="ret-asset"></span></div>
+                                    <div><strong>Type:</strong> <span id="ret-type"></span></div>
+                                    <div id="ret-ba-wrap" style="display:none;">
+                                        <strong>Before → After:</strong>
+                                        <span id="ret-before"></span>
+                                        <span class="mx-1">→</span>
+                                        <span id="ret-after" class="fw-bold"></span>
+                                    </div>
+                                    <div class="mt-1"><strong>Code:</strong> <span id="ret-code"></span></div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Create Return</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    {{-- ===== Acquisition Modal ===== --}}
+    <div class="modal fade" id="modal-acq" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formAcq">
+                    @csrf
+                    <div class="modal-header">
+                        <h5 class="modal-title">Acquisition — {{ $asset->asset_code }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="row g-4">
+                            <div class="col-md-4">
+                                <label class="form-label required">Quantity</label>
+                                <input type="number" step="0.0001" min="0" class="form-control"
+                                    name="quantity" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">UOM</label>
+                                <select name="kode_uom" id="acq-uom" class="form-select" required></select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Price</label>
+                                <input type="number" step="0.0001" min="0" class="form-control" name="price"
+                                    required>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label required">Useful Life (Months)</label>
+                                <input type="number" step="1" min="0" class="form-control"
+                                    name="useful_life_month" required>
+                                <div class="form-text">Year will be auto-calculated</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Include Tax (VAT-IN)?</label>
+                                <select name="is_pajak" class="form-select" required>
+                                    <option value="1" selected>Yes</option>
+                                    <option value="0">No</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label required">Nilai Pajak (%)</label>
+                                <input type="number" class="form-control" id="nilai_pajak" name="nilai_pajak"
+                                    value = "{{ ENV('NILAI_PAJAK') }}">
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label required">Actual Date</label>
+                                <input type="date" class="form-control" name="actual_date" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label required">Capitalization Date</label>
+                                <input type="date" class="form-control" name="capitalization_date" required>
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Note</label>
+                                <textarea class="form-control" rows="3" name="note" placeholder="Optional note…"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-danger">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {{-- ===== Approve Movement Location Modal ===== --}}
+    <div class="modal fade" id="modal-transfer-approve" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <input type="hidden" id="tf-approve-id">
+                <div class="modal-header">
+                    <h5 class="modal-title">Approve Movement Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="tf-flow-steps">
+                        {{-- steps will be rendered by JS --}}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modal-disposal-flow" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="formDisposalFlow" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" id="flow-disposal-id" name="uuid" value="">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Disposal Approval Flow</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="mb-4">
+                            <div><strong>Asset:</strong> <span id="flow-asset"></span></div>
+                            <div><strong>Transaction:</strong> <span id="flow-code"></span></div>
+                            <div><strong>Status:</strong> <span id="flow-status"></span></div>
+                            <div class="mt-2">
+                                <strong>Form Disposal:</strong>
+                                <span id="flow-form-file"></span>
+                            </div>
+                            <div class="mt-2">
+                                <strong>Berita Acara:</strong>
+                                <span id="flow-ba-file"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label">Flow Steps</label>
+                            <ul class="list-group" id="flow-steps"></ul>
+                        </div>
+
+                        <div class="mb-4 d-none" id="flow-wrap-ba-upload">
+                            <label class="form-label">Upload Berita Acara Disposal</label>
+                            <input type="file" name="ba_file" id="flow-ba-file-input" class="form-control"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.bmp">
+                            <div class="form-text">Required on final step by Asset Management.</div>
+                        </div>
+                        <div class="mb-4 d-none" id="flow-wrap-form-upload">
+                            <label class="form-label">Upload Form Disposal</label>
+                            <input type="file" name="flow_file" id="flow-form-file-input" class="form-control"
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.bmp">
+                            <div class="form-text">Optional: upload signed / scanned form disposal.</div>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-danger" id="btn-flow-approve">
+                            Approve Next Step
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @push('scripts')
@@ -503,7 +813,8 @@
                 transfers: '{{ route('transfer.data', $asset->uuid) }}',
                 create: '{{ route('transfer.store') }}',
                 show: id => '{{ route('transfer.show', ':id') }}'.replace(':id', id),
-                approveLocationStep: id => '{{ route('transfer.approve-step', ':id') }}'.replace(':id', id),
+                approveLocationStep: id => '{{ route('transfer.approve-step', ':id') }}'.replace(':id',
+                    id),
             };
             const ROUTE = {
                 update: id => '{{ route('transfer.update', ':id') }}'.replace(':id', id),
@@ -568,6 +879,7 @@
                 initTargetSelect(this.value);
             });
 
+
             // Transfer history DataTable
             $('#tbl-transfers').DataTable({
                 processing: true,
@@ -579,11 +891,13 @@
                 order: [
                     [8, 'desc']
                 ],
-                dom: "<'row mb-2'" +
+                "dom": "<'row mb-2'" +
                     "<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>" +
                     ">" +
+
                     "<'table-responsive'tr>" +
+
                     "<'row'" +
                     "<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>" +
@@ -623,7 +937,7 @@
                     {
                         data: 'workflow_label',
                         name: 'workflow_label',
-                        render: function(data, type, row) {
+                        "render": function(data, type, row, meta) {
                             if (row.kode_status == 'APR') {
                                 return `<span class="badge badge-light-primary">${data||''}</span>`;
                             } else if (row.kode_status == 'ACC') {
@@ -679,7 +993,208 @@
                 ]
             });
 
-            // ... (transfer edit / approve / reject / delete handlers – unchanged) ...
+            $('#tbl-transfers').on('click', '.btn-tf-edit', function() {
+                const row = $('#tbl-transfers').DataTable().row($(this).closest('tr')).data();
+                $('#modal-transfer').modal('show');
+
+                $('#formTransfer').data('edit-id', row.uuid);
+                $('#tf-type').val(row.type).trigger('change');
+
+                if (row.file_url) {
+                    $('#tf-current-file').removeClass('d-none');
+                    $('#tf-current-file-link').attr('href', row.file_url).text(row.file_name || 'Current file');
+                    $('#tf-remove-file').val('0');
+                } else {
+                    $('#tf-current-file').addClass('d-none');
+                    $('#tf-remove-file').val('0');
+                }
+
+                $('#btn-remove-file').off('click').on('click', function() {
+                    $('#tf-remove-file').val('1');
+                    $('#tf-current-file').addClass('d-none');
+                });
+                setTimeout(() => {
+                    const code = row.after_code || '';
+                    const opt = new Option(code, code, true, true);
+                    $('#tf-target').append(opt).trigger('change');
+                    $('#tf-target-hidden').val(code);
+                }, 300);
+
+                $('textarea[name="note"]').val(row.note || '');
+            });
+
+            $('#formTransfer').off('submit').on('submit', function(e) {
+                e.preventDefault();
+
+                const isEdit = !!$('#formTransfer').data('edit-id');
+                const id = $('#formTransfer').data('edit-id');
+
+                const baseFields = {
+                    asset_uuid: '{{ $asset->uuid }}',
+                    type: $('#tf-type').val(),
+                    note: $('textarea[name="note"]').val() || '',
+                    'after[value]': $('#tf-target-hidden').val() || '',
+                    remove_file: $('#tf-remove-file').length ? ($('#tf-remove-file').val() || 0) : 0
+                };
+
+                const fileInput = document.getElementById('tf-file');
+                const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+                let req;
+
+                if (hasFile) {
+                    const fd = new FormData();
+                    Object.entries(baseFields).forEach(([k, v]) => fd.append(k, v));
+                    fd.append('file', fileInput.files[0]);
+
+                    const url = isEdit ? ROUTE.update(id) : '{{ route('transfer.store', $asset->uuid) }}';
+                    const type = isEdit ? 'POST' : 'POST';
+                    if (isEdit) fd.append('_method', 'PUT');
+
+                    req = $.ajax({
+                        url,
+                        type,
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    });
+
+                } else {
+                    const payload = baseFields;
+
+                    req = isEdit ?
+                        $.ajax({
+                            url: ROUTE.update(id),
+                            type: 'PUT',
+                            data: payload
+                        }) :
+                        $.post('{{ route('transfer.store', $asset->uuid) }}', payload);
+                }
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                req.done(() => {
+                        $('#modal-transfer').modal('hide');
+                        Swal.fire('Success', isEdit ? 'Transfer updated.' : 'Transfer created.', 'success');
+                        $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                        if (fileInput) fileInput.value = '';
+                        if ($('#tf-remove-file').length) $('#tf-remove-file').val('0');
+                    })
+                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+            });
+
+            $('#btn-remove-file').off('click').on('click', function() {
+                $('#tf-remove-file').val('1');
+                $('#tf-current-file').addClass('d-none');
+            });
+
+            $('#tbl-transfers').on('click', '.btn-tf-approve', function() {
+                const id = $(this).data('id');
+                const row = $('#tbl-transfers').DataTable().row($(this).closest('tr')).data();
+
+                if ((row.type || '').toLowerCase() === 'location') {
+                    // Use multi-step flow modal for location
+                    $('#tf-approve-id').val(id);
+
+                    $.get(R.show(id))
+                        .done(d => {
+                            renderApproveFlowModal(d);
+                            $('#modal-transfer-approve').modal('show');
+                        })
+                        .fail(() => {
+                            Swal.fire('Error', 'Cannot load transfer', 'error');
+                        });
+                } else {
+                    // Old simple approve for other types
+                    Swal.fire({
+                            title: 'Approve this transfer?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Approve',
+                            confirmButtonColor: '#EA242A',
+                            cancelButtonColor: '#B5B5B6'
+                        })
+                        .then(res => {
+                            if (!res.isConfirmed) return;
+                            Swal.fire({
+                                title: 'Applying…',
+                                didOpen: () => Swal.showLoading(),
+                                allowOutsideClick: false
+                            });
+                            $.post(ROUTE.approve(id)).done(() => {
+                                Swal.fire({
+                                    title: 'Approved',
+                                    text: 'Transfer applied to asset.',
+                                    icon: 'success',
+                                    showConfirmButton: false,
+                                    timer: 500,
+                                    timerProgressBar: true,
+                                }).then(() => {
+                                    location.reload();
+                                });
+                            }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed',
+                                'error'));
+                        });
+                }
+            });
+
+            $('#tbl-transfers').on('click', '.btn-tf-reject', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                        title: 'Reject this transfer?',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Reject',
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6'
+                    })
+                    .then(res => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({
+                            title: 'Updating…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
+                        $.post(ROUTE.reject(id)).done(() => {
+                            Swal.fire('Rejected', 'Transfer rejected.', 'success');
+                            $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    });
+            });
+
+            $('#tbl-transfers').on('click', '.btn-tf-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                        title: 'Delete this request?',
+                        text: 'It will go to trash.',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonText: 'Delete',
+                        confirmButtonColor: '#EA242A',
+                        cancelButtonColor: '#B5B5B6'
+                    })
+                    .then(res => {
+                        if (!res.isConfirmed) return;
+                        Swal.fire({
+                            title: 'Deleting…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
+                        $.ajax({
+                                url: ROUTE.destroy(id),
+                                type: 'DELETE'
+                            })
+                            .done(() => {
+                                Swal.fire('Deleted', 'Request moved to trash.', 'success');
+                                $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                            })
+                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    });
+            });
 
             function renderApproveFlowModal(data) {
                 const container = $('#tf-flow-steps').empty();
@@ -737,6 +1252,7 @@
         `);
                 });
 
+                // Only allow clicking the first pending step
                 let firstPending = true;
                 container.find('.btn-flow-approve-step').each(function() {
                     if (firstPending) {
@@ -751,6 +1267,7 @@
                 return $('<div/>').text(text || '').html();
             }
 
+            // Approve a single flow step
             $('#tf-flow-steps').on('click', '.btn-flow-approve-step', function() {
                 const id = $('#tf-approve-id').val();
                 if (!id) return;
@@ -782,24 +1299,29 @@
 
         })();
     </script>
-
-    {{-- ===== Disposal history + BA/Form buttons in Actions ===== --}}
     <script>
         (function() {
-            // Auto-filled download routes
-            const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
-            const BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
-
             const DS = {
                 data: '{{ route('disposal.data', $asset->uuid) }}',
                 create: '{{ route('disposal.store') }}',
                 show: '{{ route('disposal.show', ':id') }}',
                 update: '{{ route('disposal.update', ':id') }}',
                 destroy: '{{ route('disposal.destroy', ':id') }}',
-                approve: '{{ route('disposal.approve', ':id') }}',
+                approve: '{{ route('disposal.approve', ':id') }}', // simple approve (fallback, unused in flow)
                 reject: '{{ route('disposal.reject', ':id') }}',
+                approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
+                form: id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
+
+                assets: '{{ route('assets.options') }}',
+                exportUrl: '{{ route('export.disposal') }}',
             };
 
+            const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
+            const BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
+
+            // =========================================================
+            // BASIC CREATE / EDIT MODAL (modal-disposal)
+            // =========================================================
             $('#btnOpenDisposal').on('click', function(e) {
                 e.preventDefault();
                 resetDisposalForm();
@@ -872,7 +1394,9 @@
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
 
-            // DataTable (Disposal)
+            // =========================================================
+            // DISPOSAL HISTORY DATATABLE
+            // =========================================================
             const dsTable = $('#tbl-disposal').DataTable({
                 processing: true,
                 serverSide: true,
@@ -883,9 +1407,11 @@
                 order: [
                     [7, 'desc']
                 ],
-                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
-                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i><'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 columns: [{
                         data: 'disposal_code',
                         name: 'disposal_code'
@@ -915,10 +1441,10 @@
                         name: 'workflow_label',
                         render: (d, t, row) => {
                             if (row.kode_status === 'APR')
-                                return `<span class="badge badge-light-primary">${d||''}</span>`;
-                            if (row.kode_status === 'APP')
-                                return `<span class="badge badge-light-success">${d||''}</span>`;
-                            return `<span class="badge badge-light-danger">${d||''}</span>`;
+                                return `<span class="badge badge-light-primary">${d || ''}</span>`;
+                            if (row.kode_status === 'ACC')
+                                return `<span class="badge badge-light-success">${d || ''}</span>`;
+                            return `<span class="badge badge-light-danger">${d || ''}</span>`;
                         }
                     },
                     {
@@ -957,94 +1483,69 @@
                         searchable: false
                     }
                 ],
-                // 🔹 Inject Form + BA buttons into the Actions group (same as Disposal index)
                 rowCallback: function(row, data) {
                     const $actions = $('td:last', row);
                     const $group = $actions.find('.btn-group');
-
                     if (!$group.length) return;
 
-                    // Prefer uploaded form/BA; fallback to auto-filled routes
-                    const formUrl = (data.form_file_url && data.form_file_url.length) ?
+                    const formUrl = data.form_file_url && data.form_file_url.length ?
                         data.form_file_url :
                         FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
 
-                    const baUrl = (data.ba_file_url && data.ba_file_url.length) ?
+                    const baUrl = data.ba_file_url && data.ba_file_url.length ?
                         data.ba_file_url :
                         BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
 
-                    const formBtn = `
-                        <button type="button"
-                           class="btn btn-light-info btn-sm btn-ds-form"
-                           onclick="window.open('${formUrl}','_blank')">
-                           Form
-                        </button>
-                    `;
-
-                    const baBtn = `
-                        <button type="button"
-                           class="btn btn-light-warning btn-sm btn-ds-ba"
-                           onclick="window.open('${baUrl}','_blank')">
-                           BA
-                        </button>
-                    `;
-
-                    // Inject BA first, then Form (so group is: BA, Form, Edit, Accept, Reject, Delete)
-                    if (!$group.find('.btn-ds-ba').length) {
-                        $group.prepend(baBtn);
-                    }
                     if (!$group.find('.btn-ds-form').length) {
+                        const formBtnLabel = data.form_file_name || 'Form';
+                        const formBtn = `
+                        <button type="button"
+                            class="btn btn-light-info btn-sm btn-ds-form"
+                            onclick="window.open('${formUrl}','_blank')">
+                            ${escapeHtml(formBtnLabel)}
+                        </button>`;
                         $group.prepend(formBtn);
+                    }
+
+                    if (!$group.find('.btn-ds-ba').length && baUrl) {
+                        const baLabel = data.ba_file_name || 'BA';
+                        const baBtn = `
+                        <button type="button"
+                            class="btn btn-light-warning btn-sm btn-ds-ba"
+                            onclick="window.open('${baUrl}','_blank')">
+                            ${escapeHtml(baLabel)}
+                        </button>`;
+                        $group.prepend(baBtn);
                     }
                 }
             });
 
+            // =========================================================
+            // SIMPLE EDIT / REJECT / DELETE HANDLERS
+            // =========================================================
+
+            // Edit Disposal (open basic modal)
             $(document).on('click', '.btn-ds-edit', function() {
                 const id = $(this).data('id');
                 $.getJSON(DS.show.replace(':id', id), function(d) {
                     resetDisposalForm();
                     $('#ds-edit-id').val(d.uuid);
                     $('#ds-note').val(d.note || '');
-                    if (d.file_path) {
-                        $('#ds-current-file-link').attr('href', d.file_url).text(d.file_name ||
-                            'Current file');
+                    if (d.file_url) {
+                        $('#ds-current-file-link')
+                            .attr('href', d.file_url)
+                            .text(d.file_name || 'Current file');
                         $('#ds-current-file').removeClass('d-none');
+                        $('#ds-remove-file').val('0');
+                    } else {
+                        $('#ds-current-file').addClass('d-none');
                         $('#ds-remove-file').val('0');
                     }
                     $('#modal-disposal').modal('show');
                 });
             });
 
-            $(document).on('click', '.btn-ds-approve', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                    title: 'Approve?',
-                    icon: 'question',
-                    showCancelButton: true
-                }).then(res => {
-                    if (!res.isConfirmed) return;
-                    Swal.fire({
-                        title: 'Applying…',
-                        didOpen: () => Swal.showLoading(),
-                        allowOutsideClick: false
-                    });
-                    $.post(DS.approve.replace(':id', id), {})
-                        .done(() => {
-                            Swal.fire({
-                                title: 'Approved',
-                                text: 'Disposal approved.',
-                                icon: 'success',
-                                showConfirmButton: false,
-                                timer: 500,
-                                timerProgressBar: true,
-                            }).then(() => {
-                                location.reload();
-                            });
-                        })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                });
-            });
-
+            // Reject Disposal
             $(document).on('click', '.btn-ds-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1067,6 +1568,7 @@
                 });
             });
 
+            // Delete Disposal
             $(document).on('click', '.btn-ds-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
@@ -1093,6 +1595,723 @@
                 });
             });
 
+            // =========================================================
+            // NEW APPROVAL FLOW MODAL (modal-disposal-flow)
+            // =========================================================
+
+            const $flowModal = $('#modal-disposal-flow');
+            const $flowSteps = $('#flow-steps');
+            const $flowBaInput = $('#flow-ba-file-input');
+            const $flowBaWrapper = $('#flow-wrap-ba-upload');
+            const $flowFormInput = $('#flow-form-file-input');
+            const $flowFormWrapper = $('#flow-wrap-form-upload');
+
+            const $flowAsset = $('#flow-asset');
+            const $flowCode = $('#flow-code');
+            const $flowStatus = $('#flow-status');
+            const $flowFormOut = $('#flow-form-file'); // span for form URL
+            const $flowBaOut = $('#flow-ba-file'); // span for BA URL
+
+            const $btnNextStep = $('#btn-flow-approve');
+
+            function resetFlowModal() {
+                $('#flow-disposal-id').val('');
+                if ($flowBaInput.length) $flowBaInput.val('');
+                if ($flowFormInput.length) $flowFormInput.val('');
+
+                if ($flowBaWrapper.length) $flowBaWrapper.addClass('d-none');
+                if ($flowFormWrapper.length) $flowFormWrapper.addClass('d-none');
+
+                if ($flowAsset.length) $flowAsset.text('');
+                if ($flowCode.length) $flowCode.text('');
+                if ($flowStatus.length) $flowStatus.text('');
+                if ($flowFormOut.length) $flowFormOut.html('—');
+                if ($flowBaOut.length) $flowBaOut.html('—');
+
+                $flowSteps.empty();
+                $flowModal.data('require-ba', false);
+            }
+
+            function renderFlowSteps(flow) {
+                $flowSteps.empty();
+                let steps = flow && Array.isArray(flow.steps) ? flow.steps : [];
+
+                if (!steps.length) {
+                    $flowSteps.append('<div class="text-muted">No flow defined.</div>');
+                    $flowModal.data('require-ba', false);
+                    return;
+                }
+
+                const firstPendingIndex = steps.findIndex(s => !s.approved_at);
+                const lastIndex = steps.length - 1;
+                const requireBa = (firstPendingIndex === lastIndex && firstPendingIndex !== -1);
+
+                $flowModal.data('require-ba', requireBa);
+
+                steps.forEach((step, idx) => {
+                    const approvedAt = step.approved_at;
+                    const approvedBy = step.approved_by;
+
+                    const statusBadge = approvedAt ?
+                        '<span class="badge badge-light-success">Approved</span>' :
+                        (idx === firstPendingIndex ?
+                            '<span class="badge badge-light-warning">Pending (Next)</span>' :
+                            '<span class="badge badge-light-secondary">Waiting</span>');
+
+                    const approverInfo = approvedAt ?
+                        `<div class="small text-muted">by ${escapeHtml(approvedBy || '-')} at ${escapeHtml(approvedAt)}</div>` :
+                        '';
+
+                    $flowSteps.append(`
+                    <div class="border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold">${escapeHtml(step.label || 'Step')}</div>
+                                <div class="small text-muted">${escapeHtml(step.role || '')}</div>
+                                ${approverInfo}
+                            </div>
+                            <div>${statusBadge}</div>
+                        </div>
+                    </div>
+                `);
+                });
+
+                // BA upload is required only on the final step
+                if ($flowBaWrapper.length) {
+                    if (requireBa) {
+                        $flowBaWrapper.removeClass('d-none');
+                    } else {
+                        $flowBaWrapper.addClass('d-none');
+                    }
+                }
+
+                // Form disposal upload is always optional → always show
+                if ($flowFormWrapper.length) {
+                    $flowFormWrapper.removeClass('d-none');
+                }
+            }
+
+            // Click Approve in disposal table → open flow modal
+            $(document).on('click', '.btn-ds-approve', function() {
+                const id = $(this).data('id');
+                if (!id) return;
+
+                resetFlowModal();
+
+                Swal.fire({
+                    title: 'Loading flow…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.getJSON(DS.show.replace(':id', id))
+                    .done(d => {
+                        $('#flow-disposal-id').val(id);
+                        $flowModal.data('disposal-id', id);
+
+                        // header info (safe even if keys are missing)
+                        if ($flowAsset.length) {
+                            $flowAsset.text(d.asset_label || d.asset_code || '{{ $asset->asset_code }}');
+                        }
+                        if ($flowCode.length) {
+                            $flowCode.text(d.disposal_code || '');
+                        }
+                        if ($flowStatus.length) {
+                            $flowStatus.text(d.workflow_label || d.kode_status || '');
+                        }
+
+                        // Form Disposal link
+                        if ($flowFormOut.length) {
+                            let html = '—';
+                            if (d.form_file_url) {
+                                html =
+                                    `<a href="${d.form_file_url}" target="_blank">${escapeHtml(d.form_file_name || 'Download Form')}</a>`;
+                            }
+                            $flowFormOut.html(html);
+                        }
+
+                        // BA link
+                        if ($flowBaOut.length) {
+                            let html = '—';
+                            if (d.ba_file_url) {
+                                html =
+                                    `<a href="${d.ba_file_url}" target="_blank">${escapeHtml(d.ba_file_name || 'Download BA')}</a>`;
+                            }
+                            $flowBaOut.html(html);
+                        }
+
+                        let flowData = d.flow || d.flow_json || null;
+                        if (typeof flowData === 'string') {
+                            try {
+                                flowData = JSON.parse(flowData);
+                            } catch (e) {
+                                flowData = null;
+                            }
+                        }
+                        renderFlowSteps(flowData || {});
+
+                        Swal.close();
+                        $flowModal.modal('show');
+                    })
+                    .fail(() => {
+                        Swal.fire('Error', 'Cannot load disposal flow.', 'error');
+                    });
+            });
+
+            // Approve NEXT step (with BA required on last step)
+            if ($btnNextStep.length) {
+                $btnNextStep.off('click').on('click', function(e) {
+                    e.preventDefault();
+
+                    const id = $('#flow-disposal-id').val();
+                    if (!id) return;
+
+                    const requireBa = !!$flowModal.data('require-ba');
+                    const baEl = $flowBaInput.length ? $flowBaInput[0] : null;
+                    const hasBa = baEl && baEl.files && baEl.files.length > 0;
+
+                    if (requireBa && !hasBa) {
+                        Swal.fire('Required', 'Berita Acara must be uploaded on the last step.', 'warning');
+                        return;
+                    }
+
+                    const fd = new FormData($('#formDisposalFlow')[0]);
+
+                    Swal.fire({
+                        title: 'Applying…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.ajax({
+                            url: DS.approveStep(id),
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        })
+                        .done(res => {
+                            if (res.flow) {
+                                let flowData = res.flow;
+                                if (typeof flowData === 'string') {
+                                    try {
+                                        flowData = JSON.parse(flowData);
+                                    } catch (e) {
+                                        flowData = null;
+                                    }
+                                }
+                                renderFlowSteps(flowData || {});
+                            }
+
+                            if (res.ba_file_url && $flowBaOut.length) {
+                                const html =
+                                    `<a href="${res.ba_file_url}" target="_blank">${escapeHtml(res.ba_file_name || 'Download BA')}</a>`;
+                                $flowBaOut.html(html);
+                            }
+
+                            if (res.form_file_url && $flowFormOut.length) {
+                                const html =
+                                    `<a href="${res.form_file_url}" target="_blank">${escapeHtml(res.form_file_name || 'Download Form')}</a>`;
+                                $flowFormOut.html(html);
+                            }
+
+                            if (res.completed) {
+                                $flowModal.modal('hide');
+                                Swal.fire({
+                                    title: 'Approved',
+                                    text: 'Disposal flow completed.',
+                                    icon: 'success',
+                                    showConfirmButton: false,
+                                    timer: 600,
+                                    timerProgressBar: true
+                                }).then(() => {
+                                    dsTable.ajax.reload(null, false);
+                                    location.reload();
+                                });
+                            } else {
+                                Swal.fire('Approved', 'Step approved.', 'success');
+                                dsTable.ajax.reload(null, false);
+                            }
+                        })
+                        .fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        });
+                });
+            }
+
+            function escapeHtml(text) {
+                return $('<div/>').text(text || '').html();
+            }
+
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const R_RET = {
+                options: '{{ route('return.options') }}',
+                store: '{{ route('return.store') }}',
+                data: '{{ route('return.data.asset', $asset->uuid) }}',
+                destroy: id => '{{ route('return.destroy', ':id') }}'.replace(':id', id),
+            };
+            const dtRet = $('#tbl-returns').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: R_RET.data,
+                    type: 'GET'
+                },
+                order: [
+                    [5, 'desc']
+                ],
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'return_code',
+                        name: 'return_history.return_code'
+                    }, {
+                        data: 'source_code',
+                        name: 'return_history.source_code'
+                    },
+                    {
+                        data: 'source_type_label',
+                        name: 'return_history.source_type'
+                    },
+                    {
+                        data: 'source_detail',
+                        name: 'source_detail',
+                        orderable: false,
+                        searchable: true
+                    },
+                    {
+                        data: 'note',
+                        name: 'return_history.note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'return_history.pic_request_uid'
+                    },
+                    {
+                        data: 'created_at',
+                        name: 'return_history.created_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false,
+                        defaultContent: ''
+                    }
+                ]
+            });
+
+            function initReturnSelect() {
+                $('#ret-source').select2({
+                    dropdownParent: $('#modal-return'),
+                    placeholder: 'Search code / asset…',
+                    width: '100%',
+                    allowClear: true,
+                    ajax: {
+                        url: R_RET.options,
+                        dataType: 'json',
+                        delay: 150,
+                        data: params => ({
+                            q: params.term || '',
+                            asset_uuid: '{{ $asset->uuid }}'
+                        }),
+                        processResults: d => d
+                    }
+                }).on('select2:select', function(e) {
+                    const m = e.params.data || {};
+                    $('#ret-preview').show();
+                    $('#ret-asset').text(m.asset_label || '');
+                    $('#ret-type').text((m.source_type === 'transfer' ? (m.type || '').toUpperCase() :
+                        'DISPOSAL'));
+                    $('#ret-code').text(m.code || '');
+
+                    if (m.source_type === 'transfer') {
+                        $('#ret-ba-wrap').show();
+                        $('#ret-before').text(m.before_label || '');
+                        $('#ret-after').text(m.after_label || '');
+                    } else {
+                        $('#ret-ba-wrap').hide();
+                        $('#ret-before').text('');
+                        $('#ret-after').text('');
+                    }
+                }).on('select2:clear', function() {
+                    $('#ret-preview').hide();
+                    $('#ret-asset,#ret-type,#ret-code,#ret-before,#ret-after').text('');
+                });
+            }
+
+            $('#btnOpenReturn').on('click', function(e) {
+                e.preventDefault();
+
+                $('#formReturn')[0].reset();
+                if ($('#ret-source').data('select2')) {
+                    $('#ret-source').val(null).trigger('change');
+                } else {
+                    initReturnSelect();
+                }
+                $('#ret-preview').hide();
+                $('#modal-return').modal('show');
+            });
+            // window.openReturnModal = function() {
+            // };
+
+            $('#formReturn').on('submit', function(e) {
+                e.preventDefault();
+                const id = $('#ret-source').val();
+                if (!id) {
+                    Swal.fire('Required', 'Please select an item.', 'warning');
+                    return;
+                }
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.post(R_RET.store, {
+                    source: id,
+                    note: $('textarea[name="note"]').val() || ''
+                }).done(() => {
+                    $('#modal-return').modal('hide');
+                    Swal.fire('Success', 'Return recorded.', 'success');
+                    if ($.fn.DataTable.isDataTable('#tbl-returns')) {
+                        $('#tbl-returns').DataTable().ajax.reload(null, false);
+                    }
+                    if ($.fn.DataTable.isDataTable('#tbl-transfers')) {
+                        $('#tbl-transfers').DataTable().ajax.reload(null, false);
+                    }
+                    location.reload();
+                }).fail(x => {
+                    Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error');
+                });
+            });
+            $('#tbl-returns').on('click', '.btn-ret-delete', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Delete this return?',
+                    text: 'It will go to trash.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6'
+                }).then(res => {
+                    if (!res.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+                    $.ajax({
+                            url: R_RET.destroy(id),
+                            type: 'DELETE'
+                        })
+                        .done(() => {
+                            Swal.fire('Deleted', '', 'success');
+                            dtRet.ajax.reload(null, false);
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+        })();
+    </script>
+    <script>
+        (function() {
+            const ACQ = {
+                latest: '{{ route('acquisition.latest', $asset->uuid) }}',
+                store: '{{ route('acquisition.store', $asset->uuid) }}',
+                data: '{{ route('acquisition.data', $asset->uuid) }}',
+            };
+
+            // ==== Lock / unlock fields based on existing acquisition ====
+            function setExistingMode(isExisting) {
+                const lockInputs = [
+                    'input[name="price"]',
+                    'input[name="useful_life_month"]',
+                    'input[name="actual_date"]',
+                    'input[name="capitalization_date"]',
+                    '#nilai_pajak'
+                ];
+
+                lockInputs.forEach(sel => {
+                    const $el = $(sel);
+                    $el.prop('readonly', isExisting);
+                    $el.toggleClass('bg-light', isExisting);
+                });
+
+                $('select[name="is_pajak"]')
+                    .prop('disabled', isExisting)
+                    .toggleClass('bg-light', isExisting);
+
+                // quantity & note always editable
+                $('input[name="quantity"]').prop('readonly', false).removeClass('bg-light');
+                $('textarea[name="note"]').prop('readonly', false).removeClass('bg-light');
+                $('#acq-uom').prop('disabled', false);
+            }
+
+            function clearAcqForm() {
+                if ($('#formAcq')[0]) {
+                    $('#formAcq')[0].reset();
+                }
+                if ($('#acq-uom').data('select2')) {
+                    $('#acq-uom').val(null).trigger('change');
+                }
+                setExistingMode(false);
+            }
+
+            // ==== Open Modal & Prefill from latest acquisition ====
+            $('#btnOpenAcq').on('click', function(e) {
+                e.preventDefault();
+
+                clearAcqForm();
+
+                $.getJSON(ACQ.latest)
+                    .done(res => {
+                        const today = new Date().toISOString().slice(0, 10);
+
+                        if (!res || !res.value) {
+                            // no data at all → treat as new, fully editable
+                            $('input[name="actual_date"]').val(today);
+                            $('input[name="capitalization_date"]').val(today);
+                            setExistingMode(false);
+                            $('#modal-acq').modal('show');
+                            return;
+                        }
+
+                        const v = res.value;
+
+                        $('input[name="quantity"]').val(v.quantity ?? '');
+                        $('input[name="price"]').val(v.price ?? '');
+                        $('input[name="useful_life_month"]').val(v.useful_life_month ?? '');
+                        $('select[name="is_pajak"]').val((v.is_pajak ?? 0) ? '1' : '0');
+
+                        if (typeof v.nilai_pajak !== 'undefined' && v.nilai_pajak !== null) {
+                            $('#nilai_pajak').val(v.nilai_pajak);
+                        }
+
+                        if (v.actual_date) {
+                            $('input[name="actual_date"]').val(String(v.actual_date).substring(0, 10));
+                        } else {
+                            $('input[name="actual_date"]').val(today);
+                        }
+
+                        if (v.capitalization_date) {
+                            $('input[name="capitalization_date"]').val(String(v.capitalization_date)
+                                .substring(0, 10));
+                        } else {
+                            $('input[name="capitalization_date"]').val(today);
+                        }
+
+                        const kode = v.kode_uom;
+                        const text = v.uom_text || kode;
+                        if (kode) {
+                            const opt = new Option(text, kode, true, true);
+                            $('#acq-uom').append(opt).trigger('change');
+                        }
+
+                        // === NEW LOGIC:
+                        // if total == 0 or null → editable
+                        // if total != 0 → disabled (existing acquisition already applied)
+                        const totalRaw = v.total;
+                        const shouldLock =
+                            totalRaw !== null &&
+                            totalRaw !== undefined &&
+                            Number(totalRaw) !== 0;
+
+                        setExistingMode(shouldLock);
+
+                        $('#modal-acq').modal('show');
+                    })
+                    .fail(() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        $('input[name="actual_date"]').val(today);
+                        $('input[name="capitalization_date"]').val(today);
+                        setExistingMode(false);
+                        $('#modal-acq').modal('show');
+                    });
+            });
+
+            // ==== UOM Select2 ====
+            $('#acq-uom').select2({
+                dropdownParent: $('#modal-acq'),
+                placeholder: 'Select UOM…',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: '{{ route('master.uom.options') }}',
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1
+                    }),
+                    processResults: d => d
+                }
+            });
+
+            // ==== Submit Acquisition ====
+            $('#formAcq').on('submit', function(e) {
+                e.preventDefault();
+
+                const payload = {
+                    quantity: $('input[name="quantity"]').val(),
+                    kode_uom: $('#acq-uom').val(),
+                    price: $('input[name="price"]').val(),
+                    useful_life_month: $('input[name="useful_life_month"]').val(),
+                    is_pajak: $('select[name="is_pajak"]').val(),
+                    actual_date: $('input[name="actual_date"]').val(),
+                    capitalization_date: $('input[name="capitalization_date"]').val(),
+                    nilai_pajak: $('input[name="nilai_pajak"]').val(),
+                    note: $('textarea[name="note"]').val(),
+                    _token: $('meta[name="csrf-token"]').attr('content')
+                };
+
+                Swal.fire({
+                    title: 'Saving…',
+                    didOpen: () => Swal.showLoading(),
+                    allowOutsideClick: false
+                });
+
+                $.post(ACQ.store, payload)
+                    .done(() => {
+                        $('#modal-acq').modal('hide');
+                        Swal.fire('Saved', 'Acquisition saved.', 'success');
+
+                        if ($.fn.DataTable.isDataTable('#tbl-acq')) {
+                            $('#tbl-acq').DataTable().ajax.reload(null, false);
+                        }
+
+                        // refresh summary/value di atas
+                        setTimeout(() => location.reload(), 400);
+                    })
+                    .fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
+            });
+
+            // ==== Acquisition History DataTable ====
+            const tblAcq = $('#tbl-acq').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: ACQ.data,
+                    type: 'GET'
+                },
+                order: [
+                    [3, 'desc']
+                ], // created_at desc
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                    "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                    "<'table-responsive'tr>" +
+                    "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                    "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                columns: [{
+                        data: 'acq_code',
+                        name: 'acq_code'
+                    },
+                    {
+                        data: 'detail',
+                        name: 'detail',
+                        orderable: false,
+                        searchable: true
+                    },
+                    {
+                        data: 'note',
+                        name: 'note',
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'pic_request_uid',
+                        name: 'pic_request_uid'
+                    },
+                    {
+                        data: 'created_at',
+                        name: 'created_at',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+
+                            const d = new Date(iso);
+                            const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                            const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false
+                            }).format(d);
+
+                            return `${dateStr} ${timeStr}`;
+                        }
+                    }
+                ]
+            });
+
+            // ==== Delete Acquisition Row ====
+            $('#tbl-acq').on('click', '.btn-delete', function() {
+                const id = $(this).data('id');
+                if (!id) return;
+
+                Swal.fire({
+                    title: 'Delete?',
+                    text: 'Moved to trash',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6'
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+
+                    Swal.fire({
+                        title: 'Deleting…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.ajax({
+                            url: '{{ route('acquisition.destroy', ':id') }}'.replace(':id', id),
+                            type: 'DELETE'
+                        })
+                        .done(() => {
+                            Swal.fire('Deleted', '', 'success');
+                            tblAcq.ajax.reload(null, false);
+                        })
+                        .fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        });
+                });
+            });
         })();
     </script>
 @endpush
