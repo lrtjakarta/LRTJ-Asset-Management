@@ -242,39 +242,57 @@ class DepreciationController extends Controller
             ->toJson();
     }
 
+    // public function runMonth(Request $request)
+    // {
+    //     abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+
+    //     $to = $request->filled('period')
+    //         ? Carbon::parse($request->input('period'))->startOfMonth()
+    //         : now()->startOfMonth();
+
+    //     $fromPolicy = AssetDeprPolicy::whereNotNull('depr_start_date')
+    //         ->min(DB::raw("date_trunc('month', depr_start_date)::date"));
+
+    //     $from = $fromPolicy
+    //         ? Carbon::parse($fromPolicy)->startOfMonth()
+    //         : $to->copy();
+
+    //     $this->processMonthlyDeprRange($from, $to);
+
+    //     return response()->json(['ok' => true]);
+    // }
+
+    // private function processMonthlyDeprRange(Carbon $from, Carbon $to): void
+    // {
+    //     $from = $from->copy()->startOfMonth();
+    //     $to   = $to->copy()->startOfMonth();
+
+    //     if ($from->gt($to)) {
+    //         return;
+    //     }
+
+    //     while ($from->lte($to)) {
+    //         $this->processMonthlyDepr($from);
+    //         $from->addMonth();
+    //     }
+    // }
+
     public function runMonth(Request $request)
     {
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
 
-        $to = $request->filled('period')
-            ? Carbon::parse($request->input('period'))->startOfMonth()
+        $periodInput = $request->input('period');
+
+        $period = $periodInput
+            ? Carbon::parse($periodInput)->startOfMonth()
             : now()->startOfMonth();
 
-        $fromPolicy = AssetDeprPolicy::whereNotNull('depr_start_date')
-            ->min(DB::raw("date_trunc('month', depr_start_date)::date"));
+        $this->processMonthlyDepr($period);
 
-        $from = $fromPolicy
-            ? Carbon::parse($fromPolicy)->startOfMonth()
-            : $to->copy();
-
-        $this->processMonthlyDeprRange($from, $to);
-
-        return response()->json(['ok' => true]);
-    }
-
-    private function processMonthlyDeprRange(Carbon $from, Carbon $to): void
-    {
-        $from = $from->copy()->startOfMonth();
-        $to   = $to->copy()->startOfMonth();
-
-        if ($from->gt($to)) {
-            return;
-        }
-
-        while ($from->lte($to)) {
-            $this->processMonthlyDepr($from);
-            $from->addMonth();
-        }
+        return response()->json([
+            'ok'     => true,
+            'period' => $period->toDateString(),
+        ]);
     }
 
     private function processMonthlyDepr(Carbon $period): void
@@ -367,12 +385,14 @@ class DepreciationController extends Controller
 
                 $capDate  = $av?->capitalization_date ?? $av?->actual_date ?? $av?->created_at;
                 $capTotal = (float) ($av?->total ?? 0);
+
                 if ($capDate) {
                     $assetStartMonth = Carbon::parse($capDate)->startOfMonth();
                     if ($period->lt($assetStartMonth)) {
                         continue;
                     }
                 }
+
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
                     ->whereDate('period', '<', $period)
                     ->orderBy('period', 'desc')
@@ -403,7 +423,7 @@ class DepreciationController extends Controller
                     ->where('category', AssetDeprMovement::ADJUSTMENT_DEPRECIATION)
                     ->sum('amount');
 
-                $startBase     = $policy->depr_start_date
+                $startBase = $policy->depr_start_date
                     ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
 
                 $eligibleStart = $startBase
@@ -419,7 +439,7 @@ class DepreciationController extends Controller
                 $elapsed   = $eligible ? $eligibleStart->diffInMonths($period) : 0;
                 $remaining = $eligible ? max(0, $lifeMonths - $elapsed) : 0;
 
-                $deprBase    = $eligible
+                $deprBase = $eligible
                     ? max(
                         ($opening + $adjValue + $tin - $tout - $disposals)
                             - (float) $policy->salvage_value,
@@ -469,43 +489,58 @@ class DepreciationController extends Controller
         });
     }
 
-    public function buildYear(Request $r)
+
+    public function buildYear(Request $request)
     {
-        abort_unless($r->user()?->hasAction('DEPRECIATION', 'C'), 403);
-        $r->validate(['year' => ['required', 'integer', 'min:1900', 'max:3000']]);
-        $year = (int) $r->year;
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'min:1900', 'max:3000'],
+        ]);
+
+        $year = (int) $data['year'];
 
         DB::transaction(function () use ($year) {
+            $start = "{$year}-01-01";
+            $end   = "{$year}-12-31";
+
             $rows = AssetDeprMonthly::query()
                 ->selectRaw("
-                    asset_uuid,
-                    SUM(CASE WHEN EXTRACT(MONTH FROM period)=1 THEN opening_balance ELSE 0 END) AS opening_balance,
-                    SUM(additions + transfers_in - transfers_out - disposals + adjustment_value) AS total_additions,
-                    SUM(depr_expense) AS depr_expense_year,
-                    SUM(adjustment_depreciation) AS adjustment_depreciation_year,
-                    MAX(accumulated_depr_end) AS accumulated_depr_end,
-                    MAX(ending_balance) AS ending_balance_year
-                ")
-                ->whereYear('period', $year)
+                asset_uuid,
+                SUM(CASE WHEN EXTRACT(MONTH FROM period) = 1 THEN opening_balance ELSE 0 END) AS opening_balance,
+                SUM(additions + transfers_in - transfers_out - disposals + adjustment_value) AS total_additions,
+                SUM(depr_expense) AS depr_expense_year,
+                SUM(adjustment_depreciation) AS adjustment_depreciation_year,
+                MAX(accumulated_depr_end) AS accumulated_depr_end,
+                MAX(ending_balance) AS ending_balance_year
+            ")
+                ->whereBetween('period', [$start, $end])
                 ->groupBy('asset_uuid')
                 ->get();
 
-            foreach ($rows as $r) {
+            foreach ($rows as $row) {
                 AssetDeprYearly::updateOrCreate(
-                    ['asset_uuid' => $r->asset_uuid, 'fiscal_year' => $year],
                     [
-                        'opening_balance'              => (float)$r->opening_balance,
-                        'total_additions'              => (float)$r->total_additions,
-                        'depr_expense_year'            => (float)$r->depr_expense_year,
-                        'adjustment_depreciation_year' => (float)$r->adjustment_depreciation_year,
-                        'accumulated_depr_end'         => (float)$r->accumulated_depr_end,
-                        'ending_balance_year'          => (float)$r->ending_balance_year,
+                        'asset_uuid'  => $row->asset_uuid,
+                        'fiscal_year' => $year,
+                    ],
+                    [
+                        'opening_balance'              => (float) $row->opening_balance,
+                        'total_additions'              => (float) $row->total_additions,
+                        'depr_expense_year'            => (float) $row->depr_expense_year,
+                        'adjustment_depreciation_year' => (float) $row->adjustment_depreciation_year,
+                        'accumulated_depr_end'         => (float) $row->accumulated_depr_end,
+                        'ending_balance_year'          => (float) $row->ending_balance_year,
                     ]
                 );
             }
         });
 
-        return response()->json(['ok' => true, 'message' => "Yearly summary built for {$year}"]);
+        return response()->json([
+            'ok'      => true,
+            'message' => "Yearly summary built for {$year}",
+            'year'    => $year,
+        ]);
     }
 
     public function recordAddition(Request $r)

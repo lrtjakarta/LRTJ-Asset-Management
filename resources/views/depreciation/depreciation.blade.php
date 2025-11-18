@@ -75,26 +75,26 @@
 
                     @canAction('DEPRECIATION','C')
                     <div class="card-toolbar">
-                        {{-- Process Current Month --}}
+                        {{-- Process Depreciation Month --}}
                         <form id="form-process-month" method="POST" action="{{ route('depreciation.run.month') }}"
                             class="d-inline-flex align-items-center gap-2 me-2">
                             @csrf
                             <input type="hidden" name="period" id="period" value="{{ $currentMonth }}">
-                            <button type="submit" id="btn-process-month" class="btn btn-danger btn-sm">
-                                <span class="indicator-label">Process Current Month</span>
+                            <button type="button" id="btn-open-process-month" class="btn btn-danger btn-sm">
+                                <span class="indicator-label">Process Depreciation Month</span>
                                 <span class="indicator-progress">
                                     Processing… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                                 </span>
                             </button>
                         </form>
 
-                        {{-- Build Year button (current year) --}}
+                        {{-- Build Year --}}
                         <form id="form-build-year" method="POST" action="{{ route('depreciation.build.year') }}"
                             class="d-inline-flex align-items-center gap-2 me-2">
                             @csrf
-                            <input type="hidden" name="year" value="{{ $currentYear }}">
-                            <button type="submit" id="btn-build-year" class="btn btn-danger btn-sm">
-                                <span class="indicator-label">Build Year {{ $currentYear }}</span>
+                            <input type="hidden" name="year" id="year" value="{{ $currentYear }}">
+                            <button type="button" id="btn-open-build-year" class="btn btn-danger btn-sm">
+                                <span id="btn-build-year-label" class="indicator-label">Build Year</span>
                                 <span class="indicator-progress">
                                     Building… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
                                 </span>
@@ -107,6 +107,7 @@
                         </button>
                     </div>
                     @endcanAction
+
                 </div>
 
                 <div class="card-body">
@@ -135,6 +136,76 @@
                         </thead>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+    {{-- Process Depreciation Month - Month Picker --}}
+    <div class="modal fade" id="modal-process-month" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Process Depreciation Month</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form id="form-process-month-modal" autocomplete="off">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label required">Period (Current Year Only)</label>
+                            <input type="month" id="proc-period" class="form-control" min="{{ $currentYear }}-01"
+                                max="{{ $currentYear }}-12"
+                                value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
+                            <small class="text-muted">Only months in {{ $currentYear }} are allowed.</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="btn-run-process-month" class="btn btn-danger">
+                            <span class="indicator-label">Process</span>
+                            <span class="indicator-progress">
+                                Processing… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- Build Year - Year Picker --}}
+    <div class="modal fade" id="modal-build-year" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Build Year</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <form id="form-build-year-modal" autocomplete="off">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label required">Year</label>
+                            <select id="build-year-select" class="form-select">
+                                @for ($y = $currentYear - 5; $y <= $currentYear + 1; $y++)
+                                    <option value="{{ $y }}" @selected($y == $currentYear)>{{ $y }}
+                                    </option>
+                                @endfor
+                            </select>
+                            <small class="text-muted">Pick the year to build depreciation summary.</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="btn-run-build-year" class="btn btn-danger">
+                            <span class="indicator-label">Build</span>
+                            <span class="indicator-progress">
+                                Building… <span class="spinner-border spinner-border-sm align-middle ms-2"></span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -195,15 +266,25 @@
         </div>
     </div>
 @endsection
-
 @push('scripts')
     <script>
         (function() {
-            const PERIOD = "{{ $currentMonth }}";
-            const $btn = $('#btn-process-month');
-            const $form = $('#form-process-month');
-            const $btnYear = $('#btn-build-year');
+            const PERIOD = "{{ $currentMonth }}"; // YYYY-MM-01
+            const CURRENT_YEAR = {{ $currentYear }};
+            const DEFAULT_PERIOD_MONTH = "{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}";
+
+            const $formProc = $('#form-process-month');
             const $formYear = $('#form-build-year');
+
+            const $btnProcOpen = $('#btn-open-process-month');
+            const $btnYearOpen = $('#btn-open-build-year');
+            const $btnAdjOpen = $('#btn-open-adj-depr');
+
+            const $procMonthInp = $('#proc-period');
+            const $yearSelect = $('#build-year-select');
+
+            const monthModal = new bootstrap.Modal(document.getElementById('modal-process-month'));
+            const yearModal = new bootstrap.Modal(document.getElementById('modal-build-year'));
             const $modalAdj = new bootstrap.Modal(document.getElementById('modal-adj-depr'));
 
             const money = v => Intl.NumberFormat().format(Number(v ?? 0));
@@ -211,20 +292,17 @@
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
             }).format(Number(v ?? 0));
-            const fmt2 = v => new Intl.NumberFormat(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(Number(v || 0));
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
 
-            const setBusy = (busy) => {
-                if (busy) $btn.attr('data-kt-indicator', 'on').prop('disabled', true);
-                else $btn.removeAttr('data-kt-indicator').prop('disabled', false);
+            const setBusyProc = busy => {
+                if (busy) $btnProcOpen.attr('data-kt-indicator', 'on').prop('disabled', true);
+                else $btnProcOpen.removeAttr('data-kt-indicator').prop('disabled', false);
             };
-            const setBusyYear = (busy) => {
-                if (busy) $btnYear.attr('data-kt-indicator', 'on').prop('disabled', true);
-                else $btnYear.removeAttr('data-kt-indicator').prop('disabled', false);
+
+            const setBusyYear = busy => {
+                if (busy) $btnYearOpen.attr('data-kt-indicator', 'on').prop('disabled', true);
+                else $btnYearOpen.removeAttr('data-kt-indicator').prop('disabled', false);
             };
 
             function buildFilters() {
@@ -239,14 +317,16 @@
                     asset_q: $('#f-asset').val() || '',
                 };
             }
-            // Open Adjustment Depreciation modal
-            $('#btn-open-adj-depr').on('click', () => {
+
+            // ===== Adjustment Depreciation modal open =====
+            $btnAdjOpen.on('click', () => {
                 $('#form-adj-depr')[0].reset();
                 $('#adj-asset-uuid').val('');
                 $('#adj-asset').val(null).trigger('change');
                 $('#adj-date').val("{{ Carbon::now()->toDateString() }}");
                 $modalAdj.show();
             });
+
             $('#f-asset-status').select2({
                 placeholder: 'All status',
                 allowClear: true,
@@ -263,7 +343,6 @@
                     processResults: d => d
                 }
             });
-
 
             $('#adj-asset').select2({
                 dropdownParent: $('#modal-adj-depr'),
@@ -288,7 +367,7 @@
                 $('#adj-asset-uuid').val($(this).val() || '');
             });
 
-            // DataTable
+            // ===== DataTable =====
             const tbl = $('#tbl-monthly').DataTable({
                 processing: true,
                 serverSide: true,
@@ -305,9 +384,7 @@
                 ],
                 ajax: {
                     url: "{{ route('depreciation.dt.monthly') }}",
-                    data: d => {
-                        Object.assign(d, buildFilters());
-                    }
+                    data: d => Object.assign(d, buildFilters())
                 },
                 columns: [{
                         data: 'asset_code',
@@ -424,12 +501,10 @@
                 ]
             });
 
-            function formatPeriodToText(period) {
-                if (!period) return '';
-
-                const [year, month] = period.split('-');
+            function formatPeriodToText(periodMonth) {
+                if (!periodMonth) return '';
+                const [year, month] = periodMonth.split('-');
                 const date = new Date(Number(year), Number(month) - 1, 1);
-
                 return date.toLocaleDateString('en-US', {
                     month: 'long',
                     year: 'numeric'
@@ -437,67 +512,128 @@
             }
 
             function updatePeriodText() {
-                const periodVal = $('#f-period').val();
+                const periodVal = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
                 $('#currentMonthText').text(formatPeriodToText(periodVal));
             }
 
+            // initial text
+            updatePeriodText();
+
+            // ===== Filter & Reset & Export =====
             $('#btnFilter').on('click', function() {
                 tbl.ajax.reload();
                 updatePeriodText();
             });
 
             $('#btnReset').on('click', function() {
-                $('#f-period').val("{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}");
+                $('#f-period').val(DEFAULT_PERIOD_MONTH);
                 $('#f-asset-status').val('');
                 $('#f-cap-from').val('');
                 $('#f-cap-to').val('');
                 $('#f-asset').val('');
-
                 tbl.ajax.reload();
                 updatePeriodText();
             });
+
             $('#btnExport').on('click', function(e) {
                 e.preventDefault();
                 const params = $.param(buildFilters());
                 window.location = "{{ route('export.depreciation.monthly') }}" + '?' + params;
             });
-            // Process Current Month
-            $form.on('submit', async function(e) {
+
+            // ===== Open Process Month modal =====
+            $btnProcOpen.on('click', function() {
+                let period = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
+                const [yrStr] = period.split('-');
+                const yr = Number(yrStr || CURRENT_YEAR);
+                if (yr !== CURRENT_YEAR) {
+                    period = DEFAULT_PERIOD_MONTH;
+                }
+                $procMonthInp.attr('min', CURRENT_YEAR + '-01');
+                $procMonthInp.attr('max', CURRENT_YEAR + '-12');
+                $procMonthInp.val(period);
+                monthModal.show();
+            });
+
+            // ===== Submit Process Month (from modal) =====
+            $('#form-process-month-modal').on('submit', async function(e) {
                 e.preventDefault();
+
+                const periodMonth = $procMonthInp.val();
+                if (!periodMonth) {
+                    toastr?.error('Please pick a month');
+                    return;
+                }
+                const [yrStr] = periodMonth.split('-');
+                const yr = Number(yrStr || CURRENT_YEAR);
+                if (yr !== CURRENT_YEAR) {
+                    toastr?.error(`Only months in current year (${CURRENT_YEAR}) are allowed`);
+                    return;
+                }
+
+                const period = periodMonth + '-01';
+                $('#period').val(period); // hidden input in main form
+
                 try {
-                    setBusy(true);
+                    setBusyProc(true);
+                    monthModal.hide();
                     await $.ajax({
-                        url: this.action,
+                        url: $formProc.attr('action'),
                         type: 'POST',
-                        data: $(this).serialize(),
+                        data: $formProc.serialize(),
                         headers: {
-                            'X-CSRF-TOKEN': $('input[name="_token"]', this).val()
+                            'X-CSRF-TOKEN': $('input[name="_token"]', $formProc).val()
                         }
                     });
-                    toastr?.success('Processed {{ $currentMonthText }}');
+
+                    toastr?.success(`Processed ${formatPeriodToText(periodMonth)}`);
                     tbl.ajax.reload(null, false);
                 } catch (err) {
-                    // console.error(err);
                     toastr?.error('Failed to process depreciation');
                 } finally {
-                    setBusy(false);
+                    setBusyProc(false);
                 }
             });
 
-            // Build Year (current year)
-            $formYear.on('submit', async function(e) {
+            // ===== Open Build Year modal =====
+            $btnYearOpen.on('click', function() {
+                // Suggest year from filter if same as currentYear range
+                const filterPeriod = $('#f-period').val();
+                if (filterPeriod && filterPeriod.includes('-')) {
+                    const fy = Number(filterPeriod.split('-')[0]);
+                    if (fy && fy >= CURRENT_YEAR - 5 && fy <= CURRENT_YEAR + 1) {
+                        $yearSelect.val(String(fy));
+                    }
+                }
+                yearModal.show();
+            });
+
+            // ===== Submit Build Year (from modal) =====
+            $('#form-build-year-modal').on('submit', async function(e) {
                 e.preventDefault();
+
+                const yearVal = $yearSelect.val();
+                const yearNum = Number(yearVal);
+                if (!yearNum) {
+                    toastr?.error('Please pick a year');
+                    return;
+                }
+
+                $('#year').val(yearNum);
+                $('#btn-build-year-label').text(`Build Year`);
+
                 try {
                     setBusyYear(true);
+                    yearModal.hide();
                     await $.ajax({
-                        url: this.action,
+                        url: $formYear.attr('action'),
                         type: 'POST',
-                        data: $(this).serialize(),
+                        data: $formYear.serialize(),
                         headers: {
-                            'X-CSRF-TOKEN': $('input[name="_token"]', this).val()
+                            'X-CSRF-TOKEN': $('input[name="_token"]', $formYear).val()
                         }
                     });
-                    toastr?.success('Yearly summary built for {{ $currentYear }}');
+                    toastr?.success(`Yearly summary built for ${yearNum}`);
                 } catch (err) {
                     console.error(err);
                     const msg = err?.responseJSON?.message || 'Failed to build yearly depreciation';
@@ -509,7 +645,7 @@
 
             // ===== Adjustment Depreciation submit =====
             const $btnAdj = $('#btn-submit-adj');
-            const setBusyAdj = (b) => {
+            const setBusyAdj = b => {
                 if (b) $btnAdj.attr('data-kt-indicator', 'on').prop('disabled', true);
                 else $btnAdj.removeAttr('data-kt-indicator').prop('disabled', false);
             };
@@ -551,6 +687,7 @@
                         }
                     });
 
+                    // best-effort re-run month
                     try {
                         await $.ajax({
                             url: "{{ route('depreciation.run.month') }}",
@@ -565,7 +702,7 @@
                     } catch (e2) {
                         console.error('runMonth after adjustment failed', e2);
                         toastr?.warning(
-                            'Adjustment saved, but monthly recompute failed. Please press "Process Current Month".'
+                            'Adjustment saved, but monthly recompute failed. Please press "Process Depreciation Month".'
                         );
                     }
 
