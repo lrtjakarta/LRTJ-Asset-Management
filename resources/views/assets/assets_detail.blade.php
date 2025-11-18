@@ -1298,431 +1298,449 @@
             });
 
         })();
-    </script>@push('scripts')
-<script>
-    (function () {
-        const DS = {
-            data:    '{{ route('disposal.data', $asset->uuid) }}',
-            create:  '{{ route('disposal.store') }}',
-            show:    '{{ route('disposal.show', ':id') }}',
-            update:  '{{ route('disposal.update', ':id') }}',
-            destroy: '{{ route('disposal.destroy', ':id') }}',
-            approve: '{{ route('disposal.approve', ':id') }}', // simple fallback (not used by buttons now)
-            reject:  '{{ route('disposal.reject', ':id') }}',
+    </script>
+    @push('scripts')
+        <script>
+            (function() {
+                const DS = {
+                    data: '{{ route('disposal.data', $asset->uuid) }}',
+                    create: '{{ route('disposal.store') }}',
+                    show: '{{ route('disposal.show', ':id') }}',
+                    update: '{{ route('disposal.update', ':id') }}',
+                    destroy: '{{ route('disposal.destroy', ':id') }}',
+                    approve: '{{ route('disposal.approve', ':id') }}', // simple fallback (not used by buttons now)
+                    reject: '{{ route('disposal.reject', ':id') }}',
 
-            approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
-            formRoute:   id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
-            baRoute:     id => '{{ route('disposal.ba', ':id') }}'.replace(':id', id),
-        };
+                    approveStep: id => '{{ route('disposal.approve-step', ':id') }}'.replace(':id', id),
+                    formRoute: id => '{{ route('disposal.form', ':id') }}'.replace(':id', id),
+                    baRoute: id => '{{ route('disposal.ba', ':id') }}'.replace(':id', id),
+                };
 
-        const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
-        const BA_URL_TPL   = @json(route('disposal.ba', '__UUID__'));
+                const FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
+                const BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
 
-        // ----------------------------
-        // Basic create / edit modal
-        // ----------------------------
-        $('#btnOpenDisposal').on('click', function (e) {
-            e.preventDefault();
-            resetDisposalForm();
-            $('#modal-disposal').modal('show');
-        });
-
-        function resetDisposalForm() {
-            $('#ds-edit-id').val('');
-            $('#ds-note').val('');
-            $('#ds-file').val('');
-            $('#ds-remove-file').val('0');
-            $('#ds-current-file').addClass('d-none');
-            $('#ds-current-file-link').attr('href', '#').text('');
-        }
-
-        $('#ds-btn-remove-file').off('click').on('click', function () {
-            $('#ds-remove-file').val('1');
-            $('#ds-current-file').addClass('d-none');
-        });
-
-        $('#formDisposal').off('submit').on('submit', function (e) {
-            e.preventDefault();
-
-            const isEdit = !!$('#ds-edit-id').val();
-            const id     = $('#ds-edit-id').val();
-            const fileEl = document.getElementById('ds-file');
-            const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
-
-            const base = {
-                asset_uuid: '{{ $asset->uuid }}',
-                note: $('#ds-note').val() || '',
-                remove_file: $('#ds-remove-file').val() || 0,
-            };
-
-            Swal.fire({
-                title: 'Saving…',
-                didOpen: () => Swal.showLoading(),
-                allowOutsideClick: false
-            });
-
-            let req;
-            if (hasFile) {
-                const fd = new FormData();
-                Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                fd.append('file', fileEl.files[0]);
-                if (isEdit) fd.append('_method', 'PUT');
-
-                req = $.ajax({
-                    url:  isEdit ? DS.update.replace(':id', id) : DS.create,
-                    type: 'POST',
-                    data: fd,
-                    processData: false,
-                    contentType: false
-                });
-            } else {
-                req = isEdit
-                    ? $.ajax({ url: DS.update.replace(':id', id), type: 'PUT', data: base })
-                    : $.post(DS.create, base);
-            }
-
-            req.done(() => {
-                $('#modal-disposal').modal('hide');
-                Swal.fire('Success', isEdit ? 'Disposal updated.' : 'Disposal created.', 'success');
-                $('#tbl-disposal').DataTable().ajax.reload(null, false);
-            }).fail(x => {
-                Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
-            });
-        });
-
-        // ----------------------------
-        // DataTable (asset history)
-        // ----------------------------
-        const dsTable = $('#tbl-disposal').DataTable({
-            processing: true,
-            serverSide: true,
-            ajax: {
-                url: DS.data,
-                type: 'GET'
-            },
-            order: [[7, 'desc']],
-            dom:
-                "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
-                "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
-                "<'table-responsive'tr>" +
-                "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
-                "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
-            columns: [
-                { data: 'disposal_code', name: 'disposal_code' },
-                {
-                    data: null,
-                    orderable: false,
-                    searchable: false,
-                    render: () => 'DISPOSAL'
-                },
-                { data: 'pic_request_uid', name: 'pic_request_uid' },
-                {
-                    data: 'pic_approve_uid',
-                    name: 'pic_approve_uid',
-                    defaultContent: ''
-                },
-                {
-                    data: 'note',
-                    name: 'note',
-                    render: d => d ? $('<div>').text(d).html() : ''
-                },
-                {
-                    data: 'workflow_label',
-                    name: 'workflow_label',
-                    render: (d, t, row) => {
-                        if (row.kode_status === 'APR') {
-                            return `<span class="badge badge-light-primary">${d || ''}</span>`;
-                        } else if (row.kode_status === 'ACC') {
-                            return `<span class="badge badge-light-success">${d || ''}</span>`;
-                        }
-                        return `<span class="badge badge-light-danger">${d || ''}</span>`;
-                    }
-                },
-                {
-                    data: 'file',
-                    name: 'file',
-                    orderable: false,
-                    searchable: false,
-                    defaultContent: ''
-                },
-                {
-                    data: 'updated_at',
-                    name: 'updated_at',
-                    render: (iso, type) => {
-                        if (!iso) return '';
-                        if (type === 'sort' || type === 'type') return iso;
-                        const d = new Date(iso);
-                        const dateStr = new Intl.DateTimeFormat('en-GB', {
-                            timeZone: 'Asia/Jakarta',
-                            day: '2-digit',
-                            month: 'long',
-                            year: 'numeric'
-                        }).format(d);
-                        const timeStr = new Intl.DateTimeFormat('en-GB', {
-                            timeZone: 'Asia/Jakarta',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false
-                        }).format(d);
-                        return `${dateStr} ${timeStr}`;
-                    }
-                },
-                {
-                    data: 'actions',
-                    name: 'actions',
-                    orderable: false,
-                    searchable: false
-                }
-            ],
-            rowCallback: function (row, data) {
-                const $actions = $('td:last', row);
-                const $group   = $actions.find('.btn-group');
-                if (!$group.length) return;
-
-                const formUrl = data.form_file_url && data.form_file_url.length
-                    ? data.form_file_url
-                    : FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
-
-                const baUrl = data.ba_file_url && data.ba_file_url.length
-                    ? data.ba_file_url
-                    : BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
-
-                if (!$group.find('.btn-ds-form').length) {
-                    const label = data.flow_file_name || 'Form';
-                    const btn = `
-                        <button type="button"
-                                class="btn btn-light-info btn-sm btn-ds-form"
-                                onclick="window.open('${formUrl}','_blank')">
-                            ${escapeHtml(label)}
-                        </button>`;
-                    $group.prepend(btn);
-                }
-
-                if (!$group.find('.btn-ds-ba').length) {
-                    const label = data.ba_file_name || 'BA';
-                    const btn = `
-                        <button type="button"
-                                class="btn btn-light-warning btn-sm btn-ds-ba"
-                                onclick="window.open('${baUrl}','_blank')">
-                            ${escapeHtml(label)}
-                        </button>`;
-                    $group.prepend(btn);
-                }
-            }
-        });
-
-        // ----------------------------
-        // Row actions (edit / reject / delete)
-        // ----------------------------
-        $(document).on('click', '.btn-ds-edit', function () {
-            const id = $(this).data('id');
-
-            $.getJSON(DS.show.replace(':id', id))
-                .done(d => {
+                // ----------------------------
+                // Basic create / edit modal
+                // ----------------------------
+                $('#btnOpenDisposal').on('click', function(e) {
+                    e.preventDefault();
                     resetDisposalForm();
-                    $('#ds-edit-id').val(d.uuid);
-                    $('#ds-note').val(d.note || '');
+                    $('#modal-disposal').modal('show');
+                });
 
-                    if (d.file_url) {
-                        $('#ds-current-file-link')
-                            .attr('href', d.file_url)
-                            .text(d.file_name || 'Current file');
-                        $('#ds-current-file').removeClass('d-none');
-                        $('#ds-remove-file').val('0');
+                function resetDisposalForm() {
+                    $('#ds-edit-id').val('');
+                    $('#ds-note').val('');
+                    $('#ds-file').val('');
+                    $('#ds-remove-file').val('0');
+                    $('#ds-current-file').addClass('d-none');
+                    $('#ds-current-file-link').attr('href', '#').text('');
+                }
+
+                $('#ds-btn-remove-file').off('click').on('click', function() {
+                    $('#ds-remove-file').val('1');
+                    $('#ds-current-file').addClass('d-none');
+                });
+
+                $('#formDisposal').off('submit').on('submit', function(e) {
+                    e.preventDefault();
+
+                    const isEdit = !!$('#ds-edit-id').val();
+                    const id = $('#ds-edit-id').val();
+                    const fileEl = document.getElementById('ds-file');
+                    const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+
+                    const base = {
+                        asset_uuid: '{{ $asset->uuid }}',
+                        note: $('#ds-note').val() || '',
+                        remove_file: $('#ds-remove-file').val() || 0,
+                    };
+
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    let req;
+                    if (hasFile) {
+                        const fd = new FormData();
+                        Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                        fd.append('file', fileEl.files[0]);
+                        if (isEdit) fd.append('_method', 'PUT');
+
+                        req = $.ajax({
+                            url: isEdit ? DS.update.replace(':id', id) : DS.create,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        });
                     } else {
-                        $('#ds-current-file').addClass('d-none');
-                        $('#ds-remove-file').val('0');
+                        req = isEdit ?
+                            $.ajax({
+                                url: DS.update.replace(':id', id),
+                                type: 'PUT',
+                                data: base
+                            }) :
+                            $.post(DS.create, base);
                     }
 
-                    $('#modal-disposal').modal('show');
-                })
-                .fail(() => {
-                    Swal.fire('Error', 'Cannot load disposal.', 'error');
-                });
-        });
-
-        $(document).on('click', '.btn-ds-reject', function () {
-            const id = $(this).data('id');
-            Swal.fire({
-                title: 'Reject?',
-                icon: 'warning',
-                showCancelButton: true
-            }).then(res => {
-                if (!res.isConfirmed) return;
-
-                Swal.fire({
-                    title: 'Updating…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
-
-                $.post(DS.reject.replace(':id', id))
-                    .done(() => {
-                        Swal.fire('Rejected', 'Disposal rejected.', 'success');
-                        dsTable.ajax.reload(null, false);
-                    })
-                    .fail(x => {
+                    req.done(() => {
+                        $('#modal-disposal').modal('hide');
+                        Swal.fire('Success', isEdit ? 'Disposal updated.' : 'Disposal created.', 'success');
+                        $('#tbl-disposal').DataTable().ajax.reload(null, false);
+                    }).fail(x => {
                         Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
                     });
-            });
-        });
-
-        $(document).on('click', '.btn-ds-delete', function () {
-            const id = $(this).data('id');
-            Swal.fire({
-                title: 'Delete?',
-                text: 'Move to trash.',
-                icon: 'warning',
-                showCancelButton: true
-            }).then(res => {
-                if (!res.isConfirmed) return;
-
-                Swal.fire({
-                    title: 'Deleting…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
                 });
 
-                $.ajax({
-                    url: DS.destroy.replace(':id', id),
-                    type: 'DELETE'
-                }).done(() => {
-                    Swal.fire('Deleted', 'Disposal deleted.', 'success');
-                    dsTable.ajax.reload(null, false);
-                }).fail(x => {
-                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                // ----------------------------
+                // DataTable (asset history)
+                // ----------------------------
+                const dsTable = $('#tbl-disposal').DataTable({
+                    processing: true,
+                    serverSide: true,
+                    ajax: {
+                        url: DS.data,
+                        type: 'GET'
+                    },
+                    order: [
+                        [7, 'desc']
+                    ],
+                    dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                        "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                        "<'table-responsive'tr>" +
+                        "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                        "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
+                    columns: [{
+                            data: 'disposal_code',
+                            name: 'disposal_code'
+                        },
+                        {
+                            data: null,
+                            orderable: false,
+                            searchable: false,
+                            render: () => 'DISPOSAL'
+                        },
+                        {
+                            data: 'pic_request_uid',
+                            name: 'pic_request_uid'
+                        },
+                        {
+                            data: 'pic_approve_uid',
+                            name: 'pic_approve_uid',
+                            defaultContent: ''
+                        },
+                        {
+                            data: 'note',
+                            name: 'note',
+                            render: d => d ? $('<div>').text(d).html() : ''
+                        },
+                        {
+                            data: 'workflow_label',
+                            name: 'workflow_label',
+                            render: (d, t, row) => {
+                                if (row.kode_status === 'APR') {
+                                    return `<span class="badge badge-light-primary">${d || ''}</span>`;
+                                } else if (row.kode_status === 'ACC') {
+                                    return `<span class="badge badge-light-success">${d || ''}</span>`;
+                                }
+                                return `<span class="badge badge-light-danger">${d || ''}</span>`;
+                            }
+                        },
+                        {
+                            data: 'file',
+                            name: 'file',
+                            orderable: false,
+                            searchable: false,
+                            defaultContent: ''
+                        },
+                        {
+                            data: 'updated_at',
+                            name: 'updated_at',
+                            render: (iso, type) => {
+                                if (!iso) return '';
+                                if (type === 'sort' || type === 'type') return iso;
+                                const d = new Date(iso);
+                                const dateStr = new Intl.DateTimeFormat('en-GB', {
+                                    timeZone: 'Asia/Jakarta',
+                                    day: '2-digit',
+                                    month: 'long',
+                                    year: 'numeric'
+                                }).format(d);
+                                const timeStr = new Intl.DateTimeFormat('en-GB', {
+                                    timeZone: 'Asia/Jakarta',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    hour12: false
+                                }).format(d);
+                                return `${dateStr} ${timeStr}`;
+                            }
+                        },
+                        {
+                            data: 'actions',
+                            name: 'actions',
+                            orderable: false,
+                            searchable: false
+                        }
+                    ],
+                rowCallback: function(row, data) {
+                    const $actions = $('td:last', row);
+                    const $group = $actions.find('.btn-group');
+
+                    if (!$group.length) return;
+
+                    const formUrl = (data.form_file_url && data.form_file_url.length) ?
+                        data.form_file_url :
+                        FORM_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
+
+                    const baUrl = (data.ba_file_url && data.ba_file_url.length) ?
+                        data.ba_file_url :
+                        BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
+
+                    const formBtn = `
+        <button type="button"
+           class="btn btn-light-info btn-sm btn-ds-form"
+           onclick="window.open('${formUrl}','_blank')">
+           Form
+        </button>
+    `;
+
+                    const baBtn = `
+        <button type="button"
+           class="btn btn-light-warning btn-sm btn-ds-ba"
+           onclick="window.open('${baUrl}','_blank')">
+           BA
+        </button>
+    `;
+
+                    if (!$group.find('.btn-ds-form').length) {
+                        $group.prepend(formBtn);
+                    }
+                    if (!$group.find('.btn-ds-ba').length) {
+                        $group.prepend(baBtn);
+                    }
+                }
+
                 });
-            });
-        });
 
-        // ----------------------------
-        // NEW: Approval Flow Modal
-        // ----------------------------
-        const $flowModal       = $('#modal-disposal-flow');
-        const $flowSteps       = $('#flow-steps');
-        const $flowBaInput     = $('#flow-ba-file-input');
-        const $flowFormInput   = $('#flow-form-file-input');
-        const $flowBaWrapper   = $('#flow-wrap-ba-upload');
-        const $flowFormWrapper = $('#flow-wrap-form-upload');
-        const $flowAsset       = $('#flow-asset');
-        const $flowCode        = $('#flow-code');
-        const $flowStatus      = $('#flow-status');
-        const $flowFormOut     = $('#flow-form-file');
-        const $flowBaOut       = $('#flow-ba-file');
+                // ----------------------------
+                // Row actions (edit / reject / delete)
+                // ----------------------------
+                $(document).on('click', '.btn-ds-edit', function() {
+                    const id = $(this).data('id');
 
-        function resetFlowModal() {
-            const form = document.getElementById('formDisposalFlow');
-            if (form) form.reset();
+                    $.getJSON(DS.show.replace(':id', id))
+                        .done(d => {
+                            resetDisposalForm();
+                            $('#ds-edit-id').val(d.uuid);
+                            $('#ds-note').val(d.note || '');
 
-            $('#flow-disposal-id').val('');
+                            if (d.file_url) {
+                                $('#ds-current-file-link')
+                                    .attr('href', d.file_url)
+                                    .text(d.file_name || 'Current file');
+                                $('#ds-current-file').removeClass('d-none');
+                                $('#ds-remove-file').val('0');
+                            } else {
+                                $('#ds-current-file').addClass('d-none');
+                                $('#ds-remove-file').val('0');
+                            }
 
-            $flowSteps.empty();
-            $flowAsset.text('');
-            $flowCode.text('');
-            $flowStatus.text('');
-            $flowFormOut.html('—');
-            $flowBaOut.html('—');
-
-            if ($flowBaWrapper.length)   $flowBaWrapper.removeClass('d-none');
-            if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
-
-            $flowModal.data('require-ba', false);
-        }
-
-        function openDisposalFlow(id) {
-            if (!id) return;
-
-            resetFlowModal();
-            $('#flow-disposal-id').val(id);
-
-            Swal.fire({
-                title: 'Loading flow…',
-                didOpen: () => Swal.showLoading(),
-                allowOutsideClick: false
-            });
-
-            $.getJSON(DS.show.replace(':id', id))
-                .done(d => {
-                    Swal.close();
-
-                    const assetLabel =
-                        ((d.asset_code || '') +
-                            (d.asset_name ? ' - ' + d.asset_name : '')) || d.asset_uuid || '';
-                    $flowAsset.text(assetLabel);
-                    $flowCode.text(d.disposal_code || '');
-                    $flowStatus.text(d.kode_status || '');
-
-                    // Form summary section
-                    if (d.flow_file_url) {
-                        $flowFormOut.html(
-                            `<a href="${d.flow_file_url}" target="_blank">${escapeHtml(d.flow_file_name || 'Download Form')}</a>`
-                        );
-                    } else {
-                        const url = FORM_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
-                        $flowFormOut.html(
-                            `<a href="${url}" target="_blank">Download auto-filled form</a>`
-                        );
-                    }
-
-                    // BA summary section
-                    if (d.ba_file_url) {
-                        $flowBaOut.html(
-                            `<a href="${d.ba_file_url}" target="_blank">${escapeHtml(d.ba_file_name || 'Download BA')}</a>`
-                        );
-                    } else {
-                        const url = BA_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
-                        $flowBaOut.html(
-                            `<a href="${url}" target="_blank">Download auto-filled BA</a>`
-                        );
-                    }
-
-                    let flow = d.flow;
-                    if (typeof flow === 'string') {
-                        try { flow = JSON.parse(flow); } catch (e) { flow = null; }
-                    }
-                    renderFlowSteps(flow || {});
-                    $flowModal.modal('show');
-                })
-                .fail(x => {
-                    Swal.fire('Error', x.responseJSON?.message || 'Cannot load flow', 'error');
+                            $('#modal-disposal').modal('show');
+                        })
+                        .fail(() => {
+                            Swal.fire('Error', 'Cannot load disposal.', 'error');
+                        });
                 });
-        }
 
-        function renderFlowSteps(flow) {
-            $flowSteps.empty();
+                $(document).on('click', '.btn-ds-reject', function() {
+                    const id = $(this).data('id');
+                    Swal.fire({
+                        title: 'Reject?',
+                        icon: 'warning',
+                        showCancelButton: true
+                    }).then(res => {
+                        if (!res.isConfirmed) return;
 
-            const steps = Array.isArray(flow.steps) ? flow.steps : [];
-            if (!steps.length) {
-                $flowSteps.append('<div class="text-muted">No flow defined.</div>');
-                $flowModal.data('require-ba', false);
-                return;
-            }
+                        Swal.fire({
+                            title: 'Updating…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
 
-            const firstPendingIndex = steps.findIndex(s => !s.approved_at);
-            const lastIndex         = steps.length - 1;
-            const requireBa         = firstPendingIndex !== -1 && firstPendingIndex === lastIndex;
+                        $.post(DS.reject.replace(':id', id))
+                            .done(() => {
+                                Swal.fire('Rejected', 'Disposal rejected.', 'success');
+                                dsTable.ajax.reload(null, false);
+                            })
+                            .fail(x => {
+                                Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                            });
+                    });
+                });
 
-            // BA required only on last step; both upload blocks are always visible
-            $flowModal.data('require-ba', requireBa);
+                $(document).on('click', '.btn-ds-delete', function() {
+                    const id = $(this).data('id');
+                    Swal.fire({
+                        title: 'Delete?',
+                        text: 'Move to trash.',
+                        icon: 'warning',
+                        showCancelButton: true
+                    }).then(res => {
+                        if (!res.isConfirmed) return;
 
-            if ($flowBaWrapper.length)   $flowBaWrapper.removeClass('d-none');
-            if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
+                        Swal.fire({
+                            title: 'Deleting…',
+                            didOpen: () => Swal.showLoading(),
+                            allowOutsideClick: false
+                        });
 
-            steps.forEach((st, idx) => {
-                const isApproved = !!st.approved_at;
-                const isNext     = !isApproved && idx === firstPendingIndex;
+                        $.ajax({
+                            url: DS.destroy.replace(':id', id),
+                            type: 'DELETE'
+                        }).done(() => {
+                            Swal.fire('Deleted', 'Disposal deleted.', 'success');
+                            dsTable.ajax.reload(null, false);
+                        }).fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        });
+                    });
+                });
 
-                const statusBadge = isApproved
-                    ? '<span class="badge badge-light-success">Approved</span>'
-                    : (isNext
-                        ? '<span class="badge badge-light-warning">Pending (Next)</span>'
-                        : '<span class="badge badge-light-secondary">Waiting</span>');
+                // ----------------------------
+                // NEW: Approval Flow Modal
+                // ----------------------------
+                const $flowModal = $('#modal-disposal-flow');
+                const $flowSteps = $('#flow-steps');
+                const $flowBaInput = $('#flow-ba-file-input');
+                const $flowFormInput = $('#flow-form-file-input');
+                const $flowBaWrapper = $('#flow-wrap-ba-upload');
+                const $flowFormWrapper = $('#flow-wrap-form-upload');
+                const $flowAsset = $('#flow-asset');
+                const $flowCode = $('#flow-code');
+                const $flowStatus = $('#flow-status');
+                const $flowFormOut = $('#flow-form-file');
+                const $flowBaOut = $('#flow-ba-file');
 
-                const info = isApproved
-                    ? `<div class="small text-muted">by ${escapeHtml(st.approved_by || '-')} at ${escapeHtml(st.approved_at || '')}</div>`
-                    : '';
+                function resetFlowModal() {
+                    const form = document.getElementById('formDisposalFlow');
+                    if (form) form.reset();
 
-                const li = `
+                    $('#flow-disposal-id').val('');
+
+                    $flowSteps.empty();
+                    $flowAsset.text('');
+                    $flowCode.text('');
+                    $flowStatus.text('');
+                    $flowFormOut.html('—');
+                    $flowBaOut.html('—');
+
+                    if ($flowBaWrapper.length) $flowBaWrapper.removeClass('d-none');
+                    if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
+
+                    $flowModal.data('require-ba', false);
+                }
+
+                function openDisposalFlow(id) {
+                    if (!id) return;
+
+                    resetFlowModal();
+                    $('#flow-disposal-id').val(id);
+
+                    Swal.fire({
+                        title: 'Loading flow…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.getJSON(DS.show.replace(':id', id))
+                        .done(d => {
+                            Swal.close();
+
+                            const assetLabel =
+                                ((d.asset_code || '') +
+                                    (d.asset_name ? ' - ' + d.asset_name : '')) || d.asset_uuid || '';
+                            $flowAsset.text(assetLabel);
+                            $flowCode.text(d.disposal_code || '');
+                            $flowStatus.text(d.kode_status || '');
+
+                            // Form summary section
+                            if (d.flow_file_url) {
+                                $flowFormOut.html(
+                                    `<a href="${d.flow_file_url}" target="_blank">${escapeHtml(d.flow_file_name || 'Download Form')}</a>`
+                                );
+                            } else {
+                                const url = FORM_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+                                $flowFormOut.html(
+                                    `<a href="${url}" target="_blank">Download auto-filled form</a>`
+                                );
+                            }
+
+                            // BA summary section
+                            if (d.ba_file_url) {
+                                $flowBaOut.html(
+                                    `<a href="${d.ba_file_url}" target="_blank">${escapeHtml(d.ba_file_name || 'Download BA')}</a>`
+                                );
+                            } else {
+                                const url = BA_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
+                                $flowBaOut.html(
+                                    `<a href="${url}" target="_blank">Download auto-filled BA</a>`
+                                );
+                            }
+
+                            let flow = d.flow;
+                            if (typeof flow === 'string') {
+                                try {
+                                    flow = JSON.parse(flow);
+                                } catch (e) {
+                                    flow = null;
+                                }
+                            }
+                            renderFlowSteps(flow || {});
+                            $flowModal.modal('show');
+                        })
+                        .fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Cannot load flow', 'error');
+                        });
+                }
+
+                function renderFlowSteps(flow) {
+                    $flowSteps.empty();
+
+                    const steps = Array.isArray(flow.steps) ? flow.steps : [];
+                    if (!steps.length) {
+                        $flowSteps.append('<div class="text-muted">No flow defined.</div>');
+                        $flowModal.data('require-ba', false);
+                        return;
+                    }
+
+                    const firstPendingIndex = steps.findIndex(s => !s.approved_at);
+                    const lastIndex = steps.length - 1;
+                    const requireBa = firstPendingIndex !== -1 && firstPendingIndex === lastIndex;
+
+                    // BA required only on last step; both upload blocks are always visible
+                    $flowModal.data('require-ba', requireBa);
+
+                    if ($flowBaWrapper.length) $flowBaWrapper.removeClass('d-none');
+                    if ($flowFormWrapper.length) $flowFormWrapper.removeClass('d-none');
+
+                    steps.forEach((st, idx) => {
+                        const isApproved = !!st.approved_at;
+                        const isNext = !isApproved && idx === firstPendingIndex;
+
+                        const statusBadge = isApproved ?
+                            '<span class="badge badge-light-success">Approved</span>' :
+                            (isNext ?
+                                '<span class="badge badge-light-warning">Pending (Next)</span>' :
+                                '<span class="badge badge-light-secondary">Waiting</span>');
+
+                        const info = isApproved ?
+                            `<div class="small text-muted">by ${escapeHtml(st.approved_by || '-')} at ${escapeHtml(st.approved_at || '')}</div>` :
+                            '';
+
+                        const li = `
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <div class="fw-bold">${escapeHtml(st.label || st.code || '')}</div>
@@ -1732,89 +1750,95 @@
                         <div>${statusBadge}</div>
                     </li>
                 `;
-                $flowSteps.append(li);
-            });
-        }
+                        $flowSteps.append(li);
+                    });
+                }
 
-        // open flow from table action
-        $(document).on('click', '.btn-ds-approve', function () {
-            const id = $(this).data('id');
-            openDisposalFlow(id);
-        });
+                // open flow from table action
+                $(document).on('click', '.btn-ds-approve', function() {
+                    const id = $(this).data('id');
+                    openDisposalFlow(id);
+                });
 
-        // Approve next step (submit flow form)
-        $('#formDisposalFlow').off('submit').on('submit', function (e) {
-            e.preventDefault();
+                // Approve next step (submit flow form)
+                $('#formDisposalFlow').off('submit').on('submit', function(e) {
+                    e.preventDefault();
 
-            const id = $('#flow-disposal-id').val();
-            if (!id) return;
+                    const id = $('#flow-disposal-id').val();
+                    if (!id) return;
 
-            const requireBa = !!$flowModal.data('require-ba');
-            const baEl = $flowBaInput.length ? $flowBaInput[0] : null;
-            const hasBa = baEl && baEl.files && baEl.files.length > 0;
+                    const requireBa = !!$flowModal.data('require-ba');
+                    const baEl = $flowBaInput.length ? $flowBaInput[0] : null;
+                    const hasBa = baEl && baEl.files && baEl.files.length > 0;
 
-            if (requireBa && !hasBa) {
-                Swal.fire('Required', 'Berita Acara must be uploaded on the last step.', 'warning');
-                return;
-            }
-
-            const fd = new FormData(this);
-
-            Swal.fire({
-                title: 'Approving…',
-                didOpen: () => Swal.showLoading(),
-                allowOutsideClick: false
-            });
-
-            $.ajax({
-                url: DS.approveStep(id),
-                type: 'POST',
-                data: fd,
-                processData: false,
-                contentType: false
-            }).done(res => {
-                Swal.close();
-
-                if (res.flow) {
-                    let flow = res.flow;
-                    if (typeof flow === 'string') {
-                        try { flow = JSON.parse(flow); } catch (e) { flow = null; }
+                    if (requireBa && !hasBa) {
+                        Swal.fire('Required', 'Berita Acara must be uploaded on the last step.', 'warning');
+                        return;
                     }
-                    renderFlowSteps(flow || {});
+
+                    const fd = new FormData(this);
+
+                    Swal.fire({
+                        title: 'Approving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.ajax({
+                        url: DS.approveStep(id),
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    }).done(res => {
+                        Swal.close();
+
+                        if (res.flow) {
+                            let flow = res.flow;
+                            if (typeof flow === 'string') {
+                                try {
+                                    flow = JSON.parse(flow);
+                                } catch (e) {
+                                    flow = null;
+                                }
+                            }
+                            renderFlowSteps(flow || {});
+                        }
+
+                        if (res.flow_file_url && $flowFormOut.length) {
+                            $flowFormOut.html(
+                                `<a href="${res.flow_file_url}" target="_blank">${escapeHtml(res.flow_file_name || 'Download Form')}</a>`
+                            );
+                        }
+
+                        if (res.ba_file_url && $flowBaOut.length) {
+                            $flowBaOut.html(
+                                `<a href="${res.ba_file_url}" target="_blank">${escapeHtml(res.ba_file_name || 'Download BA')}</a>`
+                            );
+                        }
+
+                        dsTable.ajax.reload(null, false);
+
+                        if (res.completed || res.kode_status === 'ACC') {
+                            $('#modal-disposal-flow').modal('hide');
+                            Swal.fire('Approved', 'Disposal flow completed.', 'success')
+                                .then(() => {
+                                    location.reload();
+                                });
+                        } else {
+                            Swal.fire('Approved', 'Step approved.', 'success');
+                        }
+                    }).fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
+                });
+
+                function escapeHtml(text) {
+                    return $('<div/>').text(text || '').html();
                 }
-
-                if (res.flow_file_url && $flowFormOut.length) {
-                    $flowFormOut.html(
-                        `<a href="${res.flow_file_url}" target="_blank">${escapeHtml(res.flow_file_name || 'Download Form')}</a>`
-                    );
-                }
-
-                if (res.ba_file_url && $flowBaOut.length) {
-                    $flowBaOut.html(
-                        `<a href="${res.ba_file_url}" target="_blank">${escapeHtml(res.ba_file_name || 'Download BA')}</a>`
-                    );
-                }
-
-                dsTable.ajax.reload(null, false);
-
-                if (res.completed || res.kode_status === 'ACC') {
-                    $('#modal-disposal-flow').modal('hide');
-                    Swal.fire('Approved', 'Disposal flow completed.', 'success')
-                        .then(() => { location.reload(); });
-                } else {
-                    Swal.fire('Approved', 'Step approved.', 'success');
-                }
-            }).fail(x => {
-                Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
-            });
-        });
-
-        function escapeHtml(text) {
-            return $('<div/>').text(text || '').html();
-        }
-    })();
-</script>
-@endpush
+            })();
+        </script>
+    @endpush
 
 
     <script>
