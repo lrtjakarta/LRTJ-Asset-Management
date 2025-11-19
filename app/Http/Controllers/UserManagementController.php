@@ -23,10 +23,20 @@ class UserManagementController extends Controller
 
     public function datatable(Request $request)
     {
-        $query = User::with('roles')
+        $query = User::with(['roles', 'department'])
             ->orderBy('username');
 
         return datatables()->eloquent($query)
+            ->addColumn('kode_department', function (User $user) {
+                if (!$user->kode_department) {
+                    return '<span class="text-muted">-</span>';
+                }
+                $dept = $user->department;
+                if ($dept) {
+                    return e($dept->kode . ' - ' . $dept->department);
+                }
+                return e($user->kode_department);
+            })
             ->addColumn('roles', function (User $user) {
                 if ($user->roles->isEmpty()) {
                     return '<span class="badge badge-light-warning">No Role</span>';
@@ -42,6 +52,10 @@ class UserManagementController extends Controller
                 }
 
                 $roleCodes = $user->roles->pluck('kode')->implode(',');
+                $deptLabel = '';
+                if ($user->kode_department && $user->department) {
+                    $deptLabel = $user->department->kode . ' - ' . $user->department->department;
+                }
 
                 return sprintf(
                     '<button type="button" class="btn btn-sm btn-light-primary"
@@ -51,6 +65,8 @@ class UserManagementController extends Controller
                         data-user-username="%s"
                         data-user-name="%s"
                         data-user-email="%s"
+                        data-user-kode-department="%s"
+                        data-user-department-label="%s"
                         data-user-roles="%s">
                         Edit
                     </button>',
@@ -58,10 +74,12 @@ class UserManagementController extends Controller
                     e($user->username),
                     e($user->name),
                     e($user->email),
+                    e($user->kode_department ?? ''),
+                    e($deptLabel),
                     e($roleCodes)
                 );
             })
-            ->rawColumns(['roles', 'action'])
+            ->rawColumns(['kode_department', 'roles', 'action'])
             ->make(true);
     }
 
@@ -72,12 +90,14 @@ class UserManagementController extends Controller
         $data = $request->validate([
             'name'        => ['required', 'string', 'max:191'],
             'email'       => ['nullable', 'email', 'max:191'],
+            'kode_department' => ['nullable', 'string', 'max:50'],
             'role_kode'   => ['array'],
             'role_kode.*' => ['string', 'exists:master_role,kode'],
         ]);
 
         $user->name  = $data['name'];
         $user->email = $data['email'] ?? null;
+        $user->kode_department = $data['kode_department'] ?? null;
         $user->save();
 
         $user->roles()->sync($data['role_kode'] ?? []);

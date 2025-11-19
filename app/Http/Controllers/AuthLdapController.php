@@ -52,6 +52,7 @@ class AuthLdapController extends Controller
                 name: 'Administrator',
                 email: 'admin@example.com',
                 ou: 'local',
+                kodeDepartment: null,
                 isStaticAdmin: true,
             );
 
@@ -111,6 +112,7 @@ class AuthLdapController extends Controller
                 name: $cn,
                 email: $email,
                 ou: $ou,
+                kodeDepartment: $attrs['departmentNumber'][0] ?? null,
                 isStaticAdmin: false,
             );
 
@@ -142,6 +144,7 @@ class AuthLdapController extends Controller
                 name: $cn,
                 email: $email,
                 ou: $ou,
+                kodeDepartment: $attrs['departmentNumber'][0] ?? null,
                 isStaticAdmin: false,
             );
 
@@ -170,6 +173,7 @@ class AuthLdapController extends Controller
         string $name,
         ?string $email,
         ?string $ou,
+        ?string $kodeDepartment = null,
         bool $isStaticAdmin = false,
     ): void {
         // sync to users table
@@ -179,6 +183,7 @@ class AuthLdapController extends Controller
                 'name'  => $name,
                 'email' => $email,
                 'ou'    => $ou,
+                'kode_department' => $kodeDepartment,
             ]
         );
 
@@ -265,7 +270,7 @@ class AuthLdapController extends Controller
         }
 
         $filter = sprintf('(uid=%s)', ldap_escape($username, '', LDAP_ESCAPE_FILTER));
-        $attrs  = ['cn', 'uid', 'mail', 'memberOf', 'sn', 'givenName', 'ou'];
+        $attrs  = ['cn', 'uid', 'mail', 'memberOf', 'sn', 'givenName', 'ou', 'departmentNumber'];
         $sr     = @ldap_search($conn, $baseDn, $filter, $attrs, 0, 1);
         if (! $sr) {
             ldap_unbind($conn);

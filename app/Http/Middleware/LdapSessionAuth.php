@@ -22,11 +22,14 @@ class LdapSessionAuth
 
         if (! $request->session()->has('ldap_user')) {
             $u = Auth::user();
+            $roles = $u->roles()->pluck('kode')->toArray();
             $request->session()->put('ldap_user', [
                 'username' => $u->username ?? null,
                 'name'     => $u->name ?? null,
                 'email'    => $u->email ?? null,
                 'ou'       => $u->ou ?? null,
+                'kode_department' => $u->kode_department ?? null,
+                'roles' => $roles,
             ]);
         }
 

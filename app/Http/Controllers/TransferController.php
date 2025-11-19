@@ -928,6 +928,99 @@ class TransferController extends Controller
             abort_if($nextIdx === null, 422, 'All steps already approved.');
 
             $step = &$flow['steps'][$nextIdx];
+
+            // Department validation (exclude SYSADMIN)
+            $currentUser = auth()->user();
+            $userRoles = $currentUser->roles()->pluck('kode')->toArray();
+            $isSysAdmin = in_array('SYSADMIN', $userRoles);
+            
+            // DEPT_HEAD validation (exclude SYSADMIN and USER)
+            if (in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
+                $userDept = $currentUser->kode_department;
+                
+                if (!$userDept) {
+                    abort(422, 'Your department is not set. Please contact administrator.');
+                }
+
+                // Load asset with assignment relationships
+                $asset = Assets::with(['assignment.owner', 'assignment.user', 'assignment.maintenance'])
+                    ->where('uuid', $tf->asset_uuid)
+                    ->firstOrFail();
+
+                $stepCode = $step['code'] ?? '';
+
+                if ($tf->type === 'location') {
+                    // For location type, first approval (dept_head) must match asset owner's department
+                    if ($stepCode === 'dept_head') {
+                        $ownerCode = $asset->assignment?->asset_owner;
+                        if ($ownerCode) {
+                            $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                            if ($ownerUc && $ownerUc->kode !== $userDept) {
+                                abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                            }
+                        }
+                    }
+                } elseif (in_array($tf->type, ['owner', 'user', 'maintenance'], true)) {
+                    $beforeVal = data_get($tf->before, 'value');
+                    $afterVal  = data_get($tf->after, 'value');
+
+                    if ($stepCode === 'new_dept_head') {
+                        // First approval: must match NEW (after) department
+                        if ($afterVal) {
+                            $afterUc = MasterUserCode::where('kode', $afterVal)->first();
+                            if ($afterUc && $afterUc->kode !== $userDept) {
+                                abort(422, 'This user department not matching. Expected: ' . $afterUc->kode);
+                            }
+                        }
+                    } elseif ($stepCode === 'old_dept_head') {
+                        // Second approval: must match OLD (before) department
+                        if ($beforeVal) {
+                            $beforeUc = MasterUserCode::where('kode', $beforeVal)->first();
+                            if ($beforeUc && $beforeUc->kode !== $userDept) {
+                                abort(422, 'This user department not matching. Expected: ' . $beforeUc->kode);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // AM_ADMIN validation for last step (exclude SYSADMIN)
+            $stepCode = $step['code'] ?? '';
+            if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+                $userDept = $currentUser->kode_department;
+                
+                if (!$userDept) {
+                    abort(422, 'Your department is not set. Please contact administrator.');
+                }
+
+                // Load asset with assignment relationships if not already loaded
+                if (!isset($asset)) {
+                    $asset = Assets::with(['assignment.owner', 'assignment.user', 'assignment.maintenance'])
+                        ->where('uuid', $tf->asset_uuid)
+                        ->firstOrFail();
+                }
+
+                if ($tf->type === 'location') {
+                    // For location type, AM_ADMIN must match asset owner's department
+                    $ownerCode = $asset->assignment?->asset_owner;
+                    if ($ownerCode) {
+                        $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                        if ($ownerUc && $ownerUc->kode !== $userDept) {
+                            abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                        }
+                    }
+                } elseif (in_array($tf->type, ['owner', 'user', 'maintenance'], true)) {
+                    // For owner/user/maintenance, AM_ADMIN must match NEW (after) department
+                    $afterVal = data_get($tf->after, 'value');
+                    if ($afterVal) {
+                        $afterUc = MasterUserCode::where('kode', $afterVal)->first();
+                        if ($afterUc && $afterUc->kode !== $userDept) {
+                            abort(422, 'This user department not matching. Expected: ' . $afterUc->kode);
+                        }
+                    }
+                }
+            }
+
             $step['approved_by'] = $uid;
             $step['approved_at'] = $now;
 

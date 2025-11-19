@@ -11,7 +11,7 @@ class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable;
 
-    protected $fillable = ['username', 'name', 'email', 'password'];
+    protected $fillable = ['username', 'name', 'email', 'password', 'kode_department'];
 
     protected $hidden = [
         'password',
@@ -37,6 +37,11 @@ class User extends Authenticatable
             'id',
             'kode'
         );
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(MasterUserCode::class, 'kode_department', 'kode');
     }
 
     public function hasAction(string $menuKode, string $action): bool

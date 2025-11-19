@@ -37,6 +37,7 @@
                                     <th class="min-w-125px">Username/UID</th>
                                     <th class="min-w-175px">Name</th>
                                     <th class="min-w-200px">Email</th>
+                                    <th class="min-w-150px">Department</th>
                                     <th class="min-w-200px">Roles</th>
                                     <th class="min-w-100px text-end">Action</th>
                                 </tr>
@@ -85,6 +86,13 @@
                         <div class="mb-5">
                             <label class="form-label">Email</label>
                             <input type="email" name="email" class="form-control form-control-solid" id="user-email">
+                        </div>
+
+                        <div class="mb-5">
+                            <label class="form-label">Department</label>
+                            <select name="kode_department" id="user-kode-department" class="form-select form-select-solid" data-control="select2" data-placeholder="Select department">
+                                <option value="">-- Select Department --</option>
+                            </select>
                         </div>
 
                         <div class="mb-7">
@@ -142,10 +150,32 @@
 
         const USERS_DATATABLE_URL = @json(route('settings.users.datatable'));
         const USER_UPDATE_URL = (id) => @json(route('settings.users.update', 'ID_PLACEHOLDER')).replace('ID_PLACEHOLDER', id);
+        const USER_CODE_OPTIONS_URL = @json(route('master.user_code.options'));
 
         let usersTable = null;
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize department select2
+            $('#user-kode-department').select2({
+                dropdownParent: $('#user-role-modal'),
+                placeholder: 'Select department',
+                allowClear: true,
+                ajax: {
+                    url: USER_CODE_OPTIONS_URL,
+                    dataType: 'json',
+                    delay: 250,
+                    data: function(params) {
+                        return {
+                            q: params.term || '',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function(data) {
+                        return data;
+                    }
+                }
+            });
+
             usersTable = $('#users-table').DataTable({
                 processing: true,
                 serverSide: true,
@@ -168,6 +198,10 @@
                     {
                         data: 'email',
                         name: 'email'
+                    },
+                    {
+                        data: 'kode_department',
+                        name: 'kode_department'
                     },
                     {
                         data: 'roles',
@@ -202,6 +236,8 @@
                 const username = button.getAttribute('data-user-username');
                 const name = button.getAttribute('data-user-name');
                 const email = button.getAttribute('data-user-email');
+                const kodeDepartment = button.getAttribute('data-user-kode-department');
+                const departmentLabel = button.getAttribute('data-user-department-label');
                 const rolesCsv = button.getAttribute('data-user-roles') || '';
                 const roles = rolesCsv.split(',').filter(Boolean);
 
@@ -213,8 +249,19 @@
                 const form = document.getElementById('user-role-form');
                 form.action = USER_UPDATE_URL(userId);
 
-                const select = $('#user-role-select');
-                select.val(roles).trigger('change');
+                const roleSelect = $('#user-role-select');
+                roleSelect.val(roles).trigger('change');
+
+                // Set department select2
+                const deptSelect = $('#user-kode-department');
+                deptSelect.empty();
+                if (kodeDepartment) {
+                    const label = departmentLabel || kodeDepartment;
+                    const option = new Option(label, kodeDepartment, true, true);
+                    deptSelect.append(option).trigger('change');
+                } else {
+                    deptSelect.val(null).trigger('change');
+                }
             });
         }
     </script>
