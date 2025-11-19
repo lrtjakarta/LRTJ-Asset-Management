@@ -32,6 +32,10 @@ class Transfer extends Model
         'file_name',
         'file_mime',
         'file_size',
+        'flow_file_path',
+        'flow_file_name',
+        'flow_file_mime',
+        'flow_file_size',
     ];
 
     protected $casts = [

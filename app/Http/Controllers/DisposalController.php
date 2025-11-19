@@ -269,33 +269,35 @@ class DisposalController extends Controller
                 $btns = [];
 
                 // 1) Original attachment from create/edit
-                if ($r->file_url) {
+                if ($r->file_path) {
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="%s">%s</a>',
-                        e($r->file_url),
+                        e($url),
                         e($r->file_name ?: 'Attachment')
                     );
                 }
 
                 // 2) Uploaded Form Disposal (only if there is an uploaded file)
-                if (!empty($r->flow_file_url)) {
+                if (!empty($r->flow_file_path)) {
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-info me-1" target="_blank" href="%s">%s</a>',
-                        e($r->flow_file_url),
+                        e($url),
                         e($r->flow_file_name ?: 'Form Disposal')
                     );
                 }
 
                 // 3) Uploaded Berita Acara (only if there is an uploaded file)
-                if (!empty($r->ba_file_url)) {
+                if (!empty($r->ba_file_path)) {
+                    $url  = url('storage/' . ltrim($r->ba_file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-warning" target="_blank" href="%s">%s</a>',
-                        e($r->ba_file_url),
+                        e($url),
                         e($r->ba_file_name ?: 'Berita Acara')
                     );
                 }
 
-                // If no file at all → return empty string so the column looks empty
                 return $btns ? implode(' ', $btns) : '';
             })
 
@@ -388,37 +390,37 @@ class DisposalController extends Controller
                 $btns = [];
 
                 // 1) Original attachment from create/edit
-                if ($r->file_url) {
+                if ($r->file_path) {
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="%s">%s</a>',
-                        e($r->file_url),
+                        e($url),
                         e($r->file_name ?: 'Attachment')
                     );
                 }
 
                 // 2) Uploaded Form Disposal (only if there is an uploaded file)
-                if (!empty($r->flow_file_url)) {
+                if (!empty($r->flow_file_path)) {
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-info me-1" target="_blank" href="%s">%s</a>',
-                        e($r->flow_file_url),
+                        e($url),
                         e($r->flow_file_name ?: 'Form Disposal')
                     );
                 }
 
                 // 3) Uploaded Berita Acara (only if there is an uploaded file)
-                if (!empty($r->ba_file_url)) {
+                if (!empty($r->ba_file_path)) {
+                    $url  = url('storage/' . ltrim($r->ba_file_path, '/'));
                     $btns[] = sprintf(
                         '<a class="btn btn-sm btn-light-warning" target="_blank" href="%s">%s</a>',
-                        e($r->ba_file_url),
+                        e($url),
                         e($r->ba_file_name ?: 'Berita Acara')
                     );
                 }
 
-                // If no file at all → return empty string so the column looks empty
                 return $btns ? implode(' ', $btns) : '';
             })
-
-
             ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
                 $pending = $t->kode_status === 'APR';
                 $btns = '<div class="btn-group btn-group-sm">';

@@ -271,6 +271,20 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/data',   [StockOpnameController::class, 'datatable'])->name('data.all');
         Route::post('/create/transfer', [StockOpnameController::class, 'store_transfer'])->name('transfer.store');
         Route::post('/create/disposal', [StockOpnameController::class, 'store_disposal'])->name('disposal.store');
+        // Preview downloads (generate template based on selected asset before creating record)
+        Route::get('/preview/transfer/{asset}', [StockOpnameController::class, 'previewTransferForm'])
+            ->name('transfer.preview.form');
+        Route::get('/preview/disposal/{asset}/form', [StockOpnameController::class, 'previewDisposalForm'])
+            ->name('disposal.preview.form');
+        Route::get('/preview/disposal/{asset}/ba', [StockOpnameController::class, 'previewDisposalBa'])
+            ->name('disposal.preview.ba');
+        // Post-create downloads (generate documents from created records)
+        Route::get('/transfer/{uuid}/form', [StockOpnameController::class, 'downloadTransferForm'])
+            ->name('transfer.download.form');
+        Route::get('/disposal/{uuid}/form', [StockOpnameController::class, 'downloadDisposalForm'])
+            ->name('disposal.download.form');
+        Route::get('/disposal/{uuid}/ba', [StockOpnameController::class, 'downloadDisposalBa'])
+            ->name('disposal.download.ba');
     });
 
     // DEPRECIATION ROUTE

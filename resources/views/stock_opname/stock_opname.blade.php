@@ -6,12 +6,6 @@
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
                 <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Stock Opname</h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
-                    <li class="breadcrumb-item text-muted">
-                        Transaction
-                    </li>
-                    <li class="breadcrumb-item">
-                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
-                    </li>
                     <li class="breadcrumb-item text-muted">Stock Opname</li>
                 </ul>
             </div>
@@ -106,6 +100,7 @@
                                 <th class="min-w-200px">Approver</th>
                                 <th class="min-w-200px">File</th>
                                 <th class="min-w-200px">Updated</th>
+                                <th class="min-w-200px">Actions</th>
                             </tr>
                         </thead>
                     </table>
@@ -164,7 +159,12 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="mt-3" id="tf-downloads" style="display:none">
+                                    <button type="button" id="btn-tf-download-form"
+                                        class="btn btn-sm btn-light-primary">Download Form</button>
+                                </div>
                             </div>
+
                             <div class="col-md-6">
                                 <label class="form-label required">Type</label>
                                 <select name="type" id="tf-type" class="form-select" required>
@@ -185,19 +185,19 @@
                                 <label class="form-label">Note</label>
                                 <textarea name="note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
                             </div>
+
                             <div class="col-md-12">
                                 <label class="form-label">Attachment (optional)</label>
                                 <input type="file" name="file" id="tf-file" class="form-control"
                                     accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
                                 <div class="form-text">PDF / image / office docs (max 20MB).</div>
+                            </div>
 
-                                {{-- visible only when editing and a file exists --}}
-                                <div id="tf-current-file" class="mt-2 d-none">
-                                    <a id="tf-current-file-link" href="#" target="_blank"></a>
-                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
-                                        id="btn-remove-file">Remove</button>
-                                    <input type="hidden" name="remove_file" id="tf-remove-file" value="0">
-                                </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Upload Signed Form (optional)</label>
+                                <input type="file" name="flow_file" id="tf-flow-file" class="form-control"
+                                    accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                                <div class="form-text">Upload the signed form here.</div>
                             </div>
                         </div>
                     </div>
@@ -234,6 +234,72 @@
                                 <div class="form-text">Search by code or description</div>
                             </div>
 
+                            <div id="ds-asset-snapshot" class="mt-4 d-none">
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="fw-semibold mb-2">Current Asset Info</div>
+                                    <div class="row gy-2">
+                                        <div class="col-6">
+                                            <div class="text-muted">Owner</div>
+                                            <div id="snap-owner" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">User</div>
+                                            <div id="snap-user" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-6">
+                                            <div class="text-muted">Maintenance</div>
+                                            <div id="snap-maintenance" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Status</div>
+                                            <div id="snap-status" class="fw-semibold"></div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <div class="text-muted">Location</div>
+                                            <div id="snap-location" class="fw-semibold"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="p-3 border rounded bg-light">
+                                    <div class="fw-semibold mb-2">Acquisition Info</div>
+                                    <div class="row gy-2">
+                                        <div class="col-6">
+                                            <div class="text-muted">Price</div>
+                                            <div id="snap-price" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Quantity</div>
+                                            <div id="snap-quantity" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">VAT In</div>
+                                            <div id="snap-vat-in" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">UOM</div>
+                                            <div id="snap-uom" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Total</div>
+                                            <div id="snap-total" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Useful Life (Month)</div>
+                                            <div id="snap-useful-life" class="fw-semibold"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3" id="ds-downloads" style="display:none">
+                                    <button type="button" id="btn-ds-download-form"
+                                        class="btn btn-sm btn-light-info me-2">Download Form</button>
+                                    <button type="button" id="btn-ds-download-ba"
+                                        class="btn btn-sm btn-light-warning">Download BA</button>
+                                </div>
+                            </div>
+
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
                                 <textarea name="note" id="ds-note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
@@ -251,6 +317,20 @@
                                     <button type="button" class="btn btn-sm btn-light-danger ms-2"
                                         id="ds-btn-remove-file">Remove</button>
                                 </div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Upload Signed Form (Excel)</label>
+                                <input type="file" name="flow_file" id="ds-flow-file" class="form-control"
+                                    accept=".xls,.xlsx">
+                                <div class="form-text">Upload the filled and signed disposal form (.xls, .xlsx)</div>
+                            </div>
+
+                            <div class="col-md-12">
+                                <label class="form-label">Upload BA (Berita Acara)</label>
+                                <input type="file" name="ba_file" id="ds-ba-file" class="form-control"
+                                    accept=".pdf,.doc,.docx">
+                                <div class="form-text">Upload the Berita Acara disposal document (.pdf, .doc, .docx)</div>
                             </div>
 
                         </div>
@@ -309,6 +389,14 @@
             });
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
+            const DISP_FORM_URL_TPL = @json(route('disposal.form', '__UUID__'));
+            const DISP_BA_URL_TPL = @json(route('disposal.ba', '__UUID__'));
+            const TF_FORM_URL_TPL = @json(route('transfer.form', '__UUID__')); // adjust if your route name differs
+            // Preview (pre-create) URLs provided by StockOpnameController
+            const TF_PREVIEW_URL_TPL = @json(route('stockopname.transfer.preview.form', '__UUID__'));
+            const DISP_PREVIEW_FORM_URL_TPL = @json(route('stockopname.disposal.preview.form', '__UUID__'));
+            const DISP_PREVIEW_BA_URL_TPL = @json(route('stockopname.disposal.preview.ba', '__UUID__'));
+
             const dt = $('#tbl-so-global').DataTable({
                 processing: true,
                 serverSide: true,
@@ -327,7 +415,7 @@
                 order: [
                     [9, 'desc']
                 ],
-                "dom": "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
@@ -402,8 +490,16 @@
                             }).format(d);
                             return `${dateStr} ${timeStr}`;
                         }
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false,
+                        defaultContent: ''
                     }
-                ]
+                ],
+                // rely on server-provided `actions` HTML; no client-side rowCallback modifications
             });
 
             $('#btnFilter').on('click', () => dt.ajax.reload());
@@ -421,6 +517,8 @@
 
     <script>
         (function() {
+            const TF_PREVIEW_URL_TPL = @json(route('stockopname.transfer.preview.form', '__UUID__'));
+
             const R_TF = {
                 create: '{{ route('stockopname.transfer.store') }}',
                 assets: '{{ route('assets.options') }}',
@@ -534,11 +632,36 @@
                         const assetUuid = e.params.data.id;
                         $('#tf-asset-uuid').val(assetUuid);
                         fetchAssetSnapshot(assetUuid);
+
+                        // Show download button only for owner/user/maintenance types
+                        const type = $('#tf-type').val();
+                        if (['owner', 'user', 'maintenance'].includes(type)) {
+                            $('#tf-downloads').show();
+                        } else {
+                            $('#tf-downloads').hide();
+                        }
+
+                        // Bind download button
+                        $('#btn-tf-download-form').off('click').on('click', function() {
+                            let url = TF_PREVIEW_URL_TPL.replace('__UUID__', encodeURIComponent(
+                                assetUuid));
+
+                            // Add target info if selected
+                            const targetValue = $('#tf-target-hidden').val();
+                            const targetType = $('#tf-type').val();
+                            if (targetValue && targetType) {
+                                url += '?target_type=' + encodeURIComponent(targetType) +
+                                    '&target_value=' + encodeURIComponent(targetValue);
+                            }
+
+                            window.open(url, '_blank');
+                        });
                     }
                 }).on('select2:clear', function() {
                     if (this.id === 'tf-asset') {
                         $('#tf-asset-uuid').val('');
                         clearSnapshot();
+                        $('#tf-downloads').hide();
                     }
                 });
             }
@@ -581,7 +704,16 @@
             });
 
             $('#tf-type').on('change', function() {
-                initTargetSelect(this.value);
+                const type = this.value;
+                initTargetSelect(type);
+
+                // Show/hide download button based on type
+                const assetUuid = $('#tf-asset-uuid').val();
+                if (assetUuid && ['owner', 'user', 'maintenance'].includes(type)) {
+                    $('#tf-downloads').show();
+                } else {
+                    $('#tf-downloads').hide();
+                }
             });
 
             $('#formTransfer').off('submit').on('submit', function(e) {
@@ -590,7 +722,10 @@
                 const isEdit = !!$('#tf-edit-id').val();
                 const id = $('#tf-edit-id').val();
                 const fileEl = document.getElementById('tf-file');
+                const flowFileEl = document.getElementById('tf-flow-file');
                 const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+                const hasFlowFile = flowFileEl && flowFileEl.files && flowFileEl.files.length > 0;
+                const hasAnyFile = hasFile || hasFlowFile;
 
                 const base = {
                     type: $('#tf-type').val(),
@@ -617,10 +752,11 @@
 
                 let req;
 
-                if (hasFile) {
+                if (hasAnyFile) {
                     const fd = new FormData();
                     Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    fd.append('file', fileEl.files[0]);
+                    if (hasFile) fd.append('file', fileEl.files[0]);
+                    if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
 
                     if (isEdit) fd.append('_method', 'PUT');
 
@@ -645,7 +781,7 @@
                 }
 
                 req
-                    .done(() => {
+                    .done((resp) => {
                         $('#modal-transfer').modal('hide');
                         Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Movement updated.' :
                             'Movement created.', 'success');
@@ -653,7 +789,10 @@
                         $('#tbl-so-global').DataTable().ajax.reload(null, false);
 
                         if (fileEl) fileEl.value = '';
+                        if (flowFileEl) flowFileEl.value = '';
                         $('#tf-remove-file').val('0');
+
+
                     })
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
@@ -661,10 +800,14 @@
     </script>
     <script>
         (function() {
+            const DISP_PREVIEW_FORM_URL_TPL = @json(route('stockopname.disposal.preview.form', '__UUID__'));
+            const DISP_PREVIEW_BA_URL_TPL = @json(route('stockopname.disposal.preview.ba', '__UUID__'));
+
             const DIS = {
                 create: '{{ route('stockopname.disposal.store') }}',
                 // create: '{{ route('disposal.store') }}', 
                 assets: '{{ route('assets.options') }}',
+                assetBrief: id => '{{ route('assets.brief', ':id') }}'.replace(':id', id),
             };
 
             $.ajaxSetup({
@@ -672,6 +815,34 @@
                     'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 }
             });
+
+            function renderSnapshot(d) {
+                const safe = (v) => v || '';
+                // Scope to disposal modal only to avoid conflict with transfer modal elements
+                const $modal = $('#modal-disposal');
+                $modal.find('#snap-owner').text(safe(d.owner_label));
+                $modal.find('#snap-user').text(safe(d.user_label));
+                $modal.find('#snap-maintenance').text(safe(d.maintenance_label));
+                $modal.find('#snap-status').text(safe(d.status_label));
+                $modal.find('#snap-location').text(safe(d.location_label));
+                // Acquisition info fields
+                $modal.find('#snap-price').text(safe(d.price));
+                $modal.find('#snap-quantity').text(safe(d.quantity));
+                $modal.find('#snap-vat-in').text(safe(d.vat_in));
+                $modal.find('#snap-uom').text(safe(d.kode_uom));
+                $modal.find('#snap-total').text(safe(d.total));
+                $modal.find('#snap-useful-life').text(safe(d.useful_life_month));
+                $modal.find('#ds-asset-snapshot').removeClass('d-none');
+            }
+
+            function clearSnapshot() {
+                const $modal = $('#modal-disposal');
+                $modal.find(
+                        '#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life'
+                        )
+                    .text('');
+                $modal.find('#ds-asset-snapshot').addClass('d-none');
+            }
 
             function initSelect2Dis(el, url, extra = {}) {
                 $(el).select2({
@@ -685,16 +856,49 @@
                         delay: 150,
                         data: params => Object.assign({
                             q: params.term || '',
-                            page: params.page || 1
+                            page: params.page || 1,
+                            type: 'disposal'
                         }, (typeof extra === 'function') ? extra() : (extra || {})),
                         processResults: d => d
                     }
                 }).on('select2:select', function(e) {
                     if (this.id === 'ds-asset') {
-                        $('#ds-asset-uuid').val(e.params.data.id);
+                        const assetUuid = e.params.data.id;
+                        $('#ds-asset-uuid').val(assetUuid);
+                        // fetch snapshot and show preview downloads using shared renderSnapshot
+                        const briefUrl = DIS.assetBrief(assetUuid);
+                        console.log('Fetching asset snapshot from:', briefUrl);
+                        $.getJSON(briefUrl)
+                            .done(function(d) {
+                                console.log('Snapshot data received:', d);
+                                renderSnapshot(d);
+                            })
+                            .fail(function(err) {
+                                console.error('Failed to fetch snapshot:', err);
+                                clearSnapshot();
+                            });
+                        $('#ds-downloads').show();
+                        $('#btn-ds-download-form').off('click').on('click', function() {
+                            const url = DISP_PREVIEW_FORM_URL_TPL.replace('__UUID__',
+                                encodeURIComponent(assetUuid));
+                            window.open(url, '_blank');
+                        });
+                        $('#btn-ds-download-ba').off('click').on('click', function() {
+                            const url = DISP_PREVIEW_BA_URL_TPL.replace('__UUID__', encodeURIComponent(
+                                assetUuid));
+                            window.open(url, '_blank');
+                        });
+                    }
+                }).on('select2:clear', function() {
+                    if (this.id === 'ds-asset') {
+                        $('#ds-asset-uuid').val('');
+                        $('#ds-downloads').hide();
+                        clearSnapshot();
                     }
                 });
             }
+
+
 
             function preloadSelectValue($select, id, text) {
                 if (!id) return;
@@ -716,6 +920,8 @@
                 $('#ds-asset').empty();
                 initSelect2Dis('#ds-asset', DIS.assets);
                 $('#ds-asset').prop('disabled', false);
+                clearSnapshot();
+                $('#ds-downloads').hide();
             }
 
             $('#btnOpenDis').on('click', function(e) {
@@ -731,7 +937,12 @@
                 const isEdit = !!$('#ds-edit-id').val();
                 const id = $('#ds-edit-id').val();
                 const fileEl = document.getElementById('ds-file');
+                const flowFileEl = document.getElementById('ds-flow-file');
+                const baFileEl = document.getElementById('ds-ba-file');
                 const hasFile = fileEl && fileEl.files && fileEl.files.length > 0;
+                const hasFlowFile = flowFileEl && flowFileEl.files && flowFileEl.files.length > 0;
+                const hasBaFile = baFileEl && baFileEl.files && baFileEl.files.length > 0;
+                const hasAnyFile = hasFile || hasFlowFile || hasBaFile;
 
                 const base = {
                     asset_uuid: $('#ds-asset-uuid').val() || null,
@@ -751,10 +962,12 @@
                 });
 
                 let req;
-                if (hasFile) {
+                if (hasAnyFile) {
                     const fd = new FormData();
                     Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    fd.append('file', fileEl.files[0]);
+                    if (hasFile) fd.append('file', fileEl.files[0]);
+                    if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
+                    if (hasBaFile) fd.append('ba_file', baFileEl.files[0]);
                     if (isEdit) fd.append('_method', 'PUT');
                     req = $.ajax({
                         url: isEdit ? DIS.update.replace(':id', id) : DIS.create,
@@ -773,14 +986,18 @@
                         $.post(DIS.create, base);
                 }
 
-                req.done(() => {
+                req.done((resp) => {
                         $('#modal-disposal').modal('hide');
                         Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Disposal updated.' :
                             'Disposal created.', 'success');
                         $('#ds-asset').prop('disabled', false);
                         $('#tbl-so-global').DataTable().ajax.reload(null, false);
                         if (fileEl) fileEl.value = '';
+                        if (flowFileEl) flowFileEl.value = '';
+                        if (baFileEl) baFileEl.value = '';
                         $('#ds-remove-file').val('0');
+
+
                     })
                     .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
             });
