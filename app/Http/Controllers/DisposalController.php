@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Assets;
 use App\Models\Disposal;
 use App\Models\MasterStatus;
+use App\Models\MasterUserCode;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -499,6 +500,58 @@ class DisposalController extends Controller
             $stepCode = $step['code'] ?? null;
             $now      = now()->toDateTimeString();
             $isLast   = ($idx === count($flow['steps']) - 1);
+
+            // Department validation (exclude SYSADMIN)
+            $currentUser = auth()->user();
+            $userRoles = $currentUser->roles()->pluck('kode')->toArray();
+            $isSysAdmin = in_array('SYSADMIN', $userRoles);
+
+            // DEPT_HEAD validation for first approval (exclude SYSADMIN and USER)
+            if ($stepCode === 'dept_head' && in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
+                $userDept = $currentUser->kode_department;
+                
+                if (!$userDept) {
+                    abort(422, 'Your department is not set. Please contact administrator.');
+                }
+
+                // Load asset with assignment to check owner's department
+                $asset = Assets::with(['assignment.owner'])
+                    ->where('uuid', $d->asset_uuid)
+                    ->firstOrFail();
+
+                $ownerCode = $asset->assignment?->asset_owner;
+                if ($ownerCode) {
+                    $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                    if ($ownerUc && $ownerUc->kode !== $userDept) {
+                        abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                    }
+                }
+            }
+
+            // AM_ADMIN validation for last step (exclude SYSADMIN)
+            if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+                $userDept = $currentUser->kode_department;
+                
+                if (!$userDept) {
+                    abort(422, 'Your department is not set. Please contact administrator.');
+                }
+
+                // Load asset with assignment if not already loaded
+                if (!isset($asset)) {
+                    $asset = Assets::with(['assignment.owner'])
+                        ->where('uuid', $d->asset_uuid)
+                        ->firstOrFail();
+                }
+
+                // For disposal, AM_ADMIN must match asset owner's department
+                $ownerCode = $asset->assignment?->asset_owner;
+                if ($ownerCode) {
+                    $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                    if ($ownerUc && $ownerUc->kode !== $userDept) {
+                        abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                    }
+                }
+            }
 
             if ($isLast && $stepCode === 'asset_mgt') {
                 $request->validate([
