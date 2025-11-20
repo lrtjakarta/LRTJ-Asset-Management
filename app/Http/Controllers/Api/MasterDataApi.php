@@ -8,14 +8,14 @@ use App\Models\MasterLocation;
 use App\Models\MasterStatus;
 use App\Models\MasterTransaction;
 use App\Models\MasterUserCode;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class MasterDataApi extends Controller
 {
-
-
     public function master_transaction(Request $request)
     {
         // Validate & normalize query params
@@ -596,6 +596,141 @@ class MasterDataApi extends Controller
                 'filters'      => [
                     'q' => $request->query('q'),
                     'status' => $request->query('status'),
+                    'with_trashed' => $request->query('with_trashed'),
+                ],
+            ],
+            'links' => [
+                'first' => $paginator->url(1),
+                'prev'  => $paginator->previousPageUrl(),
+                'next'  => $paginator->nextPageUrl(),
+                'last'  => $paginator->url($paginator->lastPage()),
+            ],
+        ]);
+    }
+    public function users(Request $request)
+    {
+        $v = validator($request->all(), [
+            'q'            => ['nullable', 'string', 'max:200'],
+            'status'       => ['nullable', Rule::in(['0', '1'])],
+            'sort_by'      => ['nullable', Rule::in(['uid', 'name', 'email', 'created_at', 'updated_at'])],
+            'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
+            'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
+            'page'         => ['nullable', 'integer', 'min:1'],
+            'with_trashed' => ['nullable', Rule::in(['0', '1'])],
+        ])->validate();
+
+        $tz = config('app.timezone', 'UTC');
+
+        $q = User::query();
+
+        // If User uses SoftDeletes, you can enable this
+        if ($request->boolean('with_trashed') && in_array(
+            \Illuminate\Database\Eloquent\SoftDeletes::class,
+            class_uses_recursive(User::class),
+            true
+        )) {
+            $q->withTrashed();
+        }
+
+        if (!empty($v['q'])) {
+            $search = trim($v['q']);
+            $q->where(function ($w) use ($search) {
+                $w->where('uid', 'ILIKE', "%{$search}%")
+                    ->orWhere('name', 'ILIKE', "%{$search}%")
+                    ->orWhere('email', 'ILIKE', "%{$search}%");
+            });
+        }
+
+        // Optional: if your users table has a boolean "status" column
+        if (isset($v['status']) && Schema::hasColumn('users', 'status')) {
+            $q->where('status', (bool) $v['status']);
+        }
+
+        $sortBy  = $v['sort_by']  ?? 'name';
+        $sortDir = $v['sort_dir'] ?? 'asc';
+
+        $sortColumns = [
+            'uid'        => 'uid',
+            'name'       => 'name',
+            'email'      => 'email',
+            'created_at' => 'created_at',
+            'updated_at' => 'updated_at',
+        ];
+        $q->orderBy($sortColumns[$sortBy] ?? 'name', $sortDir);
+
+        $paginationRequested = $request->has('per_page') || $request->has('page');
+
+        if (!$paginationRequested) {
+            $rows = $q->get();
+
+            return response()->json([
+                'data' => $rows->map(function (User $r) use ($tz) {
+                    return [
+                        'id'          => $r->id,
+                        'uid'         => $r->uid ?? null,
+                        'name'        => $r->name ?? null,
+                        'email'       => $r->email ?? null,
+                        // convenience label for selectors (uid - name)
+                        'label'       => trim(($r->uid ? $r->uid . ' - ' : '') . ($r->name ?? '')),
+
+                        'status'      => Schema::hasColumn('users', 'status') ? (bool) $r->status : null,
+                        'created_at'  => optional($r->created_at)->timezone($tz)?->toIso8601String(),
+                        'updated_at'  => optional($r->updated_at)->timezone($tz)?->toIso8601String(),
+                        'deleted_at'  => optional($r->deleted_at)->timezone($tz)?->toIso8601String(),
+                    ];
+                }),
+                'meta' => [
+                    'total'     => $rows->count(),
+                    'paginated' => false,
+                    'sort_by'   => $sortBy,
+                    'sort_dir'  => $sortDir,
+                    'filters'   => [
+                        'q'            => $request->query('q'),
+                        'status'       => $request->query('status'),
+                        'with_trashed' => $request->query('with_trashed'),
+                    ],
+                ],
+                'links' => [
+                    'first' => null,
+                    'prev'  => null,
+                    'next'  => null,
+                    'last'  => null,
+                ],
+            ]);
+        }
+
+        // Paginated path
+        $perPage   = (int) ($v['per_page'] ?? 15);
+        $paginator = $q->paginate($perPage)->appends($request->query());
+
+        return response()->json([
+            'data' => $paginator->getCollection()->map(function (User $r) use ($tz) {
+                return [
+                    'id'          => $r->id,
+                    'uid'         => $r->uid ?? null,
+                    'name'        => $r->name ?? null,
+                    'email'       => $r->email ?? null,
+                    'label'       => trim(($r->uid ? $r->uid . ' - ' : '') . ($r->name ?? '')),
+
+                    'status'      => Schema::hasColumn('users', 'status') ? (bool) $r->status : null,
+                    'created_at'  => optional($r->created_at)->timezone($tz)?->toIso8601String(),
+                    'updated_at'  => optional($r->updated_at)->timezone($tz)?->toIso8601String(),
+                    'deleted_at'  => optional($r->deleted_at)->timezone($tz)?->toIso8601String(),
+                ];
+            }),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page'     => $paginator->perPage(),
+                'from'         => $paginator->firstItem(),
+                'to'           => $paginator->lastItem(),
+                'total'        => $paginator->total(),
+                'last_page'    => $paginator->lastPage(),
+                'paginated'    => true,
+                'sort_by'      => $sortBy,
+                'sort_dir'     => $sortDir,
+                'filters'      => [
+                    'q'            => $request->query('q'),
+                    'status'       => $request->query('status'),
                     'with_trashed' => $request->query('with_trashed'),
                 ],
             ],

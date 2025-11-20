@@ -29,12 +29,24 @@ class TransferApi extends Controller
 
             'q'            => ['nullable', 'string', 'max:200'],
             'type'         => ['nullable', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+
+            // NEW filters (mirroring datatable_all)
+            'status'       => ['nullable', 'string', 'max:50'],   // kode_status
+            'requester'    => ['nullable', 'string', 'max:255'],  // pic_request_uid
+            'asset_q'      => ['nullable', 'string', 'max:200'],  // asset code/description search
+
+            // date filters
+            'from'         => ['nullable', 'date'],               // legacy – created_at from
+            'to'           => ['nullable', 'date'],               // legacy – created_at to
+            'created_from' => ['nullable', 'date'],
+            'created_to'   => ['nullable', 'date'],
+            'updated_from' => ['nullable', 'date'],
+            'updated_to'   => ['nullable', 'date'],
+
             'sort_by'      => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'type', 'asset_code', 'asset_description'])],
             'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
             'page'         => ['nullable', 'integer', 'min:1'],
-            'from'         => ['nullable', 'date'],
-            'to'           => ['nullable', 'date'],
             'with_trashed' => ['nullable', Rule::in(['0', '1'])],
         ])->validate();
 
@@ -42,20 +54,30 @@ class TransferApi extends Controller
             is_array($request->asset_uuid)
                 ? $request->asset_uuid
                 : (is_string($request->asset_uuid) ? explode(',', $request->asset_uuid) : [])
-        )->map(fn($x) => trim($x))->filter(fn($x) => Str::isUuid($x))->unique()->values();
+        )->map(fn($x) => trim($x))
+            ->filter(fn($x) => Str::isUuid($x))
+            ->unique()
+            ->values();
 
         $uuidSet = collect(
             is_array($request->uuids)
                 ? $request->uuids
                 : (is_string($request->uuids) ? explode(',', $request->uuids) : [])
         )->when($request->filled('uuid'), fn($c) => $c->push($request->uuid))
-         ->map(fn($x) => trim($x))
-         ->filter(fn($x) => Str::isUuid($x))
-         ->unique()->values();
+            ->map(fn($x) => trim($x))
+            ->filter(fn($x) => Str::isUuid($x))
+            ->unique()
+            ->values();
 
         $sortBy  = $v['sort_by'] ?? 'created_at';
         $sortDir = $v['sort_dir'] ?? 'desc';
         $tz      = config('app.timezone', 'UTC');
+
+        // unify created_* + from/to (for backward compatibility)
+        $createdFrom = $v['created_from'] ?? $v['from'] ?? null;
+        $createdTo   = $v['created_to']   ?? $v['to']   ?? null;
+        $updatedFrom = $v['updated_from'] ?? null;
+        $updatedTo   = $v['updated_to']   ?? null;
 
         $q = Transfer::query()
             ->select([
@@ -82,25 +104,48 @@ class TransferApi extends Controller
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
             ->when($uuidSet->isNotEmpty(),   fn($x) => $x->whereIn('assets_transfers.uuid', $uuidSet))
-            ->when(!empty($v['type']), fn($x) => $x->where('assets_transfers.type', $v['type']))
-            ->when(!empty($v['from']), fn($x) => $x->where('assets_transfers.created_at', '>=', $v['from']))
-            ->when(!empty($v['to']),   fn($x) => $x->where('assets_transfers.created_at', '<=', $v['to']))
+            ->when(!empty($v['type']),       fn($x) => $x->where('assets_transfers.type', $v['type']))
+
+            // NEW: filter by transfer workflow status (APR/ACC/REJ/etc)
+            ->when(!empty($v['status']),     fn($x) => $x->where('assets_transfers.kode_status', $v['status']))
+
+            // NEW: filter by requester (pic_request_uid)
+            ->when(!empty($v['requester']),  fn($x) => $x->where('assets_transfers.pic_request_uid', $v['requester']))
+
+            // NEW: created_at date range (like datatable_all; date-only)
+            ->when($createdFrom, fn($x) => $x->whereDate('assets_transfers.created_at', '>=', $createdFrom))
+            ->when($createdTo,   fn($x) => $x->whereDate('assets_transfers.created_at', '<=', $createdTo))
+
+            // NEW: updated_at date range
+            ->when($updatedFrom, fn($x) => $x->whereDate('assets_transfers.updated_at', '>=', $updatedFrom))
+            ->when($updatedTo,   fn($x) => $x->whereDate('assets_transfers.updated_at', '<=', $updatedTo))
+
+            // existing generic "q" search
             ->when(!empty($v['q']), function ($x) use ($v) {
                 $like = '%' . trim($v['q']) . '%';
                 $x->where(function ($w) use ($like) {
                     $w->where('assets_transfers.transfer_code', 'ILIKE', $like)
-                      ->orWhere('assets_transfers.kode_status',  'ILIKE', $like)
-                      ->orWhere('assets_transfers.type',         'ILIKE', $like)
-                      ->orWhere('a.asset_code',                  'ILIKE', $like)
-                      ->orWhere('a.description',                 'ILIKE', $like)
-                      ->orWhere('a.kode_location',               'ILIKE', $like)
-                      ->orWhere('a.kode_asset_class',            'ILIKE', $like)
-                      ->orWhere('a.kode_status',                 'ILIKE', $like)
-                      ->orWhere('a.kode_sumber',                 'ILIKE', $like)
-                      ->orWhere('ml.name',                       'ILIKE', $like)
-                      ->orWhere('mac.name',                      'ILIKE', $like)
-                      ->orWhere('ms.name',                       'ILIKE', $like)
-                      ->orWhere('msrc.name',                     'ILIKE', $like);
+                        ->orWhere('assets_transfers.kode_status',  'ILIKE', $like)
+                        ->orWhere('assets_transfers.type',         'ILIKE', $like)
+                        ->orWhere('a.asset_code',                  'ILIKE', $like)
+                        ->orWhere('a.description',                 'ILIKE', $like)
+                        ->orWhere('a.kode_location',               'ILIKE', $like)
+                        ->orWhere('a.kode_asset_class',            'ILIKE', $like)
+                        ->orWhere('a.kode_status',                 'ILIKE', $like)
+                        ->orWhere('a.kode_sumber',                 'ILIKE', $like)
+                        ->orWhere('ml.name',                       'ILIKE', $like)
+                        ->orWhere('mac.name',                      'ILIKE', $like)
+                        ->orWhere('ms.name',                       'ILIKE', $like)
+                        ->orWhere('msrc.name',                     'ILIKE', $like);
+                });
+            })
+
+            // NEW: asset_q = search only code/description (like datatable_all's asset_q)
+            ->when(!empty($v['asset_q']), function ($x) use ($v) {
+                $search = '%' . trim($v['asset_q']) . '%';
+                $x->where(function ($w) use ($search) {
+                    $w->where('a.asset_code',  'ILIKE', $search)
+                        ->orWhere('a.description', 'ILIKE', $search);
                 });
             });
 
@@ -133,8 +178,15 @@ class TransferApi extends Controller
                         'uuids'        => $uuidSet->all(),
                         'q'            => $request->query('q'),
                         'type'         => $request->query('type'),
+                        'status'       => $request->query('status'),
+                        'requester'    => $request->query('requester'),
+                        'asset_q'      => $request->query('asset_q'),
                         'from'         => $request->query('from'),
                         'to'           => $request->query('to'),
+                        'created_from' => $request->query('created_from'),
+                        'created_to'   => $request->query('created_to'),
+                        'updated_from' => $request->query('updated_from'),
+                        'updated_to'   => $request->query('updated_to'),
                         'with_trashed' => $request->query('with_trashed'),
                     ],
                 ],
@@ -164,8 +216,15 @@ class TransferApi extends Controller
                     'uuids'        => $uuidSet->all(),
                     'q'            => $request->query('q'),
                     'type'         => $request->query('type'),
+                    'status'       => $request->query('status'),
+                    'requester'    => $request->query('requester'),
+                    'asset_q'      => $request->query('asset_q'),
                     'from'         => $request->query('from'),
                     'to'           => $request->query('to'),
+                    'created_from' => $request->query('created_from'),
+                    'created_to'   => $request->query('created_to'),
+                    'updated_from' => $request->query('updated_from'),
+                    'updated_to'   => $request->query('updated_to'),
                     'with_trashed' => $request->query('with_trashed'),
                 ],
             ],
@@ -178,46 +237,62 @@ class TransferApi extends Controller
         ]);
     }
 
+
     public function store(Request $request)
     {
+        // --- AUTHORIZATION (same idea as web TransferController) ---
+        $user = $request->user(); // works for Sanctum bearer AND web session
+        abort_unless(
+            $user && $user->hasAction('MOVEMENT', 'C'),
+            403,
+            'You are not allowed to create movement.'
+        );
+
         $isBatch = is_array($request->input('items'));
 
         if ($isBatch) {
             $root = $request->validate([
-                'items'                         => ['required','array','min:1'],
-                'items.*.uuid'                  => ['nullable','uuid'],
-                'items.*.asset_uuid'            => ['required','uuid','exists:assets,uuid'],
-                'items.*.type'                  => ['required', Rule::in(['owner','user','maintenance','status','location'])],
-                'items.*.after.value'           => ['required','string'],
-                'items.*.note'                  => ['nullable','string','max:1000'],
-                'items.*.created_at'            => ['nullable','date'],
+                'items'                         => ['required', 'array', 'min:1'],
+                'items.*.uuid'                  => ['nullable', 'uuid'],
+                'items.*.asset_uuid'            => ['required', 'uuid', 'exists:assets,uuid'],
+                'items.*.type'                  => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+                'items.*.after.value'           => ['required', 'string'],
+                'items.*.note'                  => ['nullable', 'string', 'max:1000'],
+                'items.*.created_at'            => ['nullable', 'date'],
 
-                'items.*.file_b64'              => ['nullable','array'],
-                'items.*.file_b64.name'         => ['required_with:items.*.file_b64','string','max:255'],
-                'items.*.file_b64.mime'         => ['required_with:items.*.file_b64','string','max:100'],
-                'items.*.file_b64.data'         => ['required_with:items.*.file_b64','string'],
+                'items.*.file_b64'              => ['nullable', 'array'],
+                'items.*.file_b64.name'         => ['required_with:items.*.file_b64', 'string', 'max:255'],
+                'items.*.file_b64.mime'         => ['required_with:items.*.file_b64', 'string', 'max:100'],
+                'items.*.file_b64.data'         => ['required_with:items.*.file_b64', 'string'],
             ]);
         } else {
             $root = $request->validate([
-                'uuid'              => ['nullable','uuid'],
-                'asset_uuid'        => ['required','uuid','exists:assets,uuid'],
-                'type'              => ['required', Rule::in(['owner','user','maintenance','status','location'])],
-                'after.value'       => ['required','string'],
-                'note'              => ['nullable','string','max:1000'],
-                'created_at'        => ['nullable','date'],
+                'uuid'              => ['nullable', 'uuid'],
+                'asset_uuid'        => ['required', 'uuid', 'exists:assets,uuid'],
+                'type'              => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+                'after.value'       => ['required', 'string'],
+                'note'              => ['nullable', 'string', 'max:1000'],
+                'created_at'        => ['nullable', 'date'],
 
-                'file'              => ['nullable','file','mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt','max:20480'],
-                'file_b64'          => ['nullable','array'],
-                'file_b64.name'     => ['required_with:file_b64','string','max:255'],
-                'file_b64.mime'     => ['required_with:file_b64','string','max:100'],
-                'file_b64.data'     => ['required_with:file_b64','string'],
+                'file'              => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
+                'file_b64'          => ['nullable', 'array'],
+                'file_b64.name'     => ['required_with:file_b64', 'string', 'max:255'],
+                'file_b64.mime'     => ['required_with:file_b64', 'string', 'max:100'],
+                'file_b64.data'     => ['required_with:file_b64', 'string'],
             ]);
         }
 
-        $currentUid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
+        // --- CURRENT USER NAME (PIC) – align with web TransferController ---
+        $currentUid = (string) (
+            $user->name
+            ?? $user->username
+            ?? data_get($request->session()->get('ldap_user'), 'name')
+            ?? data_get($request->session()->get('ldap_user'), 'username', '')
+        );
+
         abort_if($currentUid === '', 401, 'No session UID.');
 
-        $items   = $isBatch ? $root['items'] : [ $root ];
+        $items   = $isBatch ? $root['items'] : [$root];
         $results = [];
 
         foreach ($items as $idx => $payload) {
@@ -226,10 +301,16 @@ class TransferApi extends Controller
             } catch (\Throwable $e) {
                 $res = ['ok' => false, 'index' => $idx, 'error' => $e->getMessage()];
             }
+
             if ($isBatch) {
                 $results[] = $res;
             } else {
-                return response()->json($res, ($res['ok'] ?? false) ? (($res['duplicate'] ?? false) ? 200 : 201) : 422);
+                return response()->json(
+                    $res,
+                    ($res['ok'] ?? false)
+                        ? (($res['duplicate'] ?? false) ? 200 : 201)
+                        : 422
+                );
             }
         }
 
@@ -239,7 +320,6 @@ class TransferApi extends Controller
             'results' => $results,
         ]);
     }
-
 
     private function createTransferFromPayload(Request $rootReq, array $data, string $currentUid): array
     {
@@ -266,12 +346,22 @@ class TransferApi extends Controller
             default       => null,
         };
 
-        $afterCode   = (string) data_get($data, 'after.value');
-        $beforeLabel = $this->resolveLabel($data['type'], $beforeCode);
-        $afterLabel  = $this->resolveLabel($data['type'], $afterCode);
+        $afterCode       = (string) data_get($data, 'after.value');
+        $beforeLabel     = $this->resolveLabel($data['type'], $beforeCode);
+        $afterLabel      = $this->resolveLabel($data['type'], $afterCode);
         $initialWorkflow = 'APR';
 
-        $transfer = DB::transaction(function () use ($asset, $data, $initialWorkflow, $beforeCode, $afterCode, $beforeLabel, $afterLabel, $currentUid, $rootReq) {
+        $transfer = DB::transaction(function () use (
+            $asset,
+            $data,
+            $initialWorkflow,
+            $beforeCode,
+            $afterCode,
+            $beforeLabel,
+            $afterLabel,
+            $currentUid,
+            $rootReq
+        ) {
             $code = $this->generateTransferCode($asset->asset_code);
 
             $path = $orig = $mime = $size = null;
@@ -320,6 +410,10 @@ class TransferApi extends Controller
                 $payload['created_at'] = $data['created_at'];
             }
 
+            if (in_array($data['type'], ['owner', 'user', 'maintenance', 'location'], true)) {
+                $payload['flow'] = $this->buildFlowTemplate($data['type'], $currentUid);
+            }
+
             return Transfer::create($payload);
         });
 
@@ -329,6 +423,7 @@ class TransferApi extends Controller
             'code' => $transfer->transfer_code,
         ];
     }
+
 
     private function mapRows($rows, string $tz)
     {
@@ -369,8 +464,8 @@ class TransferApi extends Controller
 
         $mapStatus = $setStatus->isNotEmpty()
             ? MasterStatus::whereIn('kode', $setStatus)
-                ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
-                ->pluck('name', 'kode')->all()
+            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+            ->pluck('name', 'kode')->all()
             : [];
 
         $mapLoc = $setLoc->isNotEmpty()
@@ -408,7 +503,9 @@ class TransferApi extends Controller
                 $fs     = Storage::disk($disk);
                 $exists = $fs->exists($t->file_path);
                 $size   = $t->file_size ?? ($exists ? $fs->size($t->file_path) : null);
-                $mtime  = $t->file_updated_at ? strtotime($t->file_updated_at) : ($exists ? $fs->lastModified($t->file_path) : null);
+                $mtime  = $t->file_updated_at
+                    ? strtotime($t->file_updated_at)
+                    : ($exists ? $fs->lastModified($t->file_path) : null);
 
                 $fileObj = [
                     'name'          => $t->file_name ?: basename($t->file_path),
@@ -420,6 +517,31 @@ class TransferApi extends Controller
                     'file_url'      => $exists ? url('storage/' . ltrim($t->file_path, '/')) : null,
                 ];
             }
+
+            $flowFileObj = null;
+            if ($t->flow_file_path) {
+                $disk   = 'public';
+                $fs     = Storage::disk($disk);
+                $exists = $fs->exists($t->flow_file_path);
+                $size   = $t->flow_file_size ?? ($exists ? $fs->size($t->flow_file_path) : null);
+                $mtime  = $t->flow_file_updated_at
+                    ? strtotime($t->flow_file_updated_at)
+                    : ($exists ? $fs->lastModified($t->flow_file_path) : null);
+
+                $flowFileObj = [
+                    'name'          => $t->flow_file_name ?: basename($t->flow_file_path),
+                    'mime'          => $t->flow_file_mime,
+                    'size'          => $size,
+                    'sha256'        => $t->flow_file_sha256 ?? null,
+                    'last_modified' => $mtime ? gmdate('c', $mtime) : null,
+                    'download_url'  => null,
+                    'file_url'      => $exists ? url('storage/' . ltrim($t->flow_file_path, '/')) : null,
+                ];
+            }
+
+            $formUrl = in_array($t->type, ['owner', 'user', 'maintenance'], true)
+                ? route('transfer.form', $t->uuid)
+                : null;
 
             return [
                 'uuid'           => $t->uuid,
@@ -434,13 +556,86 @@ class TransferApi extends Controller
                 'after_display'  => $afterDisplay,
 
                 'asset'          => $asset,
+
                 'file'           => $fileObj,
+
+                'flow_file'      => $flowFileObj,
+
+                'form_download_url' => $formUrl,
 
                 'created_at'     => optional($t->created_at)->timezone($tz)?->toIso8601String(),
                 'updated_at'     => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
                 'deleted_at'     => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
             ];
         });
+    }
+
+    protected function buildFlowTemplate(string $type, ?string $creatorName = null): array
+    {
+        $now = now()->toDateTimeString();
+
+        if ($type === 'location') {
+            return [
+                'key'   => 'movement_location',
+                'steps' => [
+                    [
+                        'code'        => 'create',
+                        'label'       => 'Create',
+                        'role'        => 'User Departemen',
+                        'approved_by' => $creatorName,
+                        'approved_at' => $creatorName ? $now : null,
+                    ],
+                    [
+                        'code'        => 'dept_head',
+                        'label'       => 'Approval Dept.Head / Section',
+                        'role'        => 'User - Dept.Head / Section',
+                        'approved_by' => null,
+                        'approved_at' => null,
+                    ],
+                    [
+                        'code'        => 'asset_mgt',
+                        'label'       => 'Completed (Asset Management)',
+                        'role'        => 'Asset Management',
+                        'approved_by' => null,
+                        'approved_at' => null,
+                    ],
+                ],
+            ];
+        }
+
+        return [
+            'key'   => 'movement_assignment',
+            'steps' => [
+                [
+                    'code'        => 'create',
+                    'label'       => 'Create Request',
+                    'role'        => 'User Departemen (New Owner/User/Maint)',
+                    'approved_by' => $creatorName,
+                    'approved_at' => $creatorName ? $now : null,
+                ],
+                [
+                    'code'        => 'new_dept_head',
+                    'label'       => 'Approval Dept.Head New Owner/User/Maint',
+                    'role'        => 'User - Dept.Head / Section (New)',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'old_dept_head',
+                    'label'       => 'Approval Dept.Head Old Owner/User/Maint (optional)',
+                    'role'        => 'User - Dept.Head / Section (Old)',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'asset_mgt',
+                    'label'       => 'Completed (Asset Management)',
+                    'role'        => 'Asset Management',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+            ],
+        ];
     }
 
     protected function labelFor(string $type = null, ?string $code = null, array $mapUser = [], array $mapStatus = [], array $mapLoc = []): string
@@ -524,8 +719,12 @@ class TransferApi extends Controller
     {
         $allowed = [
             'application/pdf',
-            'image/png','image/jpeg','image/webp','image/gif',
-            'text/plain','text/csv',
+            'image/png',
+            'image/jpeg',
+            'image/webp',
+            'image/gif',
+            'text/plain',
+            'text/csv',
             'application/msword',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.ms-excel',

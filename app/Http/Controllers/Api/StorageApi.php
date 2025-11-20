@@ -13,33 +13,41 @@ use Illuminate\Validation\Rule;
 class StorageApi extends Controller
 {
     /**
-     * Preferred: /v1/files/{kind}/{uuid}/download
+     * Preferred: /v1/files/{kind}/{uuid}/download?slot=main|form|ba
      * kind = disposal|transfer
+     * slot:
+     *  - main  : main attachment (file_path, file_name, ...)
+     *  - form  : flow / form file (flow_file_path, flow_file_name, ...)
+     *  - ba    : BA file (ba_file_path, ba_file_name, ...)
      */
     public function download(Request $request, string $kind, string $uuid)
     {
+        $slot = strtolower($request->query('slot', 'main'));
+        if (!in_array($slot, ['main', 'form', 'ba'], true)) {
+            $slot = 'main';
+        }
+
         $row = $this->resolveRow($kind, $uuid);
+
+        // Will throw 404 if path not found
+        [$path, $mime, $size, $mtime, $etag, $fileName] = $this->probe($slot, $row);
 
         [$disk, $fs] = $this->disk();
 
-        if (!$row->file_path || !$fs->exists($row->file_path)) {
-            abort(404, 'File not found');
-        }
-
-        [$mime, $size, $mtime, $etag] = $this->probe($row->file_path, $row);
-
         $headers = array_filter([
-            'Content-Type'      => $mime,
-            'Content-Length'    => $size,
-            'ETag'              => "\"$etag\"",
-            'Last-Modified'     => gmdate('D, d M Y H:i:s', $mtime) . ' GMT',
-            'Cache-Control'     => 'public, max-age=31536000, immutable',
-            'Accept-Ranges'     => 'bytes',
-            'Content-Disposition' => 'inline; filename="' . addslashes($row->file_name ?: basename($row->file_path)) . '"',
-            'X-File-Kind'       => $kind,
-            'X-File-Id'         => (string) $row->uuid,
+            'Content-Type'        => $mime,
+            'Content-Length'      => $size,
+            'ETag'                => "\"$etag\"",
+            'Last-Modified'       => gmdate('D, d M Y H:i:s', $mtime) . ' GMT',
+            'Cache-Control'       => 'public, max-age=31536000, immutable',
+            'Accept-Ranges'       => 'bytes',
+            'Content-Disposition' => 'inline; filename="' . addslashes($fileName) . '"',
+            'X-File-Kind'         => $kind,
+            'X-File-Id'           => (string) $row->uuid,
+            'X-File-Slot'         => $slot,
         ]);
 
+        // Conditional GET
         if ($request->headers->get('If-None-Match') === "\"$etag\"") {
             return response()->noContent(304)->withHeaders($headers);
         }
@@ -50,6 +58,7 @@ class StorageApi extends Controller
             }
         }
 
+        // Range support
         if ($request->headers->has('Range')) {
             [$unit, $range] = explode('=', $request->headers->get('Range'), 2);
             if (strtolower($unit) === 'bytes') {
@@ -58,8 +67,10 @@ class StorageApi extends Controller
                 $end    = ($end !== null) ? min($end, $size - 1) : ($size - 1);
                 $length = $end - $start + 1;
 
-                $stream = $fs->readStream($row->file_path);
-                if ($start > 0) fseek($stream, $start);
+                $stream = $fs->readStream($path);
+                if ($start > 0) {
+                    fseek($stream, $start);
+                }
 
                 return response()->stream(function () use ($stream, $length) {
                     $sent = 0;
@@ -78,10 +89,14 @@ class StorageApi extends Controller
             }
         }
 
-        $absolutePath = Storage::disk($disk)->path($row->file_path);
+        $absolutePath = Storage::disk($disk)->path($path);
         return response()->file($absolutePath, $headers);
     }
 
+    /**
+     * Legacy: /v1/files/{uuid}/download
+     * Uses main slot for either disposal/transfer.
+     */
     public function downloadLegacy(Request $request, string $uuid)
     {
         $row = Disposal::where('uuid', $uuid)->first()
@@ -93,12 +108,40 @@ class StorageApi extends Controller
         return $this->download($request, $kind, $uuid);
     }
 
+    /**
+     * List files for offline sync.
+     *
+     * GET /v1/files/manifest?since=2025-01-01T00:00:00Z&kind=disposal|transfer|all&slot=main|form|ba|all
+     *
+     * Returns:
+     * [
+     *   {
+     *     "id": "disposal-uuid",
+     *     "kind": "disposal",
+     *     "slot": "main|form|ba",
+     *     "name": "file.pdf",
+     *     "mime": "application/pdf",
+     *     "size": 12345,
+     *     "sha256": null,
+     *     "etag": "mtime:size",
+     *     "last_modified": "2025-11-20T09:30:00+07:00",
+     *     "download_url": ".../v1/files/disposal/{uuid}/download?slot=main",
+     *     "file_url": ".../storage/..."
+     *   },
+     *   ...
+     * ]
+     */
     public function manifest(Request $request)
     {
         $since = $request->date('since');
         $kind  = strtolower($request->query('kind', 'all'));
+        $slot  = strtolower($request->query('slot', 'all'));
+
         if (!in_array($kind, ['disposal', 'transfer', 'all'], true)) {
             return response()->json(['message' => 'Invalid kind. Use disposal|transfer|all'], 422);
+        }
+        if (!in_array($slot, ['main', 'form', 'ba', 'all'], true)) {
+            return response()->json(['message' => 'Invalid slot. Use main|form|ba|all'], 422);
         }
 
         $data = collect();
@@ -106,12 +149,33 @@ class StorageApi extends Controller
         $build = function (string $table, $model) use ($since) {
             $cols = ['uuid', 'file_path', 'file_name', 'file_mime', 'file_size', 'updated_at'];
 
-            if (Schema::hasColumn($table, 'file_sha256')) $cols[] = 'file_sha256';
-            if (Schema::hasColumn($table, 'file_etag'))   $cols[] = 'file_etag';
-            if (Schema::hasColumn($table, 'deleted_at'))  $cols[] = 'deleted_at';
+            // Optional columns – only added if physically present on table
+            foreach (
+                [
+                    'file_sha256',
+                    'file_etag',
+                    'deleted_at',
+                    'flow_file_path',
+                    'flow_file_name',
+                    'flow_file_mime',
+                    'flow_file_size',
+                    'flow_file_sha256',
+                    'flow_file_etag',
+                    'ba_file_path',
+                    'ba_file_name',
+                    'ba_file_mime',
+                    'ba_file_size',
+                    'ba_file_sha256',
+                    'ba_file_etag',
+                ] as $col
+            ) {
+                if (Schema::hasColumn($table, $col)) {
+                    $cols[] = $col;
+                }
+            }
 
             $q = $model::query()
-                ->whereNotNull('file_path')
+                ->whereNotNull('file_path') // main file must exist to be relevant
                 ->select($cols);
 
             if (in_array('deleted_at', $cols, true)) {
@@ -127,12 +191,12 @@ class StorageApi extends Controller
 
         if ($kind === 'disposal' || $kind === 'all') {
             $rows = $build('assets_disposals', Disposal::class);
-            $data = $data->merge($this->mapRowsForManifest($rows, 'disposal'));
+            $data = $data->merge($this->mapRowsForManifest($rows, 'disposal', $slot));
         }
 
         if ($kind === 'transfer' || $kind === 'all') {
             $rows = $build('assets_transfers', Transfer::class);
-            $data = $data->merge($this->mapRowsForManifest($rows, 'transfer'));
+            $data = $data->merge($this->mapRowsForManifest($rows, 'transfer', $slot));
         }
 
         return response()->json([
@@ -141,6 +205,7 @@ class StorageApi extends Controller
                 'count' => $data->count(),
                 'since' => $since?->toIso8601String(),
                 'kind'  => $kind,
+                'slot'  => $slot,
             ],
         ]);
     }
@@ -148,36 +213,89 @@ class StorageApi extends Controller
     // ----------------------
     // Helpers
     // ----------------------
-    private function mapRowsForManifest($rows, string $kind)
+    private function mapRowsForManifest($rows, string $kind, string $slot = 'all')
     {
         $disk = 'public';
         $fs   = Storage::disk($disk);
 
-        return collect($rows)->map(function ($r) use ($fs, $disk, $kind) {
-            $filePath = $r->file_path;
-            $exists   = $filePath ? $fs->exists($filePath) : false;
+        $slotsFilter = match ($slot) {
+            'main' => ['main'],
+            'form' => ['form'],
+            'ba'   => ['ba'],
+            default => ['main', 'form', 'ba'],
+        };
 
-            $size  = $r->file_size ?? ($exists ? $fs->size($filePath) : null);
-            $mtime = $exists ? $fs->lastModified($filePath) : null;
+        return collect($rows)->flatMap(function ($r) use ($fs, $disk, $kind, $slotsFilter) {
+            $items = [];
 
-            $etag   = $r->file_etag   ?? null;
-            $sha256 = $r->file_sha256 ?? null;
-            if (!$etag && ($mtime !== null || $size !== null)) {
-                $etag = ($mtime ?? 0) . ':' . ($size ?? 0);
-            }
+            $addItem = function (string $slotName, ?string $path, ?string $name, ?string $mime, ?int $sizeCol, ?string $shaCol, ?string $etagCol) use (&$items, $fs, $disk, $kind, $r, $slotsFilter) {
+                if (!in_array($slotName, $slotsFilter, true)) {
+                    return;
+                }
+                if (!$path) {
+                    return;
+                }
 
-            return [
-                'id'            => (string) $r->uuid,
-                'kind'          => $kind,
-                'name'          => $r->file_name ?: ($filePath ? basename($filePath) : null),
-                'mime'          => $r->file_mime,
-                'size'          => $size,
-                'sha256'        => $sha256,
-                'etag'          => $etag,
-                'last_modified' => optional($r->updated_at)->toIso8601String(),
-                'download_url'  => route('files.download.kind', ['kind' => $kind, 'uuid' => $r->uuid]),
-                'file_url'      => $exists ? url('storage/' . ltrim($filePath, '/')) : null,
-            ];
+                $exists = $fs->exists($path);
+                if (!$exists) {
+                    return;
+                }
+
+                $size  = $sizeCol ?? $fs->size($path);
+                $mtime = $fs->lastModified($path);
+
+                $sha256 = $shaCol ?: null;
+                $etag   = $etagCol ?: (($mtime ?? 0) . ':' . ($size ?? 0));
+
+                $items[] = [
+                    'id'            => (string) $r->uuid,
+                    'kind'          => $kind,
+                    'slot'          => $slotName,
+                    'name'          => $name ?: basename($path),
+                    'mime'          => $mime,
+                    'size'          => $size,
+                    'sha256'        => $sha256,
+                    'etag'          => $etag,
+                    'last_modified' => optional($r->updated_at)->toIso8601String(),
+                    'download_url'  => route('files.download.kind', ['kind' => $kind, 'uuid' => $r->uuid]) . '?slot=' . $slotName,
+                    'file_url'      => url('storage/' . ltrim($path, '/')),
+                ];
+            };
+
+            // main attachment
+            $addItem(
+                'main',
+                $r->file_path,
+                $r->file_name ?? null,
+                $r->file_mime ?? null,
+                $r->file_size ?? null,
+                $r->file_sha256 ?? null,
+                $r->file_etag ?? null
+            );
+
+            // flow / form file (if columns exist and value not null)
+            $addItem(
+                'form',
+                $r->flow_file_path ?? null,
+                $r->flow_file_name ?? null,
+                $r->flow_file_mime ?? null,
+                $r->flow_file_size ?? null,
+                $r->flow_file_sha256 ?? null,
+                $r->flow_file_etag ?? null
+            );
+
+            // BA file (if columns exist and value not null)
+            $addItem(
+                'ba',
+                $r->ba_file_path ?? null,
+                $r->ba_file_name ?? null,
+                $r->ba_file_mime ?? null,
+                $r->ba_file_size ?? null,
+                $r->ba_file_sha256 ?? null,
+                $r->ba_file_etag ?? null
+            );
+
+            return $items;
         });
     }
 
@@ -196,17 +314,61 @@ class StorageApi extends Controller
         return [$disk, Storage::disk($disk)];
     }
 
-    private function probe(string $path, $row): array
+    /**
+     * Resolve real path + metadata for a given slot.
+     *
+     * @return array [path, mime, size, mtime, etag, fileName]
+     */
+    private function probe(string $slot, $row): array
     {
         [$disk, $fs] = $this->disk();
 
-        $mime  = $row->file_mime ?: $fs->mimeType($path);
-        $size  = $row->file_size ?? $fs->size($path);
-        $mtime = $row->file_updated_at ? strtotime($row->file_updated_at) : $fs->lastModified($path);
+        $path = $mime = $name = null;
+        $size = $mtime = null;
+        $sha256 = $etag = null;
 
-        $weak   = $row->file_sha256 ?: ($mtime . ':' . $size);
-        $etag   = $row->file_etag ?: $weak;
+        switch ($slot) {
+            case 'form':
+                $path   = $row->flow_file_path ?? null;
+                $mime   = $row->flow_file_mime ?? null;
+                $size   = $row->flow_file_size ?? null;
+                $name   = $row->flow_file_name ?? null;
+                $sha256 = $row->flow_file_sha256 ?? null;
+                $etag   = $row->flow_file_etag ?? null;
+                break;
 
-        return [$mime, $size, $mtime, $etag];
+            case 'ba':
+                $path   = $row->ba_file_path ?? null;
+                $mime   = $row->ba_file_mime ?? null;
+                $size   = $row->ba_file_size ?? null;
+                $name   = $row->ba_file_name ?? null;
+                $sha256 = $row->ba_file_sha256 ?? null;
+                $etag   = $row->ba_file_etag ?? null;
+                break;
+
+            case 'main':
+            default:
+                $path   = $row->file_path ?? null;
+                $mime   = $row->file_mime ?? null;
+                $size   = $row->file_size ?? null;
+                $name   = $row->file_name ?? null;
+                $sha256 = $row->file_sha256 ?? null;
+                $etag   = $row->file_etag ?? null;
+                break;
+        }
+
+        if (!$path || !$fs->exists($path)) {
+            abort(404, 'File not found');
+        }
+
+        $size  = $size ?? $fs->size($path);
+        $mtime = $fs->lastModified($path);
+        $mime  = $mime ?: $fs->mimeType($path);
+
+        $weak = $sha256 ?: ($mtime . ':' . $size);
+        $etag = $etag ?: $weak;
+        $name = $name ?: basename($path);
+
+        return [$path, $mime, $size, $mtime, $etag, $name];
     }
 }

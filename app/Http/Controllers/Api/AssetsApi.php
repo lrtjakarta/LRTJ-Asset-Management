@@ -15,6 +15,7 @@ class AssetsApi extends Controller
         // ---- Validate & normalize ----
         $v = validator($request->all(), [
             'q'            => ['nullable', 'string', 'max:200'],
+            'asset_q'      => ['nullable', 'string', 'max:200'],
             'status'       => ['nullable', 'string', 'max:50'],
             'location'     => ['nullable', 'string', 'max:50'],
             'asset_class'  => ['nullable', 'string', 'max:50'],
@@ -22,6 +23,8 @@ class AssetsApi extends Controller
             'user'         => ['nullable', 'string', 'max:50'],
             'maintenance'  => ['nullable', 'string', 'max:50'],
             'sumber'       => ['nullable', 'string', 'max:50'],
+            'transaction'  => ['nullable', 'string', 'max:50'],
+
             'uuid'         => ['nullable', 'uuid'],
             'uuids'        => ['nullable'],
             'uuids.*'      => ['uuid'],
@@ -45,6 +48,7 @@ class AssetsApi extends Controller
         $withTrashed = $request->boolean('with_trashed');
         $sortBy  = $v['sort_by']  ?? 'a.updated_at';
         $sortDir = $v['sort_dir'] ?? 'desc';
+
         $uuids = collect()
             ->merge(Arr::wrap($request->query('uuids')))
             ->when($request->filled('uuid'), fn($c) => $c->push($request->query('uuid')))
@@ -68,33 +72,47 @@ class AssetsApi extends Controller
             ->leftJoin('master_user_code    as uu',   'uu.kode',   '=', 'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',  '=', 'g.asset_maintenance')
             ->when(!$withTrashed, fn($qb) => $qb->whereNull('a.deleted_at'))
-            ->when(!empty($v['q']), function ($qb) use ($v) {
-                $like = '%' . trim($v['q']) . '%';
-                $qb->where(function ($w) use ($like) {
-                    $w->where('a.asset_code', 'ILIKE', $like)
-                        ->orWhere('a.description', 'ILIKE', $like)
-                        ->orWhere('mac.name', 'ILIKE', $like)
-                        ->orWhere('ms.name', 'ILIKE', $like)
-                        ->orWhere('msrc.name', 'ILIKE', $like)
-                        ->orWhere('ml.name', 'ILIKE', $like)
-                        ->orWhere('mu.name', 'ILIKE', $like)
-                        ->orWhere('ou.name', 'ILIKE', $like)
-                        ->orWhere('uu.name', 'ILIKE', $like)
-                        ->orWhere('muw.name', 'ILIKE', $like)
-                        ->orWhere('i.asset_number_internal', 'ILIKE', $like)
-                        ->orWhere('i.asset_number_maximo', 'ILIKE', $like)
-                        ->orWhere('i.asset_number_dynamic_365', 'ILIKE', $like)
-                        ->orWhere('a.kode_location', 'ILIKE', $like)
-                        ->orWhere('a.kode_asset_class', 'ILIKE', $like)
-                        ->orWhere('a.kode_status', 'ILIKE', $like)
-                        ->orWhere('d.no_po_perjanjian_spk', 'ILIKE', $like)
-                        ->orWhere('d.nota_referensi', 'ILIKE', $like)
-                        ->orWhere('d.no_document', 'ILIKE', $like)
-                        ->orWhere('g.asset_owner', 'ILIKE', $like)
-                        ->orWhere('g.asset_user', 'ILIKE', $like)
-                        ->orWhere('g.asset_maintenance', 'ILIKE', $like);
-                });
-            })
+
+            ->when(
+                !empty($v['asset_q'] ?? null) || !empty($v['q'] ?? null),
+                function ($qb) use ($v) {
+                    $term = !empty($v['asset_q'] ?? null) ? $v['asset_q'] : $v['q'];
+                    $like = '%' . trim($term) . '%';
+
+                    if (!empty($v['asset_q'] ?? null)) {
+                        $qb->where(function ($w) use ($like) {
+                            $w->where('a.asset_code', 'ILIKE', $like)
+                              ->orWhere('a.description', 'ILIKE', $like);
+                        });
+                    } else {
+                        $qb->where(function ($w) use ($like) {
+                            $w->where('a.asset_code', 'ILIKE', $like)
+                                ->orWhere('a.description', 'ILIKE', $like)
+                                ->orWhere('mac.name', 'ILIKE', $like)
+                                ->orWhere('ms.name', 'ILIKE', $like)
+                                ->orWhere('msrc.name', 'ILIKE', $like)
+                                ->orWhere('ml.name', 'ILIKE', $like)
+                                ->orWhere('mu.name', 'ILIKE', $like)
+                                ->orWhere('ou.name', 'ILIKE', $like)
+                                ->orWhere('uu.name', 'ILIKE', $like)
+                                ->orWhere('muw.name', 'ILIKE', $like)
+                                ->orWhere('i.asset_number_internal', 'ILIKE', $like)
+                                ->orWhere('i.asset_number_maximo', 'ILIKE', $like)
+                                ->orWhere('i.asset_number_dynamic_365', 'ILIKE', $like)
+                                ->orWhere('a.kode_location', 'ILIKE', $like)
+                                ->orWhere('a.kode_asset_class', 'ILIKE', $like)
+                                ->orWhere('a.kode_status', 'ILIKE', $like)
+                                ->orWhere('d.no_po_perjanjian_spk', 'ILIKE', $like)
+                                ->orWhere('d.nota_referensi', 'ILIKE', $like)
+                                ->orWhere('d.no_document', 'ILIKE', $like)
+                                ->orWhere('g.asset_owner', 'ILIKE', $like)
+                                ->orWhere('g.asset_user', 'ILIKE', $like)
+                                ->orWhere('g.asset_maintenance', 'ILIKE', $like);
+                        });
+                    }
+                }
+            )
+
             ->when(!empty($v['status']),      fn($qb) => $qb->where('a.kode_status', $v['status']))
             ->when(!empty($v['location']),    fn($qb) => $qb->where('a.kode_location', $v['location']))
             ->when(!empty($v['asset_class']), fn($qb) => $qb->where('a.kode_asset_class', $v['asset_class']))
@@ -102,6 +120,8 @@ class AssetsApi extends Controller
             ->when(!empty($v['user']),        fn($qb) => $qb->where('g.asset_user', $v['user']))
             ->when(!empty($v['maintenance']), fn($qb) => $qb->where('g.asset_maintenance', $v['maintenance']))
             ->when(!empty($v['sumber']),      fn($qb) => $qb->where('a.kode_sumber', $v['sumber']))
+            ->when(!empty($v['transaction']), fn($qb) => $qb->where('mac.kode_transaction', $v['transaction'])) // NEW
+
             ->when($uuids->isNotEmpty(), fn($qb) => $qb->whereIn('a.uuid', $uuids->all()))
             ->when(isset($v['price_min']) || isset($v['price_max']), function ($qb) use ($v) {
                 $min = $v['price_min'] ?? null;
@@ -162,8 +182,8 @@ class AssetsApi extends Controller
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber      || ' - ' || msrc.name END AS kode_sumber_label"),
                 DB::raw("CASE WHEN ou.department  IS NULL THEN g.asset_owner      ELSE g.asset_owner         || ' - ' || ou.department  END AS asset_owner_label"),
                 DB::raw("CASE WHEN uu.department  IS NULL THEN g.asset_user       ELSE g.asset_user          || ' - ' || uu.department  END AS asset_user_label"),
-                DB::raw("CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance  || ' - ' || muw.department END AS asset_maintenance_label"),
-                DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at_local")
+                DB::raw("CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance  ELSE g.asset_maintenance  || ' - ' || muw.department END AS asset_maintenance_label"),
+                DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at_local"),
             ])
             ->orderBy($sortBy, $sortDir);
 
@@ -183,6 +203,7 @@ class AssetsApi extends Controller
                     'sort_dir'  => $sortDir,
                     'filters'   => [
                         'q'            => $request->query('q'),
+                        'asset_q'      => $request->query('asset_q'),
                         'status'       => $request->query('status'),
                         'location'     => $request->query('location'),
                         'asset_class'  => $request->query('asset_class'),
@@ -190,6 +211,7 @@ class AssetsApi extends Controller
                         'user'         => $request->query('user'),
                         'maintenance'  => $request->query('maintenance'),
                         'sumber'       => $request->query('sumber'),
+                        'transaction'  => $request->query('transaction'),
                         'with_trashed' => $request->query('with_trashed'),
                         'price_min'    => $request->query('price_min'),
                         'price_max'    => $request->query('price_max'),
@@ -197,18 +219,19 @@ class AssetsApi extends Controller
                         'total_max'    => $request->query('total_max'),
                         'updated_from' => $request->query('updated_from'),
                         'updated_to'   => $request->query('updated_to'),
-                        'uuid'  => $request->query('uuid'),
-                        'uuids' => $uuids->all(),
+                        'uuid'         => $request->query('uuid'),
+                        'uuids'        => $uuids->all(),
                     ],
                 ],
                 'links' => [
                     'first' => null,
-                    'prev' => null,
-                    'next' => null,
-                    'last' => null,
+                    'prev'  => null,
+                    'next'  => null,
+                    'last'  => null,
                 ],
             ]);
         }
+
         $perPage   = (int) ($v['per_page'] ?? 15);
         $paginator = $q->paginate($perPage)->appends($request->query());
 
@@ -228,6 +251,7 @@ class AssetsApi extends Controller
                 'sort_dir'     => $sortDir,
                 'filters'      => [
                     'q'            => $request->query('q'),
+                    'asset_q'      => $request->query('asset_q'),
                     'status'       => $request->query('status'),
                     'location'     => $request->query('location'),
                     'asset_class'  => $request->query('asset_class'),
@@ -235,6 +259,7 @@ class AssetsApi extends Controller
                     'user'         => $request->query('user'),
                     'maintenance'  => $request->query('maintenance'),
                     'sumber'       => $request->query('sumber'),
+                    'transaction'  => $request->query('transaction'),
                     'with_trashed' => $request->query('with_trashed'),
                     'price_min'    => $request->query('price_min'),
                     'price_max'    => $request->query('price_max'),
@@ -242,8 +267,8 @@ class AssetsApi extends Controller
                     'total_max'    => $request->query('total_max'),
                     'updated_from' => $request->query('updated_from'),
                     'updated_to'   => $request->query('updated_to'),
-                    'uuid'  => $request->query('uuid'),
-                    'uuids' => $uuids->all(),
+                    'uuid'         => $request->query('uuid'),
+                    'uuids'        => $uuids->all(),
                 ],
             ],
             'links' => [
