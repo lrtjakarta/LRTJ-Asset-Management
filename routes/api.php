@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
         Route::get('master-data/master-status', [MasterDataApi::class, 'master_status']);
         Route::get('master-data/master-transaction', [MasterDataApi::class, 'master_transaction']);
         Route::get('master-data/master-asset-class', [MasterDataApi::class, 'master_asset_class']);
+        Route::get('master-data/users', [MasterDataApi::class, 'users']);
         // ASSET
         Route::get('/assets', [AssetsApi::class, 'index']);
         // TRANSFERS

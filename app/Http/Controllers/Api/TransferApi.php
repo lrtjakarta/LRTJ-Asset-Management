@@ -31,7 +31,7 @@ class TransferApi extends Controller
             'type'         => ['nullable', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
 
             // NEW filters (mirroring datatable_all)
-            'status'       => ['nullable', 'string', 'max:50'],   // kode_status
+            'workflow'       => ['nullable', 'string', 'max:50'],   // kode_status
             'requester'    => ['nullable', 'string', 'max:255'],  // pic_request_uid
             'asset_q'      => ['nullable', 'string', 'max:200'],  // asset code/description search
 
@@ -107,7 +107,7 @@ class TransferApi extends Controller
             ->when(!empty($v['type']),       fn($x) => $x->where('assets_transfers.type', $v['type']))
 
             // NEW: filter by transfer workflow status (APR/ACC/REJ/etc)
-            ->when(!empty($v['status']),     fn($x) => $x->where('assets_transfers.kode_status', $v['status']))
+            ->when(!empty($v['workflow']),     fn($x) => $x->where('assets_transfers.kode_status', $v['workflow']))
 
             // NEW: filter by requester (pic_request_uid)
             ->when(!empty($v['requester']),  fn($x) => $x->where('assets_transfers.pic_request_uid', $v['requester']))
@@ -178,7 +178,7 @@ class TransferApi extends Controller
                         'uuids'        => $uuidSet->all(),
                         'q'            => $request->query('q'),
                         'type'         => $request->query('type'),
-                        'status'       => $request->query('status'),
+                        'workflow'       => $request->query('workflow'),
                         'requester'    => $request->query('requester'),
                         'asset_q'      => $request->query('asset_q'),
                         'from'         => $request->query('from'),
@@ -216,7 +216,7 @@ class TransferApi extends Controller
                     'uuids'        => $uuidSet->all(),
                     'q'            => $request->query('q'),
                     'type'         => $request->query('type'),
-                    'status'       => $request->query('status'),
+                    'workflow'       => $request->query('workflow'),
                     'requester'    => $request->query('requester'),
                     'asset_q'      => $request->query('asset_q'),
                     'from'         => $request->query('from'),

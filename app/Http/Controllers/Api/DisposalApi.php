@@ -91,8 +91,8 @@ class DisposalApi extends Controller
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
             ->with([
-                'status:id,kode,name',
-                'target:id,kode,name',
+                'status:uuid,kode,name',
+                'target:uuid,kode,name',
                 'asset:uuid,asset_code,description',
             ])
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
