@@ -526,7 +526,21 @@
             $('#btn-export-reporting').on('click', function(e) {
                 e.preventDefault();
                 const params = $.param(buildFilters());
-                window.location = R.export+(params ? ('?' + params) : '');
+
+
+                Swal.fire({
+                    title: 'Export Excel?',
+                    text: 'Export reporting data with current filters.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = R.export+(params ? ('?' + params) : '');
+                });
             });
 
         })(jQuery);

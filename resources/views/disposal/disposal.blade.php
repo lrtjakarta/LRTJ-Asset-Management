@@ -300,13 +300,13 @@
                         </div>
 
                         <div class="mb-4 d-none" id="flow-wrap-ba-upload">
-                            <label class="form-label">Upload Berita Acara Disposal</label>
+                            <label class="form-label required">Upload Berita Acara Disposal</label>
                             <input type="file" name="ba_file" id="flow-ba-file-input" class="form-control"
                                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.bmp">
                             <div class="form-text">Required on final step by Asset Management.</div>
                         </div>
                         <div class="mb-4 d-none" id="flow-wrap-form-upload">
-                            <label class="form-label">Upload Form Disposal</label>
+                            <label class="form-label required">Upload Form Disposal</label>
                             <input type="file" name="flow_file" id="flow-form-file-input" class="form-control"
                                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.bmp">
                             <div class="form-text">Optional: upload signed / scanned form disposal.</div>
@@ -680,8 +680,21 @@
                     asset_q: $('#ds-asset-q').val() || '',
                 });
 
-                window.location = R.exportUrl + '?' + params;
+                Swal.fire({
+                    title: 'Export Excel?',
+                    text: 'Export disposal data with current filters.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = R.exportUrl + '?' + params;
+                });
             });
+
 
             function isAssetMgtApproved(flowRaw) {
                 if (!flowRaw) return false;
@@ -725,46 +738,65 @@
                     return;
                 }
 
+                // NEW: Yes / No confirmation
                 Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
+                    title: isEdit ? 'Update this disposal?' : 'Create this disposal?',
+                    text: isEdit ? 'Do you want to save the changes?' :
+                        'Do you want to create this disposal request?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                let req;
-                if (hasFile) {
-                    const fd = new FormData();
-                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    fd.append('file', fileEl.files[0]);
-                    if (isEdit) fd.append('_method', 'PUT');
-                    req = $.ajax({
-                        url: isEdit ? R.update.replace(':id', id) : R.create,
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
                     });
-                } else {
-                    req = isEdit ?
-                        $.ajax({
-                            url: R.update.replace(':id', id),
-                            type: 'PUT',
-                            data: base
-                        }) :
-                        $.post(R.create, base);
-                }
 
-                req.done(() => {
-                        $('#modal-disposal').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Disposal updated.' :
-                            'Disposal created.', 'success');
-                        $('#ds-asset').prop('disabled', false);
-                        dt.ajax.reload(null, false);
-                        if (fileEl) fileEl.value = '';
-                        $('#ds-remove-file').val('0');
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    let req;
+                    if (hasFile) {
+                        const fd = new FormData();
+                        Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                        fd.append('file', fileEl.files[0]);
+                        if (isEdit) fd.append('_method', 'PUT');
+                        req = $.ajax({
+                            url: isEdit ? R.update.replace(':id', id) : R.create,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        });
+                    } else {
+                        req = isEdit ?
+                            $.ajax({
+                                url: R.update.replace(':id', id),
+                                type: 'PUT',
+                                data: base
+                            }) :
+                            $.post(R.create, base);
+                    }
+
+                    req.done(() => {
+                            $('#modal-disposal').modal('hide');
+                            Swal.fire(
+                                isEdit ? 'Updated' : 'Success',
+                                isEdit ? 'Disposal updated.' : 'Disposal created.',
+                                'success'
+                            );
+                            $('#ds-asset').prop('disabled', false);
+                            dt.ajax.reload(null, false);
+                            if (fileEl) fileEl.value = '';
+                            $('#ds-remove-file').val('0');
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
+
 
             $('#tbl-disposals-all').on('click', '.btn-ds-edit', function() {
                 const id = $(this).data('id');
@@ -818,11 +850,13 @@
             $('#tbl-disposals-all').on('click', '.btn-ds-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Reject?',
+                        title: 'Reject this disposal?',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6'
+                        cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No'
                     })
                     .then(r => {
                         if (!r.isConfirmed) return;
@@ -836,16 +870,17 @@
                         }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                     });
             });
-
             $('#tbl-disposals-all').on('click', '.btn-ds-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Delete?',
-                        text: 'Moved to trash',
+                        title: 'Delete this disposal?',
+                        text: 'The record will be moved to trash.',
                         icon: 'warning',
                         showCancelButton: true,
                         confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6'
+                        cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No'
                     })
                     .then(r => {
                         if (!r.isConfirmed) return;
@@ -992,7 +1027,6 @@
                     $('#flow-steps').append(li);
                 });
             }
-
             $('#formDisposalFlow').on('submit', function(e) {
                 e.preventDefault();
 
@@ -1001,34 +1035,48 @@
 
                 const fd = new FormData(this);
 
+                // NEW: Yes / No confirmation
                 Swal.fire({
-                    title: 'Approving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
+                    title: 'Approve next step?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                $.ajax({
-                    url: R.approveStep(id),
-                    type: 'POST',
-                    data: fd,
-                    processData: false,
-                    contentType: false
-                }).done(function(res) {
-                    Swal.close();
-                    if (res.flow) {
-                        renderFlowSteps(res.flow);
-                    }
-                    dt.ajax.reload(null, false);
-                    if (res.kode_status === 'ACC') {
-                        Swal.fire('Approved', 'Disposal fully approved.', 'success');
-                        $('#modal-disposal-flow').modal('hide');
-                    } else {
-                        Swal.fire('Approved', 'Step approved.', 'success');
-                    }
-                }).fail(function(x) {
-                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    Swal.fire({
+                        title: 'Approving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.ajax({
+                        url: R.approveStep(id),
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    }).done(function(res) {
+                        Swal.close();
+                        if (res.flow) {
+                            renderFlowSteps(res.flow);
+                        }
+                        dt.ajax.reload(null, false);
+                        if (res.kode_status === 'ACC') {
+                            Swal.fire('Approved', 'Disposal fully approved.', 'success');
+                            $('#modal-disposal-flow').modal('hide');
+                        } else {
+                            Swal.fire('Approved', 'Step approved.', 'success');
+                        }
+                    }).fail(function(x) {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
                 });
             });
+
 
         })();
     </script>

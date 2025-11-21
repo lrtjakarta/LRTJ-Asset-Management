@@ -538,7 +538,20 @@
             $('#btnExport').on('click', function(e) {
                 e.preventDefault();
                 const params = $.param(buildFilters());
-                window.location = "{{ route('export.depreciation.monthly') }}" + '?' + params;
+
+                Swal.fire({
+                    title: 'Export depreciation data?',
+                    text: 'Export current filtered depreciation data to Excel.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = "{{ route('export.depreciation.monthly') }}" + '?' + params;
+                });
             });
 
             // ===== Open Process Month modal =====
@@ -555,6 +568,7 @@
                 monthModal.show();
             });
 
+            // ===== Submit Process Month (from modal) =====
             // ===== Submit Process Month (from modal) =====
             $('#form-process-month-modal').on('submit', async function(e) {
                 e.preventDefault();
@@ -574,25 +588,39 @@
                 const period = periodMonth + '-01';
                 $('#period').val(period); // hidden input in main form
 
-                try {
-                    setBusyProc(true);
-                    monthModal.hide();
-                    await $.ajax({
-                        url: $formProc.attr('action'),
-                        type: 'POST',
-                        data: $formProc.serialize(),
-                        headers: {
-                            'X-CSRF-TOKEN': $('input[name="_token"]', $formProc).val()
-                        }
-                    });
+                Swal.fire({
+                    title: `Process depreciation for ${formatPeriodToText(periodMonth)}?`,
+                    text: 'This will (re)calculate depreciation for the selected month.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(async result => {
+                    if (!result.isConfirmed) return;
 
-                    toastr?.success(`Processed ${formatPeriodToText(periodMonth)}`);
-                    tbl.ajax.reload(null, false);
-                } catch (err) {
-                    toastr?.error('Failed to process depreciation');
-                } finally {
-                    setBusyProc(false);
-                }
+                    try {
+                        setBusyProc(true);
+                        monthModal.hide();
+                        await $.ajax({
+                            url: $formProc.attr('action'),
+                            type: 'POST',
+                            data: $formProc.serialize(),
+                            headers: {
+                                'X-CSRF-TOKEN': $('input[name="_token"]', $formProc)
+                                    .val()
+                            }
+                        });
+
+                        toastr?.success(`Processed ${formatPeriodToText(periodMonth)}`);
+                        tbl.ajax.reload(null, false);
+                    } catch (err) {
+                        toastr?.error('Failed to process depreciation');
+                    } finally {
+                        setBusyProc(false);
+                    }
+                });
             });
 
             // ===== Open Build Year modal =====
@@ -609,6 +637,7 @@
             });
 
             // ===== Submit Build Year (from modal) =====
+            // ===== Submit Build Year (from modal) =====
             $('#form-build-year-modal').on('submit', async function(e) {
                 e.preventDefault();
 
@@ -622,26 +651,42 @@
                 $('#year').val(yearNum);
                 $('#btn-build-year-label').text(`Build Year`);
 
-                try {
-                    setBusyYear(true);
-                    yearModal.hide();
-                    await $.ajax({
-                        url: $formYear.attr('action'),
-                        type: 'POST',
-                        data: $formYear.serialize(),
-                        headers: {
-                            'X-CSRF-TOKEN': $('input[name="_token"]', $formYear).val()
-                        }
-                    });
-                    toastr?.success(`Yearly summary built for ${yearNum}`);
-                } catch (err) {
-                    console.error(err);
-                    const msg = err?.responseJSON?.message || 'Failed to build yearly depreciation';
-                    toastr?.error(msg);
-                } finally {
-                    setBusyYear(false);
-                }
+                Swal.fire({
+                    title: `Build depreciation summary for ${yearNum}?`,
+                    text: 'This will (re)build yearly depreciation summary for the selected year.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(async result => {
+                    if (!result.isConfirmed) return;
+
+                    try {
+                        setBusyYear(true);
+                        yearModal.hide();
+                        await $.ajax({
+                            url: $formYear.attr('action'),
+                            type: 'POST',
+                            data: $formYear.serialize(),
+                            headers: {
+                                'X-CSRF-TOKEN': $('input[name="_token"]', $formYear)
+                                    .val()
+                            }
+                        });
+                        toastr?.success(`Yearly summary built for ${yearNum}`);
+                    } catch (err) {
+                        console.error(err);
+                        const msg = err?.responseJSON?.message ||
+                            'Failed to build yearly depreciation';
+                        toastr?.error(msg);
+                    } finally {
+                        setBusyYear(false);
+                    }
+                });
             });
+
 
             // ===== Adjustment Depreciation submit =====
             const $btnAdj = $('#btn-submit-adj');
@@ -649,6 +694,7 @@
                 if (b) $btnAdj.attr('data-kt-indicator', 'on').prop('disabled', true);
                 else $btnAdj.removeAttr('data-kt-indicator').prop('disabled', false);
             };
+
 
             $('#form-adj-depr').on('submit', async function(e) {
                 e.preventDefault();
@@ -671,51 +717,64 @@
                     return;
                 }
 
-                try {
-                    setBusyAdj(true);
-                    await $.ajax({
-                        url: "{{ route('depreciation.mv.adj.depr') }}",
-                        type: 'POST',
-                        headers: {
-                            'X-CSRF-TOKEN': "{{ csrf_token() }}"
-                        },
-                        data: {
-                            asset_uuid: assetUuid,
-                            amount: amount,
-                            actual_date: date,
-                            note: note
-                        }
-                    });
+                Swal.fire({
+                    title: 'Save this adjustment?',
+                    text: 'This will change the net book value for the selected asset.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(async result => {
+                    if (!result.isConfirmed) return;
 
-                    // best-effort re-run month
                     try {
+                        setBusyAdj(true);
                         await $.ajax({
-                            url: "{{ route('depreciation.run.month') }}",
+                            url: "{{ route('depreciation.mv.adj.depr') }}",
                             type: 'POST',
                             headers: {
                                 'X-CSRF-TOKEN': "{{ csrf_token() }}"
                             },
                             data: {
-                                period: date
+                                asset_uuid: assetUuid,
+                                amount: amount,
+                                actual_date: date,
+                                note: note
                             }
                         });
-                    } catch (e2) {
-                        console.error('runMonth after adjustment failed', e2);
-                        toastr?.warning(
-                            'Adjustment saved, but monthly recompute failed. Please press "Process Depreciation Month".'
-                        );
-                    }
 
-                    toastr?.success('Adjustment depreciation saved');
-                    tbl.ajax.reload(null, false);
-                    $modalAdj.hide();
-                } catch (err) {
-                    console.error(err);
-                    const msg = err?.responseJSON?.message || 'Failed to save adjustment';
-                    toastr?.error(msg);
-                } finally {
-                    setBusyAdj(false);
-                }
+                        // best-effort re-run month
+                        try {
+                            await $.ajax({
+                                url: "{{ route('depreciation.run.month') }}",
+                                type: 'POST',
+                                headers: {
+                                    'X-CSRF-TOKEN': "{{ csrf_token() }}"
+                                },
+                                data: {
+                                    period: date
+                                }
+                            });
+                        } catch (e2) {
+                            console.error('runMonth after adjustment failed', e2);
+                            toastr?.warning(
+                                'Adjustment saved, but monthly recompute failed. Please press "Process Depreciation Month".'
+                            );
+                        }
+
+                        toastr?.success('Adjustment depreciation saved');
+                        tbl.ajax.reload(null, false);
+                        $modalAdj.hide();
+                    } catch (err) {
+                        console.error(err);
+                        const msg = err?.responseJSON?.message || 'Failed to save adjustment';
+                        toastr?.error(msg);
+                    } finally {
+                        setBusyAdj(false);
+                    }
+                });
             });
 
         })();

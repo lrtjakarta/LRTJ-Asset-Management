@@ -794,7 +794,19 @@
                     asset_q: $('#f-asset').val() || '',
                 });
 
-                window.location = "{{ route('export.transfer-requests') }}" + '?' + params;
+                Swal.fire({
+                    title: 'Export transfer requests?',
+                    text: 'Export current filtered transfer value data to Excel.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = "{{ route('export.transfer-requests') }}" + '?' + params;
+                });
             });
 
             // ===== Row actions =====
@@ -802,10 +814,12 @@
             $('#tbl-transfer-requests').on('click', '.btn-approve', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Approve?',
+                        title: 'Approve this transfer?',
                         icon: 'question',
                         confirmButtonColor: '#EA242A',
                         cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No',
                         showCancelButton: true
                     })
                     .then(r => {
@@ -829,13 +843,16 @@
                     });
             });
 
+
             $('#tbl-transfer-requests').on('click', '.btn-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Reject?',
+                        title: 'Reject this transfer?',
                         icon: 'warning',
                         confirmButtonColor: '#EA242A',
                         cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No',
                         showCancelButton: true
                     })
                     .then(r => {
@@ -862,11 +879,13 @@
             $('#tbl-transfer-requests').on('click', '.btn-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                        title: 'Delete?',
-                        text: 'Moved to trash',
+                        title: 'Delete this transfer?',
+                        text: 'Record will be moved to trash.',
                         icon: 'warning',
                         confirmButtonColor: '#EA242A',
                         cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No',
                         showCancelButton: true
                     })
                     .then(r => {
@@ -971,22 +990,35 @@
                 const formData = new FormData(this);
                 formData.append('_method', 'PUT');
 
-                setBusyUpdate(true);
+                Swal.fire({
+                    title: 'Save changes?',
+                    text: 'Update this transfer request with the new values.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                $.ajax({
-                        url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
-                        type: 'POST',
-                        data: formData,
-                        processData: false,
-                        contentType: false,
-                    }).done(res => {
-                        Swal.fire('Updated', '', 'success');
-                        tbl.ajax.reload(null, false);
-                        $modalEdit.hide();
-                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
-                    .always(() => {
-                        setBusyUpdate(false);
-                    });
+                    setBusyUpdate(true);
+
+                    $.ajax({
+                            url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
+                            type: 'POST',
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                        }).done(res => {
+                            Swal.fire('Updated', '', 'success');
+                            tbl.ajax.reload(null, false);
+                            $modalEdit.hide();
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
+                        .always(() => {
+                            setBusyUpdate(false);
+                        });
+                });
             });
 
 
@@ -1076,7 +1108,6 @@
                 }
             }
 
-
             const $btnSave = $('#btn-submit-transfer');
             const setBusyTransfer = (b) => {
                 if (b) $btnSave.attr('data-kt-indicator', 'on').prop('disabled', true);
@@ -1159,6 +1190,19 @@
                     fd.append('attachment', fileInput.files[0]);
                 }
 
+                const confirmResult = await Swal.fire({
+                    title: 'Submit this transfer request?',
+                    text: 'This will create a new transfer value request for approval.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                });
+
+                if (!confirmResult.isConfirmed) return;
+
                 try {
                     setBusyTransfer(true);
                     await $.ajax({
@@ -1177,6 +1221,7 @@
                         title: 'Saved',
                         text: 'Transfer request saved. Waiting for approval.'
                     });
+
                     $('#tbl-monthly').DataTable().ajax.reload(null, false);
                     $modal.hide();
                     tbl.ajax.reload(null, false);
@@ -1192,6 +1237,7 @@
                     setBusyTransfer(false);
                 }
             });
+
 
         })();
     </script>

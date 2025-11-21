@@ -357,7 +357,19 @@
                     asset: $('#f-asset').val() || '',
                 });
 
-                window.location = "{{ route('export.acquisition') }}" + '?' + params;
+                Swal.fire({
+                    title: 'Export acquisition history?',
+                    text: 'Export current filtered acquisition data to Excel.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = "{{ route('export.acquisition') }}" + '?' + params;
+                });
             });
 
             $('#acq-asset-select').select2({
@@ -475,6 +487,7 @@
             });
 
             // Submit
+            // Submit
             $form.on('submit', function(e) {
                 e.preventDefault();
 
@@ -488,46 +501,61 @@
                     return;
                 }
 
-                setBusy(true);
-                $.ajax({
-                    url: "{{ route('acquisition.global.save') }}",
-                    type: 'POST',
-                    data: $form.serialize(),
-                    headers: {
-                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-                    }
-                }).done(res => {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Saved',
-                        text: res?.message || 'Acquisition saved.'
-                    });
-                    tbl.ajax.reload(null, false);
-                    $modal.hide();
-                }).fail(xhr => {
-                    let msg = xhr.responseJSON?.message || 'Failed to save acquisition.';
-                    const errs = xhr.responseJSON?.errors;
-                    if (errs) {
-                        const firstKey = Object.keys(errs)[0];
-                        if (firstKey && errs[firstKey][0]) msg = errs[firstKey][0];
-                    }
+                Swal.fire({
+                    title: 'Save acquisition?',
+                    text: 'This will create or update acquisition data for this asset.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: msg
-                    });
-                }).always(() => setBusy(false));
+                    setBusy(true);
+                    $.ajax({
+                        url: "{{ route('acquisition.global.save') }}",
+                        type: 'POST',
+                        data: $form.serialize(),
+                        headers: {
+                            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+                        }
+                    }).done(res => {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Saved',
+                            text: res?.message || 'Acquisition saved.'
+                        });
+                        tbl.ajax.reload(null, false);
+                        $modal.hide();
+                    }).fail(xhr => {
+                        let msg = xhr.responseJSON?.message || 'Failed to save acquisition.';
+                        const errs = xhr.responseJSON?.errors;
+                        if (errs) {
+                            const firstKey = Object.keys(errs)[0];
+                            if (firstKey && errs[firstKey][0]) msg = errs[firstKey][0];
+                        }
+
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Error',
+                            text: msg
+                        });
+                    }).always(() => setBusy(false));
+                });
             });
 
             $('#tbl-acq-global').on('click', '.btn-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                    title: 'Delete?',
-                    text: 'Moved to trash',
+                    title: 'Delete this acquisition?',
+                    text: 'Record will be moved to trash.',
                     icon: 'warning',
                     confirmButtonColor: '#EA242A',
                     cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No',
                     showCancelButton: true
                 }).then(r => {
                     if (!r.isConfirmed) return;
@@ -544,6 +572,7 @@
                     }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                 });
             });
+
         })();
     </script>
 @endpush

@@ -23,7 +23,6 @@
             border-color: #6b7280 !important;
             background-color: #e5e7eb !important;
         }
-
     </style>
 @endpush
 @section('content')
@@ -154,6 +153,7 @@
                         </div>
 
                         <div class="text-end mt-7">
+                            <a href="{{ route('settings.roles.index') }}" role="button" class="btn btn-light-primary me-2">Go Back</a>
                             <button type="submit" class="btn btn-primary">
                                 <span class="indicator-label">Save Changes</span>
                             </button>

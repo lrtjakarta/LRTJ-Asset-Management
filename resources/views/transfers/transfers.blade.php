@@ -570,6 +570,7 @@
             // export
             $('#mv-btn-export').on('click', function(e) {
                 e.preventDefault();
+
                 const params = $.param({
                     type: $('#mv-type').val() || '',
                     status: $('#mv-status').val() || '',
@@ -580,7 +581,20 @@
                     created_to: $('#mv-created-to').val() || '',
                     asset_q: $('#mv-asset-q').val() || '',
                 });
-                window.location = R.export+'?' + params;
+
+                Swal.fire({
+                    title: 'Export Excel?',
+                    text: 'Export movement data with current filters.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = R.export+'?' + params;
+                });
             });
 
             // open create
@@ -604,6 +618,7 @@
                 initTargetSelect(this.value);
             });
 
+            // create / update submit
             // create / update submit
             $('#formTransfer').off('submit').on('submit', function(e) {
                 e.preventDefault();
@@ -631,52 +646,67 @@
                 }
 
                 Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
+                    title: isEdit ? 'Update this movement?' : 'Create this movement?',
+                    text: isEdit ? 'Do you want to save the changes?' :
+                        'Do you want to create this movement?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                let req;
-                if (hasFile) {
-                    const fd = new FormData();
-                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    fd.append('file', fileEl.files[0]);
-                    if (isEdit) fd.append('_method', 'PUT');
-
-                    req = $.ajax({
-                        url: isEdit ? R.update.replace(':id', id) : R.create,
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
                     });
-                } else {
-                    const payload = base;
-                    req = isEdit ?
-                        $.ajax({
-                            url: R.update.replace(':id', id),
-                            type: 'PUT',
-                            data: payload
-                        }) :
-                        $.post(R.create, payload);
-                }
 
-                req.done(() => {
-                    $('#modal-transfer').modal('hide');
-                    Swal.fire(
-                        isEdit ? 'Updated' : 'Success',
-                        isEdit ? 'Transfer updated.' : 'Movement created.',
-                        'success'
-                    );
-                    $('#tf-asset').prop('disabled', false);
-                    dt.ajax.reload(null, false);
+                    let req;
+                    if (hasFile) {
+                        const fd = new FormData();
+                        Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                        fd.append('file', fileEl.files[0]);
+                        if (isEdit) fd.append('_method', 'PUT');
 
-                    if (fileEl) fileEl.value = '';
-                    $('#tf-remove-file').val('0');
-                }).fail(x => {
-                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        req = $.ajax({
+                            url: isEdit ? R.update.replace(':id', id) : R.create,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        });
+                    } else {
+                        const payload = base;
+                        req = isEdit ?
+                            $.ajax({
+                                url: R.update.replace(':id', id),
+                                type: 'PUT',
+                                data: payload
+                            }) :
+                            $.post(R.create, payload);
+                    }
+
+                    req.done(() => {
+                        $('#modal-transfer').modal('hide');
+                        Swal.fire(
+                            isEdit ? 'Updated' : 'Success',
+                            isEdit ? 'Movement updated.' : 'Movement created.',
+                            'success'
+                        );
+                        $('#tf-asset').prop('disabled', false);
+                        dt.ajax.reload(null, false);
+
+                        if (fileEl) fileEl.value = '';
+                        $('#tf-remove-file').val('0');
+                    }).fail(x => {
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
                 });
             });
+
 
             // edit
             $('#tbl-transfers-all').on('click', '.btn-tf-edit', function() {
@@ -778,10 +808,12 @@
                 } else {
                     // simple approve (e.g. status)
                     Swal.fire({
-                        title: 'Approve?',
+                        title: 'Approve this movement?',
                         icon: 'question',
                         confirmButtonColor: '#EA242A',
                         cancelButtonColor: '#B5B5B6',
+                        confirmButtonText: 'Yes',
+                        cancelButtonText: 'No',
                         showCancelButton: true
                     }).then(r => {
                         if (!r.isConfirmed) return;
@@ -800,13 +832,16 @@
             });
 
             // reject
+            // reject
             $('#tbl-transfers-all').on('click', '.btn-tf-reject', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                    title: 'Reject?',
+                    title: 'Reject this movement?',
                     icon: 'warning',
                     confirmButtonColor: '#EA242A',
                     cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No',
                     showCancelButton: true
                 }).then(r => {
                     if (!r.isConfirmed) return;
@@ -824,14 +859,17 @@
             });
 
             // delete
+            // delete
             $('#tbl-transfers-all').on('click', '.btn-tf-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
-                    title: 'Delete?',
-                    text: 'Moved to trash',
+                    title: 'Delete this movement?',
+                    text: 'The record will be moved to trash.',
                     icon: 'warning',
                     confirmButtonColor: '#EA242A',
                     cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No',
                     showCancelButton: true
                 }).then(r => {
                     if (!r.isConfirmed) return;
@@ -945,53 +983,69 @@
                 const id = $('#tf-approve-id').val();
                 if (!id) return;
 
-                const $btn = $(this).prop('disabled', true);
-                const stepCode = ($(this).data('step-code') || '').toString();
-
-                const fd = new FormData();
-
-                // only asset_mgt step for owner/user/maintenance can send signed_form
-                if (
-                    stepCode === 'asset_mgt' && ['owner', 'user', 'maintenance'].includes(currentFlowType)
-                ) {
-                    const fileInput = $(this).closest('.border').find('.tf-signed-form-input')[0];
-                    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-                        fd.append('signed_form', fileInput.files[0]);
-                    }
-                }
+                const $btn = $(this);
+                const stepCode = String($btn.data('step-code') || '');
 
                 Swal.fire({
-                    title: 'Approving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
+                    title: 'Approve this step?',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                $.ajax({
-                    url: R.approveStep.replace(':id', id),
-                    type: 'POST',
-                    data: fd,
-                    processData: false,
-                    contentType: false
-                }).done(res => {
-                    if (res.flow) {
-                        renderApproveFlowModal({
-                            flow: res.flow
-                        });
+                    $btn.prop('disabled', true);
+
+                    const fd = new FormData();
+
+                    // only asset_mgt step for owner/user/maintenance can send signed_form
+                    if (
+                        stepCode === 'asset_mgt' && ['owner', 'user', 'maintenance'].includes(
+                            currentFlowType)
+                    ) {
+                        const fileInput = $btn.closest('.border').find('.tf-signed-form-input')[0];
+                        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                            fd.append('signed_form', fileInput.files[0]);
+                        }
                     }
 
-                    if (res.completed) {
-                        $('#modal-transfer-approve').modal('hide');
-                        Swal.fire('Approved', 'Movement completed.', 'success');
-                    } else {
-                        Swal.fire('Approved', 'Step approved.', 'success');
-                    }
+                    Swal.fire({
+                        title: 'Approving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
 
-                    dt.ajax.reload(null, false);
-                }).fail(x => {
-                    $btn.prop('disabled', false);
-                    Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    $.ajax({
+                        url: R.approveStep.replace(':id', id),
+                        type: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false
+                    }).done(res => {
+                        if (res.flow) {
+                            renderApproveFlowModal({
+                                flow: res.flow
+                            });
+                        }
+
+                        if (res.completed) {
+                            $('#modal-transfer-approve').modal('hide');
+                            Swal.fire('Approved', 'Movement completed.', 'success');
+                        } else {
+                            Swal.fire('Approved', 'Step approved.', 'success');
+                        }
+
+                        dt.ajax.reload(null, false);
+                    }).fail(x => {
+                        $btn.prop('disabled', false);
+                        Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                    });
                 });
             });
+
 
         })();
     </script>

@@ -393,7 +393,19 @@
                 asset_q: $('#flt-asset-q').val() || ''
             });
 
-            window.location = "{{ route('export.assets') }}" + '?' + params;
+            Swal.fire({
+                title: 'Export Excel?',
+                text: 'Export assets data with current filters.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#EA242A',
+                cancelButtonColor: '#B5B5B6',
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No'
+            }).then(result => {
+                if (!result.isConfirmed) return;
+                window.location = "{{ route('export.assets') }}" + '?' + params;
+            });
         });
     </script>
 @endpush

@@ -297,7 +297,6 @@
                 $('#f-users').val(null).trigger('change');
                 dt.ajax.reload();
             });
-
             $('#btnExport').on('click', function(e) {
                 e.preventDefault();
 
@@ -310,8 +309,21 @@
                     asset: $('#f-asset').val() || '',
                 });
 
-                window.location = R.export+'?' + params;
+                Swal.fire({
+                    title: 'Export return history?',
+                    text: 'Export current filtered return data to Excel.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = R.export+'?' + params;
+                });
             });
+
             $('#btnOpenCreate').on('click', function(e) {
                 e.preventDefault();
                 $('#formReturn')[0].reset();
@@ -365,41 +377,66 @@
             $('#formReturn').on('submit', function(e) {
                 e.preventDefault();
                 const id = $('#ret-source').val();
-                if (!id) return Swal.fire('Required', 'Please select an item.', 'warning');
+                if (!id) {
+                    Swal.fire('Required', 'Please select an item.', 'warning');
+                    return;
+                }
 
                 Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
+                    title: 'Create this return?',
+                    text: 'A return record will be created for the selected movement/disposal.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
+
+                    $.post(R.store, {
+                            source: id,
+                            note: $('textarea[name="note"]').val() || ''
+                        })
+                        .done(() => {
+                            $('#modal-return').modal('hide');
+                            Swal.fire('Success', 'Return recorded.', 'success');
+                            dt.ajax.reload(null, false);
+                        })
+                        .fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed to save',
+                                'error');
+                        });
                 });
-                $.post(R.store, {
-                        source: id,
-                        note: $('textarea[name="note"]').val() || ''
-                    })
-                    .done(() => {
-                        $('#modal-return').modal('hide');
-                        Swal.fire('Success', 'Return recorded.', 'success');
-                        dt.ajax.reload(null, false);
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed to save', 'error'));
             });
+
 
             $('#tbl-returns-all').on('click', '.btn-ret-delete', function() {
                 const id = $(this).data('id');
                 Swal.fire({
                     title: 'Delete this return?',
-                    text: 'It will go to trash.',
+                    text: 'Record will be moved to trash.',
                     icon: 'warning',
                     showCancelButton: true,
                     confirmButtonColor: '#EA242A',
-                    cancelButtonColor: '#B5B5B6'
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
                 }).then(res => {
                     if (!res.isConfirmed) return;
+
                     Swal.fire({
                         title: 'Deleting…',
                         didOpen: () => Swal.showLoading(),
                         allowOutsideClick: false
                     });
+
                     $.ajax({
                             url: R.destroy(id),
                             type: 'DELETE'
@@ -408,9 +445,12 @@
                             Swal.fire('Deleted', '', 'success');
                             dt.ajax.reload(null, false);
                         })
-                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                        .fail(x => {
+                            Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error');
+                        });
                 });
             });
+
         })();
     </script>
 @endpush
