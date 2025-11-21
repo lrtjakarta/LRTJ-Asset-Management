@@ -523,9 +523,18 @@
                 });
             }
 
+            function formatPeriodDeprCode(periodMonth) {
+                if (!periodMonth) return '';
+                const [year, month] = periodMonth.split('-');
+                const yy = String(year).slice(-2);
+                const mm = String(month).padStart(2, '0');
+                return yy + mm;
+            }
+
             function updatePeriodText() {
                 const periodVal = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
-                $('#currentMonthText').text(formatPeriodToText(periodVal));
+                $('#currentMonthText').text(formatPeriodToText(periodVal) + ' - DEP' + formatPeriodDeprCode(periodVal) +
+                    '0001');
             }
 
             // initial text

@@ -268,77 +268,230 @@ class StockOpnameController extends Controller
     public function dataByAsset(string $uuid, Request $request)
     {
         if (!$this->canReadStockOpname()) {
-            return response()->json(['data' => []]);
+            $draw = (int) $request->input('draw', 1);
+            return response()->json([
+                'draw'            => $draw,
+                'recordsTotal'    => 0,
+                'recordsFiltered' => 0,
+                'data'            => [],
+            ]);
         }
-        $qT = DB::table('assets_transfers as t')
+        $draw   = (int) $request->input('draw', 1);
+        $start  = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+        $search = trim(data_get($request->input('search', []), 'value', ''));
+
+        $source    = $request->input('source');
+        $tfType    = $request->input('tf_type');
+        $dateFrom  = $request->input('date_from');
+        $dateTo    = $request->input('date_to');
+        $assetLike = $request->input('asset');
+        $users = $request->input('users');
+
+        $t = DB::table('assets_transfers as t')
+            ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
             ->selectRaw("
-        t.uuid,
-        t.asset_uuid,
-        t.transfer_code  as code,
-        'transfer'       as source_type,
-        t.type           as tf_type,
-        COALESCE(t.before->>'value','') as before_label,
-        COALESCE(t.after->>'value','')  as after_label,
-        t.pic_request_uid,
-        t.pic_approve_uid,
-        t.note,
-        t.file_name,
-        t.file_path,
-        t.updated_at
-        ")
+                t.uuid,
+                t.asset_uuid,
+                a.asset_code,
+                a.description,
+                t.transfer_code       as code,
+                'transfer'            as source_type,
+                t.type                as tf_type,
+                COALESCE(t.before->>'value','') as before_val,
+                COALESCE(t.after->>'value','')  as after_val,
+                t.pic_request_uid,
+                t.pic_approve_uid,
+                t.note,
+                t.file_name,
+                t.file_path,
+                t.flow_file_name,
+                t.flow_file_path,
+                NULL::text            as ba_file_name,
+                NULL::text            as ba_file_path,
+                t.updated_at
+            ")
             ->whereNull('t.deleted_at')
             ->where('t.kode_status', 'ACC')
             ->where('t.asset_uuid', $uuid);
 
-        $qD = DB::table('assets_disposals as d')
+        $d = DB::table('assets_disposals as d')
+            ->join('assets as a', 'a.uuid', '=', 'd.asset_uuid')
             ->selectRaw("
-        d.uuid,
-        d.asset_uuid,
-        d.disposal_code  as code,
-        'disposal'       as source_type,
-        NULL::text       as tf_type,
-        COALESCE(d.before_status,'') as before_label,
-        COALESCE('DIS','')  as after_label,
-        d.pic_request_uid,
-        d.pic_approve_uid,
-        d.note,
-        d.file_name,
-        d.file_path,
-        d.updated_at
-    ")
+                d.uuid,
+                d.asset_uuid,
+                a.asset_code,
+                a.description,
+                d.disposal_code       as code,
+                'disposal'            as source_type,
+                NULL::text            as tf_type,
+                COALESCE(d.before_status,'') as before_val,
+                COALESCE('DIS','')  as after_val,
+                d.pic_request_uid,
+                d.pic_approve_uid,
+                d.note,
+                d.file_name,
+                d.file_path,
+                d.flow_file_name,
+                d.flow_file_path,
+                d.ba_file_name,
+                d.ba_file_path,
+                d.updated_at
+            ")
             ->whereNull('d.deleted_at')
             ->where('d.kode_status', 'ACC')
             ->where('d.asset_uuid', $uuid);
 
-        $union = $qT->unionAll($qD);
+        if ($source === 'transfer') {
+            $union = $t;
+        } elseif ($source === 'disposal') {
+            $union = $d;
+        } else {
+            $union = $t->unionAll($d);
+        }
 
-        $rows = DB::query()
-            ->fromSub($union, 'u')
-            ->orderByDesc('updated_at')
+        $q = DB::query()->fromSub($union, 'u');
+
+        if ($tfType) {
+            $q->where('source_type', 'transfer')->where('tf_type', $tfType);
+        }
+        if ($dateFrom) {
+            $q->whereDate('updated_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $q->whereDate('updated_at', '<=', $dateTo);
+        }
+        if ($assetLike) {
+            $q->where(function ($qq) use ($assetLike) {
+                $qq->where('asset_code', 'ilike', "%{$assetLike}%")
+                    ->orWhere('description', 'ilike', "%{$assetLike}%");
+            });
+        }
+        if ($users) {
+            $q->where('pic_request_uid', $users);
+        }
+        if ($search !== '') {
+            $q->where(function ($qq) use ($search) {
+                $qq->where('code', 'ilike', "%{$search}%")
+                    ->orWhere('asset_code', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%")
+                    ->orWhere('note', 'ilike', "%{$search}%")
+                    ->orWhere('pic_request_uid', 'ilike', "%{$search}%")
+                    ->orWhere('pic_approve_uid', 'ilike', "%{$search}%");
+            });
+        }
+
+        $totalFiltered = (clone $q)->count();
+
+        $orderColIdx = (int) data_get($request->input('order', []), '0.column', 9);
+        $orderDir    = data_get($request->input('order', []), '0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
+        $columns     = [
+            'asset_code',
+            'code',
+            'source_type',
+            'tf_type',
+            'before_val',
+            'note',
+            'pic_request_uid',
+            'pic_approve_uid',
+            'file_path',
+            'updated_at',
+        ];
+        $orderBy = $columns[$orderColIdx] ?? 'updated_at';
+
+        $rows = $q->orderBy($orderBy, $orderDir)
+            ->skip($start)
+            ->take($length)
             ->get()
             ->map(function ($r) {
-                $detail = $r->source_type === 'transfer'
-                    ? (strtoupper($r->tf_type) . ' - ' . $r->before_label . ' → ' . $r->after_label)
-                    : ('DISPOSAL' . ($r->before_label ? ' - ' . $r->before_label . ' → ' . $r->after_label : ''));
+                $asset_label = ($r->asset_code ?? '') . ' — ' . ($r->description ?? '');
+                $isTransfer = $r->source_type === 'transfer';
 
-                $file = $r->file_path
-                    ? '<a href="' . e(Storage::url($r->file_path)) . '" target="_blank">' . e($r->file_name ?: 'File') . '</a>'
-                    : '';
+                // Build detailed label with full names
+                $detail = '';
+                if ($isTransfer) {
+                    $beforeLabel = $r->before_val;
+                    $afterLabel = $r->after_val;
+
+                    // Get full usercode details for before/after values
+                    if ($r->before_val) {
+                        $beforeUc = MasterUserCode::with('division')->where('kode', $r->before_val)->first();
+                        if ($beforeUc) {
+                            $beforeLabel = $beforeUc->kode . ' - ' . $beforeUc->department;
+                        }
+                    }
+
+                    if ($r->after_val) {
+                        $afterUc = MasterUserCode::with('division')->where('kode', $r->after_val)->first();
+                        if ($afterUc) {
+                            $afterLabel = '<strong>' . $afterUc->kode . ' - ' . $afterUc->department . '</strong>';
+                        }
+                    }
+
+                    $detail = strtoupper($r->tf_type) . ' - ' . $beforeLabel . ' → ' . $afterLabel;
+                } else {
+                    $detail = 'DISPOSAL';
+                }
+
+                // Build file links - show all uploaded files
+                $files = [];
+                if (!empty($r->file_path)) {
+                    $url = Storage::url($r->file_path);
+                    $name = $r->file_name ?: 'Attachment';
+                    $files[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                }
+                if (!empty($r->flow_file_path)) {
+                    $url = Storage::url($r->flow_file_path);
+                    $name = $r->flow_file_name ?: 'Signed Form';
+                    $files[] = '<a class="btn btn-sm btn-light-success me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                }
+                if (!empty($r->ba_file_path)) {
+                    $url = Storage::url($r->ba_file_path);
+                    $name = $r->ba_file_name ?: 'Berita Acara';
+                    $files[] = '<a class="btn btn-sm btn-light-warning" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
+                }
+                $file = implode(' ', $files);
+
+                // Build actions buttons
+                $actions = '';
+                if ($isTransfer) {
+                    // Transfer: show form download for owner/user/maintenance types
+                    if (in_array($r->tf_type, ['owner', 'user', 'maintenance'], true)) {
+                        $formUrl = route('stockopname.transfer.download.form', $r->uuid);
+                        $actions .= '<a href="' . e($formUrl) . '" class="btn btn-light-primary btn-sm me-1" target="_blank">Form</a>';
+                    }
+                } else {
+                    // Disposal: show both form and BA download
+                    $formUrl = route('stockopname.disposal.download.form', $r->uuid);
+                    $baUrl = route('stockopname.disposal.download.ba', $r->uuid);
+                    $actions .= '<a href="' . e($formUrl) . '" class="btn btn-light-info btn-sm me-1" target="_blank">Form</a>';
+                    $actions .= '<a href="' . e($baUrl) . '" class="btn btn-light-warning btn-sm" target="_blank">BA</a>';
+                }
 
                 return [
-                    'code'            => $r->code,
-                    'source'          => $r->source_type === 'transfer' ? 'MOVEMENT' : 'DISPOSAL',
-                    'type'            => $r->source_type === 'transfer' ? strtoupper($r->tf_type) : 'DISPOSAL',
-                    'detail'          => $detail,
-                    'note'            => $r->note,
-                    'pic_request_uid' => $r->pic_request_uid,
-                    'pic_approve_uid' => $r->pic_approve_uid,
-                    'file'            => $file,
-                    'updated_at'      => $r->updated_at,
+                    'uuid'             => $r->uuid,
+                    'asset_uuid'       => $r->asset_uuid,
+                    'asset_code'       => $r->asset_code,
+                    'asset_label'      => $asset_label,
+                    'code'             => $r->code,
+                    'source'           => $isTransfer ? 'MOVEMENT' : 'DISPOSAL',
+                    'type'             => $isTransfer ? strtoupper($r->tf_type) : 'DISPOSAL',
+                    'detail'           => $detail,
+                    'note'             => $r->note,
+                    'pic_request_uid'  => $r->pic_request_uid,
+                    'pic_approve_uid'  => $r->pic_approve_uid,
+                    'file'             => $file,
+                    'updated_at'       => $r->updated_at,
+                    'actions'          => $actions,
                 ];
             });
 
-        return response()->json(['data' => $rows]);
+        return response()->json([
+            'draw'            => $draw,
+            'recordsTotal'    => $totalFiltered,
+            'recordsFiltered' => $totalFiltered,
+            'data'            => $rows,
+        ]);
     }
 
     public function store_transfer(Request $request)
@@ -421,8 +574,12 @@ class StockOpnameController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
             'target_status' => ['nullable', 'string'],
             'file' => ['nullable', 'file', 'max:51200'],
-            'flow_file' => ['nullable', 'file', 'max:51200'],
-            'ba_file' => ['nullable', 'file', 'max:51200']
+            'flow_file' => ['required', 'file', 'max:51200'],
+            'ba_file' => ['required', 'file', 'max:51200'],
+            'reason'      => [
+                'required',
+                Rule::in(['Sale', 'Waste', 'Donate', 'Held']),
+            ],
         ]);
         $user = auth()->user();
         $uid = $user ? ($user->name ?? $user->id) : null;
@@ -432,7 +589,9 @@ class StockOpnameController extends Controller
         $ok = MasterStatus::where('kode', $target)->where(function ($q) {
             $q->where('type', 'Asset')->orWhereNull('type');
         })->exists();
+
         abort_unless($ok, 422, 'Target disposal status not valid');
+
         $now = Carbon::now();
         $prefix = 'OPN' . $now->format('ym');
         $last = Disposal::where('disposal_code', 'like', $prefix . '%')->orderBy('disposal_code', 'desc')->first();
@@ -462,7 +621,8 @@ class StockOpnameController extends Controller
             'ba_file_size' => $baSize,
             'pic_request_uid' => $uid,
             'pic_approve_uid' => $uid,
-            'before_status' => $asset->kode_status
+            'before_status' => $asset->kode_status,
+            'reason' => $data['reason'],
         ]);
         $asset->kode_status = $target;
         $asset->save();
@@ -482,11 +642,56 @@ class StockOpnameController extends Controller
         ])->findOrFail($uuid);
 
         $asset = $transfer->asset;
+        $tfNote = $transfer->note ?? '';
         $assign = $asset?->assignment;
         $beforeVal = data_get($transfer->before, 'value');
         $afterVal = data_get($transfer->after, 'value');
         $createdAt = $transfer->created_at?->timezone('Asia/Jakarta');
 
+        $flowRaw   = $transfer->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = \Carbon\Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
         $template = storage_path('app/public/template/form_transfer_asset.xlsx');
         if (!file_exists($template)) return abort(404, 'Template not found');
 
@@ -570,14 +775,17 @@ class StockOpnameController extends Controller
         $sheet->setCellValue('N23', $uomText);
 
         $sheet->setCellValue('P23', $asset?->notes ?? '');
+        $sheet->setCellValue('C30', $tfNote ?? '');
+
+        $sheet->setCellValue('C34', $flowText);
+        $sheet->getStyle('C34')->getAlignment()->setWrapText(true);
 
         // Signature sections
-        $sheet->setCellValue('C37', $fromDeptLabel);
-        $sheet->setCellValue('C38', '');
-        $sheet->setCellValue('I37', $toDeptLabel);
-        $sheet->setCellValue('I38', '');
+        $sheet->setCellValue('C36', $fromDeptLabel);
 
-        $fileName = 'Form_Transfer_' . ($transfer->transfer_code ?? $uuid) . '.xlsx';
+        $sheet->setCellValue('I36', $toDeptLabel);
+
+        $fileName = 'Form Transfer Asset - ' . ($transfer->transfer_code ?? 'MOV') . '.xlsx';
 
         return response()->streamDownload(function () use ($spreadsheet) {
             $writer = new XlsxWriter($spreadsheet);
@@ -596,6 +804,7 @@ class StockOpnameController extends Controller
         ])->findOrFail($uuid);
 
         $asset = $disposal->asset;
+        $reason   = $disposal->reason ?? '';
         $assign = $asset?->assignment;
         $owner = $assign?->owner;
         $ownerDiv = $owner?->division;
@@ -627,35 +836,86 @@ class StockOpnameController extends Controller
 
         $justification = $disposal->note ?? '';
 
+        // ========= NEW: build "done" flow steps text =========
+        $flowRaw   = $disposal->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = \Carbon\Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
+        // ========= END NEW =========
+
         $template = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
         if (!file_exists($template)) return abort(404, 'Template not found');
 
         $spreadsheet = IOFactory::load($template);
         $sheet = $spreadsheet->getSheetByName('Form Disposal Aset Tetap') ?? $spreadsheet->getActiveSheet();
 
-        $sheet->setCellValue('H7', $companyName);
-        $sheet->setCellValue('H8', $disposal->disposal_code ?? '');
-        $sheet->setCellValue('H9', $createdAt ? $createdAt->format('d-m-Y') : '');
+        $sheet->setCellValue('H7',  $companyName);
+        $sheet->setCellValue('H8',  $disposal->disposal_code ?? '');
+        $sheet->setCellValue('H9',  $createdAt ? $createdAt->format('d-m-Y') : '');
         $sheet->setCellValue('H10', $deptLabel);
         $sheet->setCellValue('H11', $divLabel);
 
-        $sheet->setCellValue('H14', '');
+        $sheet->setCellValue('H14', $reason);
 
         $sheet->setCellValue('H15', $assetCode);
         $sheet->setCellValue('H16', $assetName);
         $sheet->setCellValue('H17', $acqDate ? $acqDate->format('d-m-Y') : '');
 
-        $sheet->setCellValue('H18', $comCost);
-        $sheet->setCellValue('H19', $comAcc);
-        $sheet->setCellValue('H20', $comNbv);
-        $sheet->setCellValue('H21', $taxNbv);
+        $sheet->setCellValue('H18', $comCost); // Commercial Acquisition Cost (IDR)
+        $sheet->setCellValue('H19', $comAcc);  // Commercial Accumulated Depreciation (IDR)
+        $sheet->setCellValue('H20', $comNbv);  // Commercial Net Book Value (IDR)
+        $sheet->setCellValue('H21', $taxNbv);  // Tax Net Book Value (IDR)
 
         $sheet->setCellValue('H22', '');
         $sheet->setCellValue('H23', '');
 
         $sheet->setCellValue('H24', $justification);
 
-        $fileName = 'Form_Disposal_' . ($disposal->disposal_code ?? $uuid) . '.xlsx';
+        $sheet->setCellValue('C26', $flowText);
+        $sheet->getStyle('C26')->getAlignment()->setWrapText(true);
+
+        $fileName = 'Form Disposal Aset Tetap - ' . ($disposal->disposal_code ?? 'DSP') . '.xlsx';
 
         return response()->streamDownload(function () use ($spreadsheet) {
             $writer = new XlsxWriter($spreadsheet);
@@ -744,7 +1004,7 @@ class StockOpnameController extends Controller
         $now = now()->timezone('Asia/Jakarta');
 
         // V11: Transfer Code
-        $sheet->setCellValue('V11', 'PREVIEW');
+        $sheet->setCellValue('V11', '');
 
         // FROM section (G15-G18)
         $sheet->setCellValue('G15', $fromDeptLabel);
@@ -814,11 +1074,16 @@ class StockOpnameController extends Controller
 
         $sheet->setCellValue('P23', $asset->notes ?? '');
 
+        // $sheet->setCellValue('C30', $tfNote ?? '');
+
+        // $sheet->setCellValue('C34', $flowText);
+        // $sheet->getStyle('C34')->getAlignment()->setWrapText(true);
+
         // Signature sections
-        $sheet->setCellValue('C37', $fromDeptLabel); // FROM signature
-        $sheet->setCellValue('C38', '');
-        $sheet->setCellValue('I37', $toSignatureLabel); // TO signature
-        $sheet->setCellValue('I38', '');
+
+        $sheet->setCellValue('C36', $fromDeptLabel);
+
+        $sheet->setCellValue('I36', $toDeptLabel);
 
         $fileName = 'Form_Transfer_Preview_' . ($asset->asset_code ?? $assetUuid) . '.xlsx';
 
@@ -874,7 +1139,7 @@ class StockOpnameController extends Controller
         $sheet = $spreadsheet->getSheetByName('Form Disposal Aset Tetap') ?? $spreadsheet->getActiveSheet();
 
         $sheet->setCellValue('H7', $companyName);
-        $sheet->setCellValue('H8', 'PREVIEW');
+        $sheet->setCellValue('H8', '');
         $sheet->setCellValue('H9', $now->format('d-m-Y'));
         $sheet->setCellValue('H10', $deptLabel);
         $sheet->setCellValue('H11', $divLabel);

@@ -266,6 +266,24 @@
                                 <div class="p-3 border rounded bg-light">
                                     <div class="fw-semibold mb-2">Acquisition Info</div>
                                     <div class="row gy-2">
+                                        {{-- NEW FIELDS --}}
+                                        <div class="col-6">
+                                            <div class="text-muted">Acquisition Date</div>
+                                            <div id="snap-acq-date" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Acquisition Cost (IDR)</div>
+                                            <div id="snap-commercial-acq" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Accumulated Depreciation (IDR)</div>
+                                            <div id="snap-commercial-acc-depr" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Net Book Value (IDR)</div>
+                                            <div id="snap-commercial-nbv" class="fw-semibold"></div>
+                                        </div>
+
                                         <div class="col-6">
                                             <div class="text-muted">Price</div>
                                             <div id="snap-price" class="fw-semibold"></div>
@@ -306,28 +324,32 @@
                             </div>
 
                             <div class="col-md-12">
+                                <label for="ds-reason" class="form-label required">Reason</label>
+                                <select name="reason" id="ds-reason" class="form-select" required>
+                                    <option value="" selected disabled>-- Select Reason --</option>
+                                    <option value="Sale">Sale</option>
+                                    <option value="Waste">Waste</option>
+                                    <option value="Donate">Donate</option>
+                                    <option value="Held">Held</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-12">
                                 <label class="form-label">Attachment (optional)</label>
                                 <input type="file" name="file" id="ds-file" class="form-control"
                                     accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.txt">
                                 <div class="form-text">PDF / image / office docs (max 20MB).</div>
-
-                                {{-- visible only when editing and a file exists --}}
-                                <div id="ds-current-file" class="mt-2 d-none">
-                                    <a id="ds-current-file-link" href="#" target="_blank"></a>
-                                    <button type="button" class="btn btn-sm btn-light-danger ms-2"
-                                        id="ds-btn-remove-file">Remove</button>
-                                </div>
                             </div>
 
                             <div class="col-md-12">
-                                <label class="form-label">Upload Signed Form (Excel)</label>
+                                <label class="form-label required">Upload Signed Form (Excel)</label>
                                 <input type="file" name="flow_file" id="ds-flow-file" class="form-control"
                                     accept=".xls,.xlsx">
                                 <div class="form-text">Upload the filled and signed disposal form (.xls, .xlsx)</div>
                             </div>
 
                             <div class="col-md-12">
-                                <label class="form-label">Upload BA (Berita Acara)</label>
+                                <label class="form-label required">Upload BA (Berita Acara)</label>
                                 <input type="file" name="ba_file" id="ds-ba-file" class="form-control"
                                     accept=".pdf,.doc,.docx">
                                 <div class="form-text">Upload the Berita Acara disposal document (.pdf, .doc, .docx)</div>
@@ -385,7 +407,20 @@
                     users: $('#f-users').val() || ''
                 });
 
-                window.location = SO.export+'?' + params;
+                Swal.fire({
+                    title: 'Export Excel?',
+                    text: 'Export stock opname data with current filters.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = SO.export+'?' + params;
+                });
+
             });
 
             const SHOW_URL_TPL = @json(route('assets.detail', '__UUID__'));
@@ -744,58 +779,74 @@
                     return;
                 }
 
+                // === YES / NO CONFIRMATION ===
                 Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
+                    title: isEdit ? 'Update this movement?' : 'Create this movement?',
+                    text: 'This will be recorded in Stock Opname.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
-                let req;
-
-                if (hasAnyFile) {
-                    const fd = new FormData();
-                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    if (hasFile) fd.append('file', fileEl.files[0]);
-                    if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
-
-                    if (isEdit) fd.append('_method', 'PUT');
-
-                    req = $.ajax({
-                        url: isEdit ? R_TF.update.replace(':id', id) : R_TF.create,
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
+                    // Original "Saving..." dialog
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
                     });
 
-                } else {
-                    const payload = base;
+                    let req;
 
-                    req = isEdit ?
-                        $.ajax({
-                            url: R_TF.update.replace(':id', id),
-                            type: 'PUT',
-                            data: payload
-                        }) :
-                        $.post(R_TF.create, payload);
-                }
+                    if (hasAnyFile) {
+                        const fd = new FormData();
+                        Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                        if (hasFile) fd.append('file', fileEl.files[0]);
+                        if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
 
-                req
-                    .done((resp) => {
-                        $('#modal-transfer').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Movement updated.' :
-                            'Movement created.', 'success');
-                        $('#tf-asset').prop('disabled', false);
-                        $('#tbl-so-global').DataTable().ajax.reload(null, false);
+                        if (isEdit) fd.append('_method', 'PUT');
 
-                        if (fileEl) fileEl.value = '';
-                        if (flowFileEl) flowFileEl.value = '';
-                        $('#tf-remove-file').val('0');
+                        req = $.ajax({
+                            url: isEdit ? R_TF.update.replace(':id', id) : R_TF.create,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        });
 
+                    } else {
+                        const payload = base;
+                        req = isEdit ?
+                            $.ajax({
+                                url: R_TF.update.replace(':id', id),
+                                type: 'PUT',
+                                data: payload
+                            }) :
+                            $.post(R_TF.create, payload);
+                    }
 
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    req
+                        .done((resp) => {
+                            $('#modal-transfer').modal('hide');
+                            Swal.fire(
+                                isEdit ? 'Updated' : 'Success',
+                                isEdit ? 'Movement updated.' : 'Movement created.',
+                                'success'
+                            );
+                            $('#tf-asset').prop('disabled', false);
+                            $('#tbl-so-global').DataTable().ajax.reload(null, false);
+
+                            if (fileEl) fileEl.value = '';
+                            if (flowFileEl) flowFileEl.value = '';
+                            $('#tf-remove-file').val('0');
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
+
         })();
     </script>
     <script>
@@ -818,30 +869,48 @@
 
             function renderSnapshot(d) {
                 const safe = (v) => v || '';
-                // Scope to disposal modal only to avoid conflict with transfer modal elements
-                const $modal = $('#modal-disposal');
-                $modal.find('#snap-owner').text(safe(d.owner_label));
-                $modal.find('#snap-user').text(safe(d.user_label));
-                $modal.find('#snap-maintenance').text(safe(d.maintenance_label));
-                $modal.find('#snap-status').text(safe(d.status_label));
-                $modal.find('#snap-location').text(safe(d.location_label));
-                // Acquisition info fields
-                $modal.find('#snap-price').text(safe(d.price));
-                $modal.find('#snap-quantity').text(safe(d.quantity));
-                $modal.find('#snap-vat-in').text(safe(d.vat_in));
-                $modal.find('#snap-uom').text(safe(d.kode_uom));
-                $modal.find('#snap-total').text(safe(d.total));
-                $modal.find('#snap-useful-life').text(safe(d.useful_life_month));
-                $modal.find('#ds-asset-snapshot').removeClass('d-none');
+
+                const formatIDR = (v) => {
+                    if (v === null || v === undefined || v === '') return '';
+                    const n = Number(v);
+                    if (isNaN(n)) return v;
+                    return new Intl.NumberFormat('id-ID', {
+                        style: 'currency',
+                        currency: 'IDR',
+                        maximumFractionDigits: 0
+                    }).format(n);
+                };
+
+                $('#snap-owner').text(safe(d.owner_label));
+                $('#snap-user').text(safe(d.user_label));
+                $('#snap-maintenance').text(safe(d.maintenance_label));
+                $('#snap-status').text(safe(d.status_label));
+                $('#snap-location').text(safe(d.location_label));
+
+                // NEW
+                $('#snap-acq-date').text(safe(d.acquisition_date));
+                $('#snap-commercial-acq').text(formatIDR(d.commercial_acq_cost));
+                $('#snap-commercial-acc-depr').text(formatIDR(d.commercial_accum_depr));
+                $('#snap-commercial-nbv').text(formatIDR(d.commercial_nbv));
+
+                // Existing
+                $('#snap-price').text(safe(d.price));
+                $('#snap-quantity').text(safe(d.quantity));
+                $('#snap-vat-in').text(safe(d.vat_in));
+                $('#snap-uom').text(safe(d.kode_uom));
+                $('#snap-total').text(safe(d.total));
+                $('#snap-useful-life').text(safe(d.useful_life_month));
+
+                $('#ds-asset-snapshot').removeClass('d-none');
             }
 
             function clearSnapshot() {
-                const $modal = $('#modal-disposal');
-                $modal.find(
-                        '#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life'
-                        )
-                    .text('');
-                $modal.find('#ds-asset-snapshot').addClass('d-none');
+                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,' +
+                    '#snap-acq-date,#snap-commercial-acq,#snap-commercial-acc-depr,#snap-commercial-nbv,' +
+                    '#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life'
+                ).text('');
+
+                $('#ds-asset-snapshot').addClass('d-none');
             }
 
             function initSelect2Dis(el, url, extra = {}) {
@@ -898,8 +967,6 @@
                 });
             }
 
-
-
             function preloadSelectValue($select, id, text) {
                 if (!id) return;
                 const opt = new Option(text ?? String(id), id, true, true);
@@ -947,59 +1014,82 @@
                 const base = {
                     asset_uuid: $('#ds-asset-uuid').val() || null,
                     note: $('#ds-note').val() || '',
-                    remove_file: $('#ds-remove-file').val() || 0
+                    remove_file: $('#ds-remove-file').val() || 0,
+                    reason: $('#ds-reason').val() || ''
                 };
 
                 if (!base.asset_uuid) {
                     Swal.fire('Asset required', 'Please choose an asset.', 'warning');
                     return;
                 }
-
-                Swal.fire({
-                    title: 'Saving…',
-                    didOpen: () => Swal.showLoading(),
-                    allowOutsideClick: false
-                });
-
-                let req;
-                if (hasAnyFile) {
-                    const fd = new FormData();
-                    Object.entries(base).forEach(([k, v]) => fd.append(k, v));
-                    if (hasFile) fd.append('file', fileEl.files[0]);
-                    if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
-                    if (hasBaFile) fd.append('ba_file', baFileEl.files[0]);
-                    if (isEdit) fd.append('_method', 'PUT');
-                    req = $.ajax({
-                        url: isEdit ? DIS.update.replace(':id', id) : DIS.create,
-                        type: 'POST',
-                        data: fd,
-                        processData: false,
-                        contentType: false
-                    });
-                } else {
-                    req = isEdit ?
-                        $.ajax({
-                            url: DIS.update.replace(':id', id),
-                            type: 'PUT',
-                            data: base
-                        }) :
-                        $.post(DIS.create, base);
+                if (!base.reason) {
+                    Swal.fire('Reason required', 'Please select a disposal reason.', 'warning');
+                    return;
                 }
 
-                req.done((resp) => {
-                        $('#modal-disposal').modal('hide');
-                        Swal.fire(isEdit ? 'Updated' : 'Success', isEdit ? 'Disposal updated.' :
-                            'Disposal created.', 'success');
-                        $('#ds-asset').prop('disabled', false);
-                        $('#tbl-so-global').DataTable().ajax.reload(null, false);
-                        if (fileEl) fileEl.value = '';
-                        if (flowFileEl) flowFileEl.value = '';
-                        if (baFileEl) baFileEl.value = '';
-                        $('#ds-remove-file').val('0');
+                // === YES / NO CONFIRMATION ===
+                Swal.fire({
+                    title: isEdit ? 'Update this disposal?' : 'Create this disposal?',
+                    text: 'This will be recorded in Stock Opname.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
 
+                    // Original "Saving..." dialog
+                    Swal.fire({
+                        title: 'Saving…',
+                        didOpen: () => Swal.showLoading(),
+                        allowOutsideClick: false
+                    });
 
-                    })
-                    .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                    let req;
+                    if (hasAnyFile) {
+                        const fd = new FormData();
+                        Object.entries(base).forEach(([k, v]) => fd.append(k, v));
+                        if (hasFile) fd.append('file', fileEl.files[0]);
+                        if (hasFlowFile) fd.append('flow_file', flowFileEl.files[0]);
+                        if (hasBaFile) fd.append('ba_file', baFileEl.files[0]);
+                        if (isEdit) fd.append('_method', 'PUT');
+
+                        req = $.ajax({
+                            url: isEdit ? DIS.update.replace(':id', id) : DIS.create,
+                            type: 'POST',
+                            data: fd,
+                            processData: false,
+                            contentType: false
+                        });
+                    } else {
+                        req = isEdit ?
+                            $.ajax({
+                                url: DIS.update.replace(':id', id),
+                                type: 'PUT',
+                                data: base
+                            }) :
+                            $.post(DIS.create, base);
+                    }
+
+                    req
+                        .done((resp) => {
+                            $('#modal-disposal').modal('hide');
+                            Swal.fire(
+                                isEdit ? 'Updated' : 'Success',
+                                isEdit ? 'Disposal updated.' : 'Disposal created.',
+                                'success'
+                            );
+                            $('#ds-asset').prop('disabled', false);
+                            $('#tbl-so-global').DataTable().ajax.reload(null, false);
+                            if (fileEl) fileEl.value = '';
+                            if (flowFileEl) flowFileEl.value = '';
+                            if (baFileEl) baFileEl.value = '';
+                            $('#ds-remove-file').val('0');
+                        })
+                        .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
             });
 
         })();
