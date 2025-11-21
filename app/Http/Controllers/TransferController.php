@@ -178,7 +178,7 @@ class TransferController extends Controller
 
                 if ($pending) {
                     if ($canEdit) {
-                        $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
+                        // $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
                     }
                     if ($canApr) {
                         $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
@@ -605,7 +605,7 @@ class TransferController extends Controller
 
                 if ($pending) {
                     if ($canEdit) {
-                        $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
+                        // $btns .= '<button class="btn btn-light-primary btn-tf-edit" data-id="' . $id . '">Edit</button>';
                     }
                     if ($canApr) {
                         $btns .= '<button class="btn btn-light-success btn-tf-approve" data-id="' . $id . '">Accept</button>';
@@ -860,21 +860,21 @@ class TransferController extends Controller
                 [
                     'code'        => 'create',
                     'label'       => 'Create Request',
-                    'role'        => 'User Departemen (New Owner/User/Maint)',
+                    'role'        => 'User Departemen',
                     'approved_by' => $creatorName,
                     'approved_at' => $creatorName ? $now : null,
                 ],
                 [
                     'code'        => 'new_dept_head',
-                    'label'       => 'Approval Dept.Head New Owner/User/Maint',
-                    'role'        => 'User - Dept.Head / Section (New)',
+                    'label'       => 'Approval Dept.Head / Section (Move To)',
+                    'role'        => 'User - Dept.Head / Section',
                     'approved_by' => null,
                     'approved_at' => null,
                 ],
                 [
                     'code'        => 'old_dept_head',
-                    'label'       => 'Approval Dept.Head Old Owner/User/Maint (optional)',
-                    'role'        => 'User - Dept.Head / Section (Old)',
+                    'label'       => 'Approval Dept.Head / Section (Move From)',
+                    'role'        => 'User - Dept.Head / Section',
                     'approved_by' => null,
                     'approved_at' => null,
                 ],
@@ -933,11 +933,11 @@ class TransferController extends Controller
             $currentUser = auth()->user();
             $userRoles = $currentUser->roles()->pluck('kode')->toArray();
             $isSysAdmin = in_array('SYSADMIN', $userRoles);
-            
+
             // DEPT_HEAD validation (exclude SYSADMIN and USER)
             if (in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
                 $userDept = $currentUser->kode_department;
-                
+
                 if (!$userDept) {
                     abort(422, 'Your department is not set. Please contact administrator.');
                 }
@@ -988,7 +988,7 @@ class TransferController extends Controller
             $stepCode = $step['code'] ?? '';
             if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
                 $userDept = $currentUser->kode_department;
-                
+
                 if (!$userDept) {
                     abort(422, 'Your department is not set. Please contact administrator.');
                 }
@@ -1115,6 +1115,7 @@ class TransferController extends Controller
         ]);
 
         $asset      = $transfer->asset;
+        $tfNote     = $transfer->note;
         $assign     = $asset?->assignment;
         $beforeVal  = data_get($transfer->before, 'value');
         $afterVal   = data_get($transfer->after,  'value');
@@ -1169,6 +1170,51 @@ class TransferController extends Controller
         $fromLocLabel = $locLabel;
         $toLocLabel   = $locLabel;
 
+        $flowRaw   = $transfer->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = \Carbon\Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
+
         $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
         $spreadsheet  = IOFactory::load($templatePath);
 
@@ -1199,11 +1245,15 @@ class TransferController extends Controller
 
         $sheet->setCellValue('P23', $asset?->notes ?? '');
 
-        $sheet->setCellValue('C37', $fromDeptLabel);
-        $sheet->setCellValue('C38', '');
+        $sheet->setCellValue('C30', $tfNote ?? '');
 
-        $sheet->setCellValue('I37', $toDeptLabel);
-        $sheet->setCellValue('I38', '');
+        $sheet->setCellValue('C34', $flowText);
+        $sheet->getStyle('C34')->getAlignment()->setWrapText(true);
+
+
+        $sheet->setCellValue('C36', $fromDeptLabel);
+
+        $sheet->setCellValue('I36', $toDeptLabel);
 
         $fileName = 'Form Transfer Asset - ' . ($transfer->transfer_code ?? 'MOV') . '.xlsx';
 

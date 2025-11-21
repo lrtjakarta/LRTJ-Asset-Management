@@ -97,6 +97,7 @@
                             <tr class="table-light">
                                 <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
+                                <th class="min-w-200px">Reason</th>
                                 <th class="min-w-200px">Note</th>
                                 <th class="min-w-200px">Requester</th>
                                 <th class="min-w-200px">Approver</th>
@@ -167,6 +168,25 @@
                                 <div class="p-3 border rounded bg-light">
                                     <div class="fw-semibold mb-2">Acquisition Info</div>
                                     <div class="row gy-2">
+                                        {{-- NEW FIELDS --}}
+                                        <div class="col-6">
+                                            <div class="text-muted">Acquisition Date</div>
+                                            <div id="snap-acq-date" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Acquisition Cost (IDR)</div>
+                                            <div id="snap-commercial-acq" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Accumulated Depreciation (IDR)</div>
+                                            <div id="snap-commercial-acc-depr" class="fw-semibold"></div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="text-muted">Commercial Net Book Value (IDR)</div>
+                                            <div id="snap-commercial-nbv" class="fw-semibold"></div>
+                                        </div>
+
+                                        {{-- Existing fields --}}
                                         <div class="col-6">
                                             <div class="text-muted">Price</div>
                                             <div id="snap-price" class="fw-semibold"></div>
@@ -195,6 +215,17 @@
                                 </div>
                             </div>
 
+
+                            <div class="col-md-12">
+                                <label for="ds-reason" class="form-label required">Reason</label>
+                                <select name="reason" id="ds-reason" class="form-select" required>
+                                    <option value="" selected disabled>-- Select Reason --</option>
+                                    <option value="Sale">Sale</option>
+                                    <option value="Waste">Waste</option>
+                                    <option value="Donate">Donate</option>
+                                    <option value="Held">Held</option>
+                                </select>
+                            </div>
                             <div class="col-md-12">
                                 <label class="form-label">Note</label>
                                 <textarea name="note" id="ds-note" class="form-control" rows="3" placeholder="Optional note…"></textarea>
@@ -243,8 +274,16 @@
                     <div class="modal-body">
                         <div class="mb-4">
                             <div><strong>Asset:</strong> <span id="flow-asset"></span></div>
-                            <div><strong>Transaction:</strong> <span id="flow-code"></span></div>
-                            <div><strong>Status:</strong> <span id="flow-status"></span></div>
+                            <div><strong>Transaction Number:</strong> <span id="flow-code"></span></div>
+                            <div><strong>Reason:</strong> <span id="flow-reason"></span></div>
+                            <div><strong>Acquisition Date:</strong> <span id="flow-acq-date"></span></div>
+                            <div><strong>Commercial Acquisition Cost (IDR):</strong> <span id="flow-commercial-acq"></span>
+                            </div>
+                            <div><strong>Commercial Accumulated Depreciation (IDR):</strong> <span
+                                    id="flow-commercial-acc-depr"></span></div>
+                            <div><strong>Commercial Net Book Value (IDR):</strong> <span id="flow-commercial-nbv"></span>
+                            </div>
+
                             <div class="mt-2">
                                 <strong>Form Disposal:</strong>
                                 <span id="flow-form-file"></span>
@@ -378,6 +417,7 @@
                 $('#ds-asset').empty();
                 initSelect2('#ds-asset', R.assets);
                 $('#ds-asset').prop('disabled', false);
+                $('#ds-reason').val('');
                 clearSnapshot();
             }
 
@@ -393,27 +433,49 @@
                 $('#ds-current-file').addClass('d-none');
             });
 
-
             function renderSnapshot(d) {
                 const safe = (v) => v || '';
+
+                const formatIDR = (v) => {
+                    if (v === null || v === undefined || v === '') return '';
+                    const n = Number(v);
+                    if (isNaN(n)) return v;
+                    return new Intl.NumberFormat('id-ID', {
+                        style: 'currency',
+                        currency: 'IDR',
+                        maximumFractionDigits: 0
+                    }).format(n);
+                };
+
                 $('#snap-owner').text(safe(d.owner_label));
                 $('#snap-user').text(safe(d.user_label));
                 $('#snap-maintenance').text(safe(d.maintenance_label));
                 $('#snap-status').text(safe(d.status_label));
                 $('#snap-location').text(safe(d.location_label));
 
+                // NEW
+                $('#snap-acq-date').text(safe(d.acquisition_date));
+                $('#snap-commercial-acq').text(formatIDR(d.commercial_acq_cost));
+                $('#snap-commercial-acc-depr').text(formatIDR(d.commercial_accum_depr));
+                $('#snap-commercial-nbv').text(formatIDR(d.commercial_nbv));
+
+                // Existing
                 $('#snap-price').text(safe(d.price));
                 $('#snap-quantity').text(safe(d.quantity));
                 $('#snap-vat-in').text(safe(d.vat_in));
                 $('#snap-uom').text(safe(d.kode_uom));
                 $('#snap-total').text(safe(d.total));
                 $('#snap-useful-life').text(safe(d.useful_life_month));
+
                 $('#ds-asset-snapshot').removeClass('d-none');
             }
 
             function clearSnapshot() {
-                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life')
-                    .text('');
+                $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location,' +
+                    '#snap-acq-date,#snap-commercial-acq,#snap-commercial-acc-depr,#snap-commercial-nbv,' +
+                    '#snap-price,#snap-quantity,#snap-vat-in,#snap-uom,#snap-total,#snap-useful-life'
+                ).text('');
+
                 $('#ds-asset-snapshot').addClass('d-none');
             }
 
@@ -475,6 +537,10 @@
                             const text = row.asset_code ?? data ?? '';
                             return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
                         }
+                    },
+                    {
+                        data: 'reason',
+                        name: 'assets_disposals.reason'
                     },
                     {
                         data: 'note',
@@ -555,28 +621,32 @@
                         BA_URL_TPL.replace('__UUID__', encodeURIComponent(data.uuid));
 
                     const formBtn = `
-        <button type="button"
-           class="btn btn-light-info btn-sm btn-ds-form"
-           onclick="window.open('${formUrl}','_blank')">
-           Form
-        </button>
-    `;
+                            <button type="button"
+                            class="btn btn-light-info btn-sm btn-ds-form"
+                            onclick="window.open('${formUrl}','_blank')">
+                            Form
+                            </button>
+                        `;
 
                     const baBtn = `
-        <button type="button"
-           class="btn btn-light-warning btn-sm btn-ds-ba"
-           onclick="window.open('${baUrl}','_blank')">
-           BA
-        </button>
-    `;
+                            <button type="button"
+                            class="btn btn-light-warning btn-sm btn-ds-ba"
+                            onclick="window.open('${baUrl}','_blank')">
+                            BA
+                            </button>
+                        `;
 
+                    // Always allow Form button
                     if (!$group.find('.btn-ds-form').length) {
                         $group.prepend(formBtn);
                     }
-                    if (!$group.find('.btn-ds-ba').length) {
+
+                    // BA button only when last step (asset_mgt) is approved
+                    if (isAssetMgtApproved(data.flow) && !$group.find('.btn-ds-ba').length) {
                         $group.prepend(baBtn);
                     }
                 }
+
 
 
             });
@@ -612,6 +682,29 @@
 
                 window.location = R.exportUrl + '?' + params;
             });
+
+            function isAssetMgtApproved(flowRaw) {
+                if (!flowRaw) return false;
+
+                let flow = flowRaw;
+
+                if (typeof flow === 'string') {
+                    try {
+                        flow = JSON.parse(flow);
+                    } catch (e) {
+                        return false;
+                    }
+                }
+
+                if (!flow || !Array.isArray(flow.steps)) return false;
+
+                for (const st of flow.steps) {
+                    if (st.code === 'akp_head') {
+                        return !!st.approved_at;
+                    }
+                }
+                return false;
+            }
             $('#formDisposal').off('submit').on('submit', function(e) {
                 e.preventDefault();
 
@@ -623,7 +716,8 @@
                 const base = {
                     asset_uuid: $('#ds-asset-uuid').val() || null,
                     note: $('#ds-note').val() || '',
-                    remove_file: $('#ds-remove-file').val() || 0
+                    remove_file: $('#ds-remove-file').val() || 0,
+                    reason: $('#ds-reason').val() || '',
                 };
 
                 if (!base.asset_uuid) {
@@ -774,7 +868,6 @@
             // ===============================
             // NEW: FLOW MODAL JS
             // ===============================
-
             function openDisposalFlow(id) {
                 $('#formDisposalFlow')[0].reset();
                 $('#flow-steps').empty();
@@ -785,7 +878,24 @@
                 $('#flow-ba-file').html('');
                 $('#flow-asset').text('');
                 $('#flow-code').text('');
-                $('#flow-status').text('');
+                $('#flow-reason').text('');
+
+                // NEW: clear extra info
+                $('#flow-acq-date').text('');
+                $('#flow-commercial-acq').text('');
+                $('#flow-commercial-acc-depr').text('');
+                $('#flow-commercial-nbv').text('');
+
+                const formatIDR = (v) => {
+                    if (v === null || v === undefined || v === '') return '';
+                    const n = Number(v);
+                    if (isNaN(n)) return v;
+                    return new Intl.NumberFormat('id-ID', {
+                        style: 'currency',
+                        currency: 'IDR',
+                        maximumFractionDigits: 0
+                    }).format(n);
+                };
 
                 Swal.fire({
                     title: 'Loading flow…',
@@ -799,7 +909,14 @@
                         $('#flow-asset').text(((d.asset_code || '') + (d.asset_name ? (' - ' + d.asset_name) :
                             '')) || d.asset_uuid);
                         $('#flow-code').text(d.disposal_code || '');
-                        $('#flow-status').text(d.kode_status || '');
+                        $('#flow-reason').text(d.reason || '');
+
+                        // NEW: fill extra info
+                        $('#flow-acq-date').text(d.acquisition_date || '');
+                        $('#flow-commercial-acq').text(formatIDR(d.commercial_acq_cost));
+                        $('#flow-commercial-acc-depr').text(formatIDR(d.commercial_accum_depr));
+                        $('#flow-commercial-nbv').text(formatIDR(d.commercial_nbv));
+
                         const formDownloadUrl = FORM_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
                         const baDownloadUrl = BA_URL_TPL.replace('__UUID__', encodeURIComponent(d.uuid));
 
@@ -812,15 +929,18 @@
                                 `<a href="${formDownloadUrl}" target="_blank">Download auto-filled form</a>`
                             );
                         }
-
-                        if (d.ba_file_url) {
-                            $('#flow-ba-file').html(
-                                `<a href="${d.ba_file_url}" target="_blank">${d.ba_file_name || 'Download BA'}</a>`
-                            );
+                        if (isAssetMgtApproved(d.flow)) {
+                            if (d.ba_file_url) {
+                                $('#flow-ba-file').html(
+                                    `<a href="${d.ba_file_url}" target="_blank">${d.ba_file_name || 'Download BA'}</a>`
+                                );
+                            } else {
+                                $('#flow-ba-file').html(
+                                    `<a href="${baDownloadUrl}" target="_blank">Download auto-filled BA</a>`
+                                );
+                            }
                         } else {
-                            $('#flow-ba-file').html(
-                                `<a href="${baDownloadUrl}" target="_blank">Download auto-filled BA</a>`
-                            );
+                            $('#flow-ba-file').html('Not available yet');
                         }
 
                         renderFlowSteps(d.flow);

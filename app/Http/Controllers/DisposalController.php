@@ -42,6 +42,10 @@ class DisposalController extends Controller
             'asset_uuid'    => ['required', 'uuid', 'exists:assets,uuid'],
             'note'          => ['nullable', 'string', 'max:1000'],
             'target_status' => ['nullable', 'string'],
+            'reason'      => [
+                'required',
+                Rule::in(['Sale', 'Waste', 'Donate', 'Held']),
+            ],
             'file'          => [
                 'nullable',
                 'file',
@@ -103,8 +107,7 @@ class DisposalController extends Controller
             'file_mime'       => $mime,
             'file_size'       => $size,
             'before_status'   => $asset->kode_status,
-
-            // NEW: initial flow (User -> Dept Head -> Asset Mgt)
+            'reason'          => $data['reason'],
             'flow'            => $this->buildFlowTemplate($uid),
         ]);
 
@@ -119,7 +122,7 @@ class DisposalController extends Controller
     {
         $d = Disposal::with(['asset'])->findOrFail($uuid);
 
-        // NEW: normalize flow for frontend (optional, backward-compatible)
+        // Build / normalize flow
         $flow = $d->flow ?? null;
         if (is_string($flow) && $flow !== '') {
             $decoded = json_decode($flow, true);
@@ -130,27 +133,46 @@ class DisposalController extends Controller
             }
         }
         if (!$flow) {
-            // If you open old record without flow, build default one (do NOT change kode_status here)
             $flow = $this->buildFlowTemplate($d->pic_request_uid ?? null);
         }
+
+        // NEW: acquisition & commercial info
+        $val = DB::table('assets_value')
+            ->select('actual_date', 'total')
+            ->where('asset_uuid', $d->asset_uuid)
+            ->first();
+
+        $ledger = DB::table('assets_depr_ledger_monthly')
+            ->selectRaw('COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
+            ->where('asset_uuid', $d->asset_uuid)
+            ->first();
+
+        $accSum = $ledger?->acc_sum ?? 0;
+        $nbvSum = $ledger?->nbv_sum ?? 0;
 
         return response()->json([
             'uuid'          => $d->uuid,
             'asset_uuid'    => $d->asset_uuid,
             'asset_code'    => $d->asset?->asset_code,
+            'asset_name'    => $d->asset?->description,
             'note'          => $d->note,
             'target_status' => $d->target_status,
             'kode_status'   => $d->kode_status,
             'file_url'      => $d->file_url,
             'file_name'     => $d->file_name,
 
-            // NEW extra info for flow UI (safe even if columns not there yet)
             'ba_file_url'   => $d->ba_file_url ?? null,
             'ba_file_name'  => $d->ba_file_name ?? null,
             'flow'          => $flow,
+            'reason'        => $d->reason,
+            'disposal_code' => $d->disposal_code,
+
+            'acquisition_date'      => $val?->actual_date,      // Acquisition Date
+            'commercial_acq_cost'   => $val?->total,            // Commercial Acquisition Cost (IDR)
+            'commercial_accum_depr' => $accSum,                 // Commercial Accumulated Depreciation (IDR)
+            'commercial_nbv'        => $nbvSum,                 // Commercial Net Book Value (IDR)
         ]);
     }
-
     public function update(Request $request, string $uuid)
     {
         abort_unless($request->user()?->hasAction('DISPOSAL', 'U'), 403);
@@ -309,7 +331,7 @@ class DisposalController extends Controller
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($pending) {
                     if ($canEdit) {
-                        $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
+                        // $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
                     }
                     if ($canApr) {
                         $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
@@ -427,7 +449,7 @@ class DisposalController extends Controller
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($pending) {
                     if ($canEdit) {
-                        $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
+                        // $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
                     }
                     if ($canApr) {
                         $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';
@@ -495,22 +517,27 @@ class DisposalController extends Controller
 
             $idx = $this->getNextPendingFlowIndex($flow);
             abort_if($idx === null, 422, 'All steps already approved.');
-
             $step     = &$flow['steps'][$idx];
             $stepCode = $step['code'] ?? null;
             $now      = now()->toDateTimeString();
             $isLast   = ($idx === count($flow['steps']) - 1);
 
-            // Department validation (exclude SYSADMIN)
+            // Department / role validation (exclude SYSADMIN)
             $currentUser = auth()->user();
-            $userRoles = $currentUser->roles()->pluck('kode')->toArray();
-            $isSysAdmin = in_array('SYSADMIN', $userRoles);
+            $userRoles   = $currentUser->roles()->pluck('kode')->toArray();
+            $isSysAdmin  = in_array('SYSADMIN', $userRoles);
+            $userDept    = $currentUser->kode_department ?? null;
 
-            // DEPT_HEAD validation for first approval (exclude SYSADMIN and USER)
-            if ($stepCode === 'dept_head' && in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
-                $userDept = $currentUser->kode_department;
-                
-                if (!$userDept) {
+            // -------------------------------------------------
+            // STEP 2: Dept Head (generic, same as your old logic)
+            // -------------------------------------------------
+            if ($stepCode === 'dept_head' && in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin) {
+                // must be DEPT_HEAD
+                if (!in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin) {
+                    abort(403, 'Only Dept Head can approve this step.');
+                }
+
+                if (!$userDept && !$isSysAdmin) {
                     abort(422, 'Your department is not set. Please contact administrator.');
                 }
 
@@ -528,22 +555,52 @@ class DisposalController extends Controller
                 }
             }
 
-            // AM_ADMIN validation for last step (exclude SYSADMIN)
+            // -------------------------------------------------
+            // STEP 3: AM_HEAD approval
+            // -------------------------------------------------
+            if ($stepCode === 'am_head') {
+                if (!in_array('AM_HEAD', $userRoles) && !$isSysAdmin) {
+                    abort(403, 'Only AM_HEAD can approve this step.');
+                }
+
+                // (Optional) if you also want AM_HEAD to match some department,
+                // you can add extra checks here similar to dept_head / asset_mgt.
+            }
+
+            // -------------------------------------------------
+            // STEP 4: DEPT_HEAD AKP approval
+            // -------------------------------------------------
+            if ($stepCode === 'akp_head') {
+                // must be DEPT_HEAD and department AKP (and not SYSADMIN)
+                if (!in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin) {
+                    abort(403, 'Only Dept Head AKP can approve this step.');
+                }
+
+                if (!$userDept && !$isSysAdmin) {
+                    abort(422, 'Your department is not set. Please contact administrator.');
+                }
+
+                // Here I assume user.kode_department == master_user_code.kode
+                // and AKP is the code you want to enforce.
+                if ($userDept !== 'AKP' && !$isSysAdmin) {
+                    abort(422, 'This step can only be approved by Dept Head with code AKP.');
+                }
+            }
+
+            // -------------------------------------------------
+            // STEP 5: Asset Management execution (final)
+            // -------------------------------------------------
             if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
-                $userDept = $currentUser->kode_department;
-                
                 if (!$userDept) {
                     abort(422, 'Your department is not set. Please contact administrator.');
                 }
 
-                // Load asset with assignment if not already loaded
                 if (!isset($asset)) {
                     $asset = Assets::with(['assignment.owner'])
                         ->where('uuid', $d->asset_uuid)
                         ->firstOrFail();
                 }
 
-                // For disposal, AM_ADMIN must match asset owner's department
                 $ownerCode = $asset->assignment?->asset_owner;
                 if ($ownerCode) {
                     $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
@@ -552,7 +609,6 @@ class DisposalController extends Controller
                     }
                 }
             }
-
             if ($isLast && $stepCode === 'asset_mgt') {
                 $request->validate([
                     'ba_file'   => ['required', 'file', 'mimes:pdf,doc,docx,jpg,jpeg,png,bmp', 'max:20480'],
@@ -643,6 +699,7 @@ class DisposalController extends Controller
         ]);
 
         $asset    = $disposal->asset;
+        $reason   = $disposal->reason ?? '';
         $assign   = $asset?->assignment;
         $owner    = $assign?->owner;
         $ownerDiv = $owner?->division;
@@ -677,6 +734,54 @@ class DisposalController extends Controller
 
         $justification = $disposal->note ?? '';
 
+        // ========= NEW: build "done" flow steps text =========
+        $flowRaw   = $disposal->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = \Carbon\Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
+        // ========= END NEW =========
+
         $templatePath = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
         $spreadsheet  = IOFactory::load($templatePath);
         $sheet        = $spreadsheet->getSheetByName('Form Disposal Aset Tetap')
@@ -688,7 +793,7 @@ class DisposalController extends Controller
         $sheet->setCellValue('H10', $deptLabel);
         $sheet->setCellValue('H11', $divLabel);
 
-        $sheet->setCellValue('H14', '');
+        $sheet->setCellValue('H14', $reason);
 
         $sheet->setCellValue('H15', $assetCode);
         $sheet->setCellValue('H16', $assetName);
@@ -704,6 +809,9 @@ class DisposalController extends Controller
 
         $sheet->setCellValue('H24', $justification);
 
+        $sheet->setCellValue('C26', $flowText);
+        $sheet->getStyle('C26')->getAlignment()->setWrapText(true);
+
         $fileName = 'Form Disposal Aset Tetap - ' . ($disposal->disposal_code ?? 'DSP') . '.xlsx';
 
         return response()->streamDownload(function () use ($spreadsheet) {
@@ -714,7 +822,6 @@ class DisposalController extends Controller
         ]);
     }
 
-
     /* ======================================================================
      |  NEW: FLOW + FILE HELPERS
      | ======================================================================*/
@@ -724,6 +831,14 @@ class DisposalController extends Controller
      * 1. Create (User Departemen)
      * 2. Approval Dept.Head / Section
      * 3. Pelaksanaan & BA Disposal (Asset Management)
+     */
+    /**
+     * Build default disposal flow:
+     * 1. Create (User Departemen)
+     * 2. Approval Dept.Head / Section
+     * 3. Approval AM Head
+     * 4. Approval Dept.Head AKP
+     * 5. Pelaksanaan & BA Disposal (Asset Management)
      */
     protected function buildFlowTemplate(?string $creatorName = null): array
     {
@@ -747,6 +862,20 @@ class DisposalController extends Controller
                     'approved_at' => null,
                 ],
                 [
+                    'code'        => 'am_head',
+                    'label'       => 'Approval Asset Management Head',
+                    'role'        => 'Asset Management Head',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'akp_head',
+                    'label'       => 'Approval Accounting',
+                    'role'        => 'Dept.Head AKP',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
                     'code'        => 'asset_mgt',
                     'label'       => 'Pelaksanaan & BA Disposal (Asset Management)',
                     'role'        => 'Asset Management',
@@ -756,6 +885,7 @@ class DisposalController extends Controller
             ],
         ];
     }
+
 
     protected function getNextPendingFlowIndex(?array $flow): ?int
     {

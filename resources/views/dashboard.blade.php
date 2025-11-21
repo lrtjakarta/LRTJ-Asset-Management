@@ -103,6 +103,7 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
+                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="movement" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -117,6 +118,7 @@
                                     <div class="fs-1 fw-bolder text-primary" id="mov-waiting">0</div>
                                 </div>
 
+                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="movement" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -131,8 +133,22 @@
                                     <div class="fs-1 fw-bolder text-danger" id="mov-rejected">0</div>
                                 </div>
 
+                                {{-- Total --}}
+                                <div class="d-flex align-items-center mt-2">
+                                    <div class="symbol symbol-50px me-5">
+                                        <span class="symbol-label bg-light-success">
+                                            <i class="ki-outline ki-chart-line fs-2x text-gray-600"></i>
+                                        </span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <span class="text-gray-800 fw-bold d-block fs-6">Accepted</span>
+                                        <span class="text-muted fw-semibold d-block fs-7">All accepted requests</span>
+                                    </div>
+                                    <div class="fs-1 fw-bolder text-danger" id="mov-total">0</div>
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
 
@@ -150,6 +166,7 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
+                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="transfer-value" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -164,6 +181,7 @@
                                     <div class="fs-1 fw-bolder text-primary" id="trv-waiting">0</div>
                                 </div>
 
+                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="transfer-value" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -178,8 +196,22 @@
                                     <div class="fs-1 fw-bolder text-danger" id="trv-rejected">0</div>
                                 </div>
 
+                                {{-- Total --}}
+                                <div class="d-flex align-items-center dash-link">
+                                    <div class="symbol symbol-50px me-5">
+                                        <span class="symbol-label bg-light-success">
+                                            <i class="ki-outline ki-chart-line fs-2x text-gray-600"></i>
+                                        </span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <span class="text-gray-800 fw-bold d-block fs-6">Accepted</span>
+                                        <span class="text-muted fw-semibold d-block fs-7">All accepted requests</span>
+                                    </div>
+                                    <div class="fs-1 fw-bolder text-danger" id="trv-total">0</div>
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
 
@@ -197,6 +229,7 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
+                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="disposal" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -211,6 +244,7 @@
                                     <div class="fs-1 fw-bolder text-primary" id="dsp-waiting">0</div>
                                 </div>
 
+                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="disposal" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -225,8 +259,22 @@
                                     <div class="fs-1 fw-bolder text-danger" id="dsp-rejected">0</div>
                                 </div>
 
+                                {{-- Total --}}
+                                <div class="d-flex align-items-center dash-link">
+                                    <div class="symbol symbol-50px me-5">
+                                        <span class="symbol-label bg-light-success">
+                                            <i class="ki-outline ki-chart-line fs-2x text-gray-600"></i>
+                                        </span>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <span class="text-gray-800 fw-bold d-block fs-6">Accepted</span>
+                                        <span class="text-muted fw-semibold d-block fs-7">All accepted requests</span>
+                                    </div>
+                                    <div class="fs-1 fw-bolder text-danger" id="dsp-total">0</div>
+                                </div>
                             </div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -454,12 +502,17 @@
                 const mv = res.movement || {};
                 const trv = res.transfer_value || {};
                 const dsp = res.disposal || {};
+
                 $('#mov-waiting').text(mv.waiting ?? 0);
                 $('#mov-rejected').text(mv.rejected ?? 0);
                 $('#trv-waiting').text(trv.waiting ?? 0);
                 $('#trv-rejected').text(trv.rejected ?? 0);
                 $('#dsp-waiting').text(dsp.waiting ?? 0);
                 $('#dsp-rejected').text(dsp.rejected ?? 0);
+
+                $('#mov-total').text(mv.total ?? ((mv.waiting || 0) + (mv.rejected || 0)));
+                $('#trv-total').text(trv.total ?? ((trv.waiting || 0) + (trv.rejected || 0)));
+                $('#dsp-total').text(dsp.total ?? ((dsp.waiting || 0) + (dsp.rejected || 0)));
             });
 
             // —— Card links keep status but preserve current filters

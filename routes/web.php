@@ -11,6 +11,7 @@ use App\Http\Controllers\ExportController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\MasterRoleController;
+use App\Http\Controllers\ReportingController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\StockOpnameController;
 use App\Http\Controllers\TransferController;
@@ -422,6 +423,10 @@ Route::middleware('ldap.session')->group(function () {
             ->name('users.update')
             ->middleware('role.action:USER_MGMT,U');
     });
+
+    Route::get('/reporting', [ReportingController::class, 'index'])->name('reporting.index')->middleware('role.action:REPORTING,R');
+    Route::get('/reporting/asset-depr/datatable', [ReportingController::class, 'datatableAssetDepr'])->name('reporting.asset_depr.datatable');
+    Route::get('/reporting/asset-depr/export', [ReportingController::class, 'exportAssetDepr'])->name('reporting.asset_depr.export');
 
     Route::get('users/select-user', [UserManagementController::class, 'select_users'])->name('users.options');
 

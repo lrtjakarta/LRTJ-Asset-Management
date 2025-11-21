@@ -29,14 +29,17 @@ class DashboardController
             'movement'       => [
                 'waiting'  => (int) ($movementAgg->waiting  ?? 0),
                 'rejected' => (int) ($movementAgg->rejected ?? 0),
+                'total'    => (int) ($movementAgg->total    ?? 0),
             ],
             'transfer_value' => [
                 'waiting'  => (int) ($valueAgg->waiting  ?? 0),
                 'rejected' => (int) ($valueAgg->rejected ?? 0),
+                'total'    => (int) ($valueAgg->total    ?? 0),
             ],
             'disposal'       => [
                 'waiting'  => (int) ($disposalAgg->waiting  ?? 0),
                 'rejected' => (int) ($disposalAgg->rejected ?? 0),
+                'total'    => (int) ($disposalAgg->total    ?? 0),
             ],
         ]);
     }
@@ -49,9 +52,11 @@ class DashboardController
         }
 
         return $query->selectRaw("
+            SUM(CASE WHEN kode_status = 'ACC' THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN kode_status = 'APR' THEN 1 ELSE 0 END) AS waiting,
             SUM(CASE WHEN kode_status = 'REJ' THEN 1 ELSE 0 END) AS rejected
-        ")->first();
+        ")
+            ->first();
     }
 
     public function acquisitionMonthly(Request $request)
@@ -165,7 +170,7 @@ class DashboardController
             $label = ($r->owner_code ?: '-') . ' - ' . ($r->owner_name ?: 'Unknown');
 
             if (!isset($byOwner[$key])) {
-                $byOwner[$key] = ['owner' => $label, 'dis' => 0, 'idl' => 0, 'ope' => 0, 'rpr' => 0];
+                $byOwner[$key] = ['owner' => $key, 'dis' => 0, 'idl' => 0, 'ope' => 0, 'rpr' => 0];
             }
             $byOwner[$key][strtolower($r->status)] += (int) $r->n;
         }

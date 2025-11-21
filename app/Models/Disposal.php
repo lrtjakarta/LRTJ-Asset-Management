@@ -39,6 +39,7 @@ class Disposal extends Model
         'ba_file_name',
         'ba_file_mime',
         'ba_file_size',
+        'reason',
     ];
 
     protected $casts = [

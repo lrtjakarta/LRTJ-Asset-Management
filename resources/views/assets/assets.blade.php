@@ -10,10 +10,16 @@
             height: 100vh !important;
             margin: 0 !important;
             border-radius: 0 !important;
+            background: #fff;
+
+            /* Scroll INSIDE this card */
+            overflow-y: auto !important;
+            overflow-x: auto !important;
         }
 
         body.fs-lock {
-            overflow: hidden;
+            /* Lock background page when fullscreen card is open */
+            overflow: hidden !important;
         }
 
         th,
@@ -50,78 +56,37 @@
         (function($) {
             const FS_BTN = '[data-card="fullscreen"]';
 
+            // Pure CSS fullscreen toggle (no native requestFullscreen)
             $(document).on('click', FS_BTN, function(e) {
                 e.preventDefault();
 
                 const $btn = $(this);
-                const $card = $btn.closest('.card')[0];
+                const $card = $btn.closest('.card');
+                if (!$card.length) return;
 
-                if (!$card) return;
+                const isOn = $card.hasClass('card-fullscreen');
 
-                const canFullscreen = !!($card.requestFullscreen || $card.webkitRequestFullscreen || $card
-                    .msRequestFullscreen);
-
-                const fallbackEnter = function() {
-                    $($card).addClass('card-fullscreen');
-                    $('body').addClass('fs-lock');
-                    $btn.attr('data-state', 'on');
-                };
-
-                const fallbackExit = function() {
-                    $($card).removeClass('card-fullscreen');
+                if (isOn) {
+                    // Exit fullscreen
+                    $card.removeClass('card-fullscreen');
                     $('body').removeClass('fs-lock');
                     $btn.attr('data-state', 'off');
-                };
-
-                const enterFS = async function() {
-                    if (document.fullscreenElement || document.webkitFullscreenElement || document
-                        .msFullscreenElement) return;
-                    if ($card.requestFullscreen) await $card.requestFullscreen();
-                    else if ($card.webkitRequestFullscreen) await $card.webkitRequestFullscreen();
-                    else if ($card.msRequestFullscreen) await $card.msRequestFullscreen();
-                    else fallbackEnter();
-                };
-
-                const exitFS = async function() {
-                    if (document.exitFullscreen) await document.exitFullscreen();
-                    else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
-                    else if (document.msExitFullscreen) await document.msExitFullscreen();
-                    else fallbackExit();
-                };
-
-                const isNativeOn =
-                    document.fullscreenElement === $card ||
-                    document.webkitFullscreenElement === $card ||
-                    document.msFullscreenElement === $card;
-
-                const isFallbackOn = $($card).hasClass('card-fullscreen');
-
-                if (canFullscreen) {
-                    (isNativeOn ? exitFS() : enterFS()).catch(fallbackEnter);
                 } else {
-                    isFallbackOn ? fallbackExit() : fallbackEnter();
+                    // Enter fullscreen
+                    $card.addClass('card-fullscreen');
+                    $('body').addClass('fs-lock');
+                    $btn.attr('data-state', 'on');
                 }
             });
 
-            const syncButtons = function() {
-                const active = document.fullscreenElement || document.webkitFullscreenElement || document
-                    .msFullscreenElement;
-                $(FS_BTN).each(function() {
-                    const $btn = $(this);
-                    const card = $btn.closest('.card')[0];
-                    const inThis = !!(active && card === active);
-                    $btn.attr('data-state', inThis ? 'on' : 'off');
-                });
-            };
-
-            $(document).on('fullscreenchange webkitfullscreenchange MSFullscreenChange', syncButtons);
-
+            // ESC to exit CSS fullscreen
             $(document).on('keydown', function(e) {
                 if (e.key === 'Escape') {
                     const $fs = $('.card.card-fullscreen');
                     if ($fs.length) {
                         $fs.removeClass('card-fullscreen');
                         $('body').removeClass('fs-lock');
+                        $(FS_BTN).attr('data-state', 'off');
                     }
                 }
             });

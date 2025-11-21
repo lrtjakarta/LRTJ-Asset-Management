@@ -462,10 +462,12 @@
                     <!--end:Menu item-->
                     @endcanAction
 
+
+                    @canAction('REPORTING','R')
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link" href="#">
+                        <a class="menu-link {{ request()->segment(1) == 'reporting' ? 'active' : '' }}" href="{{ route('reporting.index') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-document fs-2">
                                     <span class="path1"></span>
@@ -477,6 +479,7 @@
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
 
                     @canAction('TRASH','R')
                     <!--begin:Menu item-->

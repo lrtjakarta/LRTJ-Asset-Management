@@ -609,7 +609,16 @@ class AssetsController extends Controller
                 $q->select('asset_uuid', 'asset_owner', 'asset_user', 'asset_maintenance');
             }])
             ->with(['value' => function ($c) {
-                $c->select('asset_uuid', 'price', 'quantity', 'vat_in', 'total', 'kode_uom', 'useful_life_month');
+                $c->select(
+                    'asset_uuid',
+                    'price',
+                    'quantity',
+                    'vat_in',
+                    'total',
+                    'kode_uom',
+                    'useful_life_month',
+                    'actual_date'      // <-- NEW
+                );
             }])
             ->findOrFail($uuid);
 
@@ -646,10 +655,19 @@ class AssetsController extends Controller
             : null;
 
         $ownerLabel = $ownerCode ? ($ownerCode . ' - ' . ($deptByKode[$ownerCode] ?? '')) : '(empty)';
-        $userLabel  = $userCode  ? ($userCode . ' - ' . ($deptByKode[$userCode]  ?? '')) : '(empty)';
-        $mntLabel   = $mntCode   ? ($mntCode  . ' - ' . ($deptByKode[$mntCode]   ?? '')) : '(empty)';
+        $userLabel  = $userCode  ? ($userCode  . ' - ' . ($deptByKode[$userCode]  ?? '')) : '(empty)';
+        $mntLabel   = $mntCode   ? ($mntCode   . ' - ' . ($deptByKode[$mntCode]   ?? '')) : '(empty)';
         $statusLabel   = $stCode ? ($stCode   . ' - ' . ($statusName ?? ''))        : '(empty)';
         $locationLabel = $locCode ? ($locCode . ' - ' . ($locName ?? ''))           : '(empty)';
+
+        // ---- NEW: ledger sums for accumulated depreciation & NBV ----
+        $ledger = DB::table('assets_depr_ledger_monthly')
+            ->selectRaw('COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
+            ->where('asset_uuid', $a?->uuid)
+            ->first();
+
+        $accSum = $ledger?->acc_sum ?? 0;
+        $nbvSum = $ledger?->nbv_sum ?? 0;
 
         return response()->json([
             'asset_uuid'       => $a->uuid,
@@ -670,13 +688,19 @@ class AssetsController extends Controller
             'location_code'    => $locCode,
             'location_label'   => $locationLabel,
 
-
+            // existing acquisition fields
             'price'              => $a->value?->price,
             'quantity'           => $a->value?->quantity,
             'vat_in'             => $a->value?->vat_in,
             'total'              => $a->value?->total,
             'kode_uom'           => $a->value?->kode_uom,
             'useful_life_month'  => $a->value?->useful_life_month,
+
+            // ---- NEW fields ----
+            'acquisition_date'        => $a->value?->actual_date?->format('d F Y'),  // Acquisition Date
+            'commercial_acq_cost'     => $a->value?->total,        // Commercial Acquisition Cost (IDR)
+            'commercial_accum_depr'   => $accSum,                  // Commercial Accumulated Depreciation (IDR)
+            'commercial_nbv'          => $nbvSum,                  // Commercial Net Book Value (IDR)
         ]);
     }
     public function bulk_upload()
