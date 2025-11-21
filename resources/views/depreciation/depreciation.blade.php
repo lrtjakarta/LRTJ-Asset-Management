@@ -134,6 +134,14 @@
                                 <th class="min-w-200px">Ending Balance</th>
                             </tr>
                         </thead>
+                        <tfoot>
+                            <tr>
+                                <th colspan="2">Total Depreciation (This Month)</th>
+                                <th id="depr-sum" class="text-danger"></th>
+                                <th></th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -151,11 +159,10 @@
                 <form id="form-process-month-modal" autocomplete="off">
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label required">Period (Current Year Only)</label>
-                            <input type="month" id="proc-period" class="form-control" min="{{ $currentYear }}-01"
-                                max="{{ $currentYear }}-12"
+                            <label class="form-label required">Period</label>
+                            <input type="month" id="proc-period" class="form-control"
                                 value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
-                            <small class="text-muted">Only months in {{ $currentYear }} are allowed.</small>
+                            <small class="text-muted">Pick any month to process depreciation.</small>
                         </div>
                     </div>
 
@@ -500,6 +507,11 @@
                     },
                 ]
             });
+            tbl.on('xhr', function() {
+                const json = tbl.ajax.json() || {};
+                const total = json.total_depr ?? 0;
+                $('#depr-sum').text(money2(total));
+            });
 
             function formatPeriodToText(periodMonth) {
                 if (!periodMonth) return '';
@@ -554,21 +566,13 @@
                 });
             });
 
-            // ===== Open Process Month modal =====
+            // ===== Open Process Month modal (any year) =====
             $btnProcOpen.on('click', function() {
-                let period = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
-                const [yrStr] = period.split('-');
-                const yr = Number(yrStr || CURRENT_YEAR);
-                if (yr !== CURRENT_YEAR) {
-                    period = DEFAULT_PERIOD_MONTH;
-                }
-                $procMonthInp.attr('min', CURRENT_YEAR + '-01');
-                $procMonthInp.attr('max', CURRENT_YEAR + '-12');
+                const period = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
                 $procMonthInp.val(period);
                 monthModal.show();
             });
 
-            // ===== Submit Process Month (from modal) =====
             // ===== Submit Process Month (from modal) =====
             $('#form-process-month-modal').on('submit', async function(e) {
                 e.preventDefault();
@@ -576,12 +580,6 @@
                 const periodMonth = $procMonthInp.val();
                 if (!periodMonth) {
                     toastr?.error('Please pick a month');
-                    return;
-                }
-                const [yrStr] = periodMonth.split('-');
-                const yr = Number(yrStr || CURRENT_YEAR);
-                if (yr !== CURRENT_YEAR) {
-                    toastr?.error(`Only months in current year (${CURRENT_YEAR}) are allowed`);
                     return;
                 }
 
@@ -622,6 +620,7 @@
                     }
                 });
             });
+
 
             // ===== Open Build Year modal =====
             $btnYearOpen.on('click', function() {

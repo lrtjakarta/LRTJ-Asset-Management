@@ -194,6 +194,7 @@ class DepreciationController extends Controller
             });
         }
 
+        $totalDepr = (clone $q)->sum('assets_depr_ledger_monthly.depr_expense');
         return DataTables::of($q)
             ->addColumn('asset_code', fn($row) => $row->asset?->asset_code)
             ->addColumn('asset_name', fn($row) => $row->asset?->description)
@@ -212,6 +213,7 @@ class DepreciationController extends Controller
                 $name = $statusMap[$kode] ?? null;
                 return $name ? "{$kode} - {$name}" : $kode;
             })
+            ->with('total_depr', (float) $totalDepr)
             ->toJson();
     }
 
@@ -374,7 +376,6 @@ class DepreciationController extends Controller
                 })
                 ->get();
 
-            $counter_code = 1;
             foreach ($policies as $policy) {
                 $assetUuid = $policy->asset_uuid;
 
@@ -461,10 +462,15 @@ class DepreciationController extends Controller
                     + $adjDepr;
 
                 $accEnd = $accPrev + $deprExpense + $adjDepr;
-                $now    = Carbon::now();
-                $prefix = 'DEP' . $now->format('ym');
+                $prefix = 'DEP' . $period->format('ym');
 
-                $code = $prefix . str_pad($counter_code++, 4, '0', STR_PAD_LEFT);
+                $last = AssetDeprMonthly::whereNotNull('depr_code')
+                    ->where('depr_code', 'like', $prefix . '%')
+                    ->orderBy('depr_code', 'desc')
+                    ->first();
+
+                $seq = $last ? ((int) substr($last->depr_code, -4) + 1) : 1;
+                $txCode = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
 
                 AssetDeprMonthly::updateOrCreate(
                     [
@@ -482,13 +488,12 @@ class DepreciationController extends Controller
                         'depr_expense'            => $deprExpense,
                         'accumulated_depr_end'    => $accEnd,
                         'ending_balance'          => $ending,
-                        'depr_code'               => $code,
+                        'depr_code'               => $txCode,
                     ]
                 );
             }
         });
     }
-
 
     public function buildYear(Request $request)
     {
@@ -641,6 +646,9 @@ class DepreciationController extends Controller
             'source_type'       => 'manual',
             'note'              => $data['note'] ?? null,
         ]);
+
+        // Recompute depreciation for the affected month
+        $this->processMonthlyDepr($period);
 
         return response()->json(['ok' => true, 'message' => 'Depreciation adjustment recorded']);
     }
