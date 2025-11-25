@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
 class TransferApi extends Controller
 {
@@ -423,8 +426,6 @@ class TransferApi extends Controller
             'code' => $transfer->transfer_code,
         ];
     }
-
-
     private function mapRows($rows, string $tz)
     {
         $codes = ['usercode' => [], 'status' => [], 'location' => []];
@@ -517,7 +518,6 @@ class TransferApi extends Controller
                     'file_url'      => $exists ? url('storage/' . ltrim($t->file_path, '/')) : null,
                 ];
             }
-
             $flowFileObj = null;
             if ($t->flow_file_path) {
                 $disk   = 'public';
@@ -527,6 +527,12 @@ class TransferApi extends Controller
                 $mtime  = $t->flow_file_updated_at
                     ? strtotime($t->flow_file_updated_at)
                     : ($exists ? $fs->lastModified($t->flow_file_path) : null);
+                    
+                $downloadUrl = route('files.download.kind', [
+                    'kind' => 'transfer',
+                    'uuid' => $t->uuid,
+                    'slot' => 'form',
+                ]);
 
                 $flowFileObj = [
                     'name'          => $t->flow_file_name ?: basename($t->flow_file_path),
@@ -534,38 +540,37 @@ class TransferApi extends Controller
                     'size'          => $size,
                     'sha256'        => $t->flow_file_sha256 ?? null,
                     'last_modified' => $mtime ? gmdate('c', $mtime) : null,
-                    'download_url'  => null,
-                    'file_url'      => $exists ? url('storage/' . ltrim($t->flow_file_path, '/')) : null,
+                    'download_url'  => $downloadUrl,
+                    'file_url'      => $exists ? $downloadUrl : null,
                 ];
             }
 
             $formUrl = in_array($t->type, ['owner', 'user', 'maintenance'], true)
-                ? route('transfer.form', $t->uuid)
+                ? route('transfers.downloadForms', ['transfer' => $t->uuid])
                 : null;
 
             return [
-                'uuid'           => $t->uuid,
-                'transfer_code'  => $t->transfer_code,
-                'type'           => $t->type,
-                'kode_status'    => $t->kode_status,
-                'workflow_label' => $workflowLabel,
+                'uuid'              => $t->uuid,
+                'transfer_code'     => $t->transfer_code,
+                'type'              => $t->type,
+                'kode_status'       => $t->kode_status,
+                'workflow_label'    => $workflowLabel,
 
-                'before_code'    => $beforeCode,
-                'after_code'     => $afterCode,
-                'before_display' => $beforeDisplay,
-                'after_display'  => $afterDisplay,
+                'before_code'       => $beforeCode,
+                'after_code'        => $afterCode,
+                'before_display'    => $beforeDisplay,
+                'after_display'     => $afterDisplay,
 
-                'asset'          => $asset,
+                'asset'             => $asset,
 
-                'file'           => $fileObj,
-
-                'flow_file'      => $flowFileObj,
+                'file'              => $fileObj,
+                'flow_file'         => $flowFileObj,
 
                 'form_download_url' => $formUrl,
 
-                'created_at'     => optional($t->created_at)->timezone($tz)?->toIso8601String(),
-                'updated_at'     => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
-                'deleted_at'     => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
+                'created_at'        => optional($t->created_at)->timezone($tz)?->toIso8601String(),
+                'updated_at'        => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
+                'deleted_at'        => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
             ];
         });
     }
@@ -739,5 +744,171 @@ class TransferApi extends Controller
     {
         $prefix = 'TRF-' . preg_replace('/[^A-Za-z0-9]/', '', $assetCode);
         return sprintf('%s-%s-%s', $prefix, now()->format('Ymd'), strtoupper(Str::random(6)));
+    }
+    public function downloadForms(Request $request, Transfer $transfer): StreamedResponse
+    {
+        // Authorization (API style, still fine)
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
+
+        // if (! in_array($transfer->type, ['owner', 'user', 'maintenance'], true)) {
+        //     abort(404, 'Form Transfer only available for Owner/User/Maintenance movement.');
+        // }
+
+        $transfer->load([
+            'asset.assignment.owner.division',
+            'asset.assignment.user.division',
+            'asset.assignment.maintenance.division',
+            'asset.location',
+        ]);
+
+        $asset      = $transfer->asset;
+        $tfNote     = $transfer->note;
+        $assign     = $asset?->assignment;
+        $beforeVal  = data_get($transfer->before, 'value');
+        $afterVal   = data_get($transfer->after,  'value');
+        $createdAt  = $transfer->created_at?->timezone('Asia/Jakarta');
+
+        $beforeUc = null;
+
+        switch ($transfer->type) {
+            case 'owner':
+                $beforeUc = $assign?->owner;
+                break;
+            case 'user':
+                $beforeUc = $assign?->user;
+                break;
+            case 'maintenance':
+                $beforeUc = $assign?->maintenance;
+                break;
+        }
+
+        $afterUc = $afterVal
+            ? MasterUserCode::with('division')->where('kode', $afterVal)->first()
+            : null;
+
+        $fromDeptLabel = '';
+        $fromDivLabel  = '';
+        $fromLocLabel  = '';
+
+        $toDeptLabel   = '';
+        $toDivLabel    = '';
+        $toLocLabel    = '';
+
+        if ($beforeUc) {
+            $fromDeptLabel = trim($beforeUc->kode . ' - ' . $beforeUc->department);
+            if ($beforeUc->division) {
+                $fromDivLabel = trim($beforeUc->division->kode . ' - ' . $beforeUc->division->name);
+            }
+        } elseif ($beforeVal !== null && $beforeVal !== '') {
+            $fromDeptLabel = $beforeVal;
+        }
+
+        if ($afterUc) {
+            $toDeptLabel = trim($afterUc->kode . ' - ' . $afterUc->department);
+            if ($afterUc->division) {
+                $toDivLabel = trim($afterUc->division->kode . ' - ' . $afterUc->division->name);
+            }
+        } elseif ($afterVal !== null && $afterVal !== '') {
+            $toDeptLabel = $afterVal;
+        }
+
+        $loc = $asset?->location;
+        $locLabel = $loc ? trim($loc->kode . ' - ' . $loc->name) : '';
+        $fromLocLabel = $locLabel;
+        $toLocLabel   = $locLabel;
+
+        $flowRaw   = $transfer->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
+
+        // Make sure this path exists in your project
+        $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
+        $spreadsheet  = IOFactory::load($templatePath);
+
+        $sheet = $spreadsheet->getSheetByName('Form Transfer');
+
+        $sheet->setCellValue('V11', $transfer->transfer_code ?? '');
+
+        $sheet->setCellValue('G15', $fromDeptLabel);
+        $sheet->setCellValue('G16', $fromDivLabel);
+        $sheet->setCellValue('G17', $fromLocLabel);
+        $sheet->setCellValue('G18', $createdAt ? $createdAt->format('d-m-Y') : '');
+
+        $sheet->setCellValue('S15', $toDeptLabel);
+        $sheet->setCellValue('S16', $toDivLabel);
+        $sheet->setCellValue('S17', $toLocLabel);
+        $sheet->setCellValue('S18', $createdAt ? $createdAt->format('d-m-Y') : '');
+
+        $sheet->setCellValue('C23', $asset?->asset_code ?? '');
+        $sheet->setCellValue('D23', $asset?->description ?? '');
+
+        $qty = $asset?->value?->quantity;
+        $sheet->setCellValue('L23', $qty !== null ? $qty : '');
+
+        $uomText = $asset?->value?->uom?->name
+            ?? $asset?->value?->kode_uom
+            ?? '';
+        $sheet->setCellValue('N23', $uomText);
+
+        $sheet->setCellValue('P23', $asset?->notes ?? '');
+
+        $sheet->setCellValue('C30', $tfNote ?? '');
+
+        $sheet->setCellValue('C34', $flowText);
+        $sheet->getStyle('C34')->getAlignment()->setWrapText(true);
+
+        $sheet->setCellValue('C36', $fromDeptLabel);
+        $sheet->setCellValue('I36', $toDeptLabel);
+
+        $fileName = 'Form Transfer Asset - ' . ($transfer->transfer_code ?? 'MOV') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 }

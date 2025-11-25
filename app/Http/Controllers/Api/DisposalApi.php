@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpWord\TemplateProcessor;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Carbon\Carbon;
 
 class DisposalApi extends Controller
 {
@@ -450,7 +454,9 @@ class DisposalApi extends Controller
                 $fs     = Storage::disk($disk);
                 $exists = $fs->exists($t->file_path);
                 $size   = $t->file_size ?? ($exists ? $fs->size($t->file_path) : null);
-                $mtime  = $t->file_updated_at ? strtotime($t->file_updated_at) : ($exists ? $fs->lastModified($t->file_path) : null);
+                $mtime  = $t->file_updated_at
+                    ? strtotime($t->file_updated_at)
+                    : ($exists ? $fs->lastModified($t->file_path) : null);
 
                 $fileObj = [
                     'name'          => $t->file_name ?: basename($t->file_path),
@@ -505,45 +511,46 @@ class DisposalApi extends Controller
             $pendingIndex = $this->getNextPendingFlowIndex($flow);
 
             return [
-                'uuid'            => $t->uuid,
-                'disposal_code'   => $t->disposal_code,
+                'uuid'              => $t->uuid,
+                'disposal_code'     => $t->disposal_code,
 
-                'asset_uuid'      => $t->asset_uuid,
-                'asset_code'      => $t->getAttribute('asset_code') ?? $t->asset?->asset_code,
+                'asset_uuid'        => $t->asset_uuid,
+                'asset_code'        => $t->getAttribute('asset_code') ?? $t->asset?->asset_code,
                 'asset_description' => $t->getAttribute('asset_description') ?? $t->asset?->description,
-                'asset_label'     => ($t->asset?->asset_code ? $t->asset->asset_code : $t->asset_uuid),
+                'asset_label'       => ($t->asset?->asset_code ? $t->asset->asset_code : $t->asset_uuid),
 
-                'kode_status'     => $t->kode_status,
-                'workflow_label'  => $workflowLabel,
+                'kode_status'       => $t->kode_status,
+                'workflow_label'    => $workflowLabel,
+                'reason'            => $t->reason,
 
-                'target_status'   => $t->target_status,
-                'target_label'    => $targetLabel,
+                'target_status'     => $t->target_status,
+                'target_label'      => $targetLabel,
 
-                'before_status'   => $t->before_status,
-                'pic_request_uid' => $t->pic_request_uid,
-                'pic_approve_uid' => $t->pic_approve_uid,
+                'before_status'     => $t->before_status,
+                'pic_request_uid'   => $t->pic_request_uid,
+                'pic_approve_uid'   => $t->pic_approve_uid,
 
-                'note'            => $t->note,
-                'file'            => $fileObj,
+                'note'              => $t->note,
+                'file'              => $fileObj,
 
-                // form/BA info
-                'form_file'       => $formFileObj,
-                'ba_file'         => $baFileObj,
-                'form_file_url'   => $t->flow_file_url ?? null,
-                'ba_file_url'     => $t->ba_file_url ?? null,
-                'form_download_url' => route('disposal.form', $t->uuid),
-                'ba_download_url'   => route('disposal.ba', $t->uuid),
+                'form_file'         => $formFileObj,
+                'ba_file'           => $baFileObj,
+                'form_file_url'     => $t->flow_file_url ?? null,
+                'ba_file_url'       => $t->ba_file_url ?? null,
 
-                // FLOW
-                'flow'              => $flow,
+                'form_download_url' => route('disposals.form.download', ['disposal' => $t->uuid]),
+                'ba_download_url'   => route('disposals.ba.download',   ['disposal' => $t->uuid]),
+
+                'flow'               => $flow,
                 'flow_pending_index' => $pendingIndex,
 
-                'created_at'      => optional($t->created_at)->timezone($tz)?->toIso8601String(),
-                'updated_at'      => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
-                'deleted_at'      => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
+                'created_at'        => optional($t->created_at)->timezone($tz)?->toIso8601String(),
+                'updated_at'        => optional($t->updated_at)->timezone($tz)?->toIso8601String(),
+                'deleted_at'        => optional($t->deleted_at)->timezone($tz)?->toIso8601String(),
             ];
         });
     }
+
 
     /**
      * Build default disposal flow (same semantics as controller):
@@ -666,5 +673,200 @@ class DisposalApi extends Controller
         if (!in_array(strtolower($mime), $allowed, true)) {
             throw new \RuntimeException('MIME not allowed: ' . $mime);
         }
+    }
+    public function downloadBa(Request $request, Disposal $disposal): StreamedResponse
+    {
+        // inline the permission check for API
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
+
+        $disposal->load([
+            'asset.location',
+            'asset.assignment.owner',
+        ]);
+
+        $asset    = $disposal->asset;
+        $location = $asset?->location;
+        $owner    = $asset?->assignment?->owner;
+
+        $assetName   = $asset?->asset_name ?? $asset?->description ?? '';
+        $assetCode   = $asset?->asset_code ?? '';
+        $formNumber  = $disposal->disposal_code ?? '';
+        $locationLbl = $location
+            ? trim(($location->kode ?? '') . ' ' . ($location->name ?? ''))
+            : '';
+
+        $keterangan  = $disposal->note ?? '';
+
+        // tanggal BA: pakai updated_at jika sudah ACC, kalau tidak pakai now()
+        $date = $disposal->updated_at
+            ? $disposal->updated_at->copy()->timezone('Asia/Jakarta')
+            : now('Asia/Jakarta');
+
+        Carbon::setLocale('id'); // so translatedFormat uses Indonesian
+
+        $hari   = $date->translatedFormat('l');        // Senin, Selasa, ...
+        $tglBT  = $date->translatedFormat('d F Y');    // 17 November 2025
+
+        $templatePath = storage_path('app/public/template/berita_acara_disposal_asset_tetap.docx');
+        $template     = new TemplateProcessor($templatePath);
+
+        // these KEYS must match the placeholders inside the DOCX (without ${})
+        $template->setValues([
+            'HARI'                        => $hari,
+            'TANGGAL_BULAN_TAHUN'         => $tglBT,
+            'TANGGAL_BULAN_TAHUN_FOOTER'  => $tglBT,
+            'NAMA_ASET'                   => $assetName,
+            'NOMOR_ASET'                  => $assetCode,
+            'NOMOR_FORM'                  => $formNumber,
+            'LOKASI'                      => $locationLbl,
+            'KETERANGAN'                  => $keterangan,
+        ]);
+
+        $fileName = 'BA Disposal - ' . ($disposal->disposal_code ?? 'DSP') . '.docx';
+
+        return response()->streamDownload(function () use ($template) {
+            $template->saveAs('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ]);
+    }
+
+    /**
+     * GET /api/v1/disposals/{disposal}/form
+     * Return Disposal Form XLSX as download.
+     */
+    public function downloadForm(Request $request, Disposal $disposal): StreamedResponse
+    {
+        // inline the permission check for API
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
+
+        $disposal->load([
+            'asset.value',
+            'asset.location',
+            'asset.assignment.owner.division',
+        ]);
+
+        $asset    = $disposal->asset;
+        $reason   = $disposal->reason ?? '';
+        $assign   = $asset?->assignment;
+        $owner    = $assign?->owner;
+        $ownerDiv = $owner?->division;
+
+        $createdAt   = $disposal->created_at?->timezone('Asia/Jakarta');
+        $companyName = config('app.company_name', 'PT LRT Jakarta');
+
+        $deptLabel = $owner?->department ?: '';
+        $divLabel  = $ownerDiv?->name ?? '';
+
+        $assetCode = $asset?->asset_code ?? '';
+        $assetName = $asset?->asset_name ?? $asset?->description ?? '';
+
+        $acqDate = null;
+        if ($asset?->value?->actual_date) {
+            $acqDate = $asset->value->actual_date instanceof Carbon
+                ? $asset->value->actual_date
+                : Carbon::parse($asset->value->actual_date);
+        }
+
+        $comCost = $asset?->value?->total ?? 0;
+
+        $ledger = DB::table('assets_depr_ledger_monthly')
+            ->selectRaw('COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
+            ->where('asset_uuid', $asset?->uuid)
+            ->first();
+
+        $comAcc = $ledger?->acc_sum ?? 0; // Commercial Accumulated Depreciation (IDR)
+        $comNbv = $ledger?->nbv_sum ?? 0; // Commercial Net Book Value (IDR)
+
+        $taxNbv = $asset?->value?->tax_nbv ?? 0;
+
+        $justification = $disposal->note ?? '';
+
+        // ========= build "done" flow steps text =========
+        $flowRaw   = $disposal->flow ?? null;
+        $flowArray = null;
+
+        if (is_string($flowRaw) && $flowRaw !== '') {
+            $decoded = json_decode($flowRaw, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flowArray = $decoded;
+            }
+        } elseif (is_array($flowRaw)) {
+            $flowArray = $flowRaw;
+        }
+
+        $doneLines = [];
+        if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
+            foreach ($flowArray['steps'] as $st) {
+                if (!empty($st['approved_at'])) {
+                    $label = $st['label'] ?? ($st['code'] ?? '');
+                    $role  = $st['role'] ?? '';
+                    $by    = $st['approved_by'] ?? '';
+                    $atRaw = $st['approved_at'];
+
+                    try {
+                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')
+                            ->timezone('Asia/Jakarta')
+                            ->format('d-m-Y H:i');
+                    } catch (\Throwable $e) {
+                        $at = $atRaw;
+                    }
+
+                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
+                    $line = trim(
+                        ($label ?: '') .
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
+                    );
+
+                    if ($line !== '') {
+                        $doneLines[] = $line;
+                    }
+                }
+            }
+        }
+
+        $flowText = implode("\n", $doneLines);
+        // ========= END flow text =========
+
+        $templatePath = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
+        $spreadsheet  = IOFactory::load($templatePath);
+        $sheet        = $spreadsheet->getSheetByName('Form Disposal Aset Tetap')
+            ?: $spreadsheet->getActiveSheet();
+
+        $sheet->setCellValue('H7',  $companyName);
+        $sheet->setCellValue('H8',  $disposal->disposal_code ?? '');
+        $sheet->setCellValue('H9',  $createdAt ? $createdAt->format('d-m-Y') : '');
+        $sheet->setCellValue('H10', $deptLabel);
+        $sheet->setCellValue('H11', $divLabel);
+
+        $sheet->setCellValue('H14', $reason);
+
+        $sheet->setCellValue('H15', $assetCode);
+        $sheet->setCellValue('H16', $assetName);
+        $sheet->setCellValue('H17', $acqDate ? $acqDate->format('d-m-Y') : '');
+
+        $sheet->setCellValue('H18', $comCost); // Commercial Acquisition Cost (IDR)
+        $sheet->setCellValue('H19', $comAcc);  // Commercial Accumulated Depreciation (IDR)
+        $sheet->setCellValue('H20', $comNbv);  // Commercial Net Book Value (IDR)
+        $sheet->setCellValue('H21', $taxNbv);  // Tax Net Book Value (IDR)
+
+        $sheet->setCellValue('H22', '');
+        $sheet->setCellValue('H23', '');
+
+        $sheet->setCellValue('H24', $justification);
+
+        $sheet->setCellValue('C26', $flowText);
+        $sheet->getStyle('C26')->getAlignment()->setWrapText(true);
+
+        $fileName = 'Form Disposal Aset Tetap - ' . ($disposal->disposal_code ?? 'DSP') . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 }
