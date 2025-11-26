@@ -567,6 +567,7 @@ class TransferApi extends Controller
                 'flow_file'         => $flowFileObj,
 
                 'form_download_url' => $formUrl,
+                'flow'              => $t->flow,
 
                 'created_at'        => optional($t->created_at)->timezone($tz)?->toIso8601String(),
                 'updated_at'        => optional($t->updated_at)->timezone($tz)?->toIso8601String(),

@@ -532,6 +532,7 @@ class DisposalApi extends Controller
 
                 'note'              => $t->note,
                 'file'              => $fileObj,
+                'flow'         => $flow,    
 
                 'form_file'         => $formFileObj,
                 'ba_file'           => $baFileObj,

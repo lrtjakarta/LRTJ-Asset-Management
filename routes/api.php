@@ -21,6 +21,7 @@ Route::prefix('v1')->group(function () {
         // MASTER DATA API
         Route::get('master-data/master-user-code', [MasterDataApi::class, 'master_user_code']);
         Route::get('master-data/master-location', [MasterDataApi::class, 'master_location']);
+        Route::get('master-data/master-sumber', [MasterDataApi::class, 'master_sumber']);
         Route::get('master-data/master-status', [MasterDataApi::class, 'master_status']);
         Route::get('master-data/master-transaction', [MasterDataApi::class, 'master_transaction']);
         Route::get('master-data/master-asset-class', [MasterDataApi::class, 'master_asset_class']);
