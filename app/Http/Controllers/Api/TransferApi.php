@@ -1271,4 +1271,89 @@ class TransferApi extends Controller
 
         return null;
     }
+    public function reject(Request $request)
+    {
+        // Same permission style as approve()
+        abort_unless($request->user()?->hasAction('MOVEMENT', 'U'), 403);
+
+        $user = $request->user();
+        $uid  = $user?->name; // or uid/username, match what you use in approve()
+        abort_if(!$uid, 401, 'No session UID.');
+
+        $root = $request->validate([
+            'items'            => ['required', 'array', 'min:1'],
+            'items.*.uuid'     => ['required', 'uuid'],
+            // if later you want reject_reason, you can add it here as optional
+            // 'items.*.reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $results = [];
+
+        foreach ($root['items'] as $idx => $payload) {
+            try {
+                $res = $this->rejectOne($payload, $uid, $user);
+            } catch (\Throwable $e) {
+                $res = [
+                    'ok'    => false,
+                    'index' => $idx,
+                    'uuid'  => $payload['uuid'] ?? null,
+                    'error' => $e->getMessage(),
+                ];
+            }
+
+            $results[] = $res;
+        }
+
+        return response()->json([
+            'ok'      => collect($results)->every(fn($r) => data_get($r, 'ok') === true),
+            'batch'   => true,
+            'results' => $results,
+        ]);
+    }
+    private function rejectOne(array $data, string $uid, $user): array
+    {
+        return DB::transaction(function () use ($data, $uid, $user) {
+            $tf = Transfer::where('uuid', $data['uuid'] ?? null)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($tf->kode_status !== 'APR') {
+                throw new \RuntimeException('Only pending transfers can be rejected.');
+            }
+
+            $type = strtolower((string) $tf->type);
+
+            if (in_array($type, ['owner', 'user', 'maintenance', 'location'], true)) {
+                // same behaviour as your original reject()
+                $flow = $tf->flow ?? $this->buildFlowTemplate($tf->type, $tf->pic_request_uid);
+
+                $now = now()->toDateTimeString();
+
+                if (is_array($flow) && isset($flow['steps']) && is_array($flow['steps'])) {
+                    $nextIdx = $this->getNextPendingFlowIndex($flow);
+                    if ($nextIdx !== null) {
+                        $step = &$flow['steps'][$nextIdx];
+                        $step['rejected_by'] = $uid;
+                        $step['rejected_at'] = $now;
+                    }
+                }
+
+                $flow['rejected_by'] = $uid;
+                $flow['rejected_at'] = $now;
+
+                $tf->flow = $flow;
+            }
+
+            $tf->kode_status     = 'REJ';
+            $tf->pic_approve_uid = $uid;
+            $tf->save();
+
+            return [
+                'ok'          => true,
+                'uuid'        => $tf->uuid,
+                'kode_status' => $tf->kode_status,
+                'flow'        => $tf->flow,
+            ];
+        });
+    }
 }

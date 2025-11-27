@@ -35,6 +35,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/transfers', [TransferApi::class, 'store']);
         Route::get('/transfers/download-form', [TransferApi::class, 'downloadForms'])->name('transfers.downloadForms');
         Route::post('/transfers/approve', [TransferApi::class, 'approve'])->name('transfers.approve');
+        Route::post('/transfers/reject', [TransferApi::class, 'reject'])->name('transfers.reject');
         
         // DISPOSAL
         Route::get('/disposals', [DisposalApi::class, 'index']);
