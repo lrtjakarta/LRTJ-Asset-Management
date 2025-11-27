@@ -243,13 +243,6 @@ class TransferApi extends Controller
 
     public function store(Request $request)
     {
-        // --- AUTHORIZATION (same idea as web TransferController) ---
-        $user = $request->user(); // works for Sanctum bearer AND web session
-        abort_unless(
-            $user && $user->hasAction('MOVEMENT', 'C'),
-            403,
-            'You are not allowed to create movement.'
-        );
 
         $isBatch = is_array($request->input('items'));
 
@@ -262,6 +255,7 @@ class TransferApi extends Controller
                 'items.*.after.value'           => ['required', 'string'],
                 'items.*.note'                  => ['nullable', 'string', 'max:1000'],
                 'items.*.created_at'            => ['nullable', 'date'],
+                'items.*.name'                  => ['nullable', 'string', 'max:200'],
 
                 'items.*.file_b64'              => ['nullable', 'array'],
                 'items.*.file_b64.name'         => ['required_with:items.*.file_b64', 'string', 'max:255'],
@@ -276,6 +270,7 @@ class TransferApi extends Controller
                 'after.value'       => ['required', 'string'],
                 'note'              => ['nullable', 'string', 'max:1000'],
                 'created_at'        => ['nullable', 'date'],
+                'name'   => ['nullable', 'string', 'max:200'],
 
                 'file'              => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
                 'file_b64'          => ['nullable', 'array'],
@@ -285,22 +280,13 @@ class TransferApi extends Controller
             ]);
         }
 
-        // --- CURRENT USER NAME (PIC) – align with web TransferController ---
-        $currentUid = (string) (
-            $user->name
-            ?? $user->username
-            ?? data_get($request->session()->get('ldap_user'), 'name')
-            ?? data_get($request->session()->get('ldap_user'), 'username', '')
-        );
-
-        abort_if($currentUid === '', 401, 'No session UID.');
 
         $items   = $isBatch ? $root['items'] : [$root];
         $results = [];
 
         foreach ($items as $idx => $payload) {
             try {
-                $res = $this->createTransferFromPayload($request, $payload, $currentUid);
+                $res = $this->createTransferFromPayload($request, $payload);
             } catch (\Throwable $e) {
                 $res = ['ok' => false, 'index' => $idx, 'error' => $e->getMessage()];
             }
@@ -324,7 +310,7 @@ class TransferApi extends Controller
         ]);
     }
 
-    private function createTransferFromPayload(Request $rootReq, array $data, string $currentUid): array
+    private function createTransferFromPayload(Request $rootReq, array $data): array
     {
         if (!empty($data['uuid'])) {
             if ($existing = Transfer::where('uuid', $data['uuid'])->first()) {
@@ -362,7 +348,6 @@ class TransferApi extends Controller
             $afterCode,
             $beforeLabel,
             $afterLabel,
-            $currentUid,
             $rootReq
         ) {
             $code = $this->generateTransferCode($asset->asset_code);
@@ -380,10 +365,11 @@ class TransferApi extends Controller
                     $data['file_b64']['data'],
                     $data['file_b64']['name'],
                     $data['file_b64']['mime'],
-                    $code
+                    $code,
+                    $asset->uuid
                 );
             } elseif ($rootReq->file('file')) {
-                [$path, $orig, $mime, $size] = $this->saveUpload($rootReq->file('file'), $code);
+                [$path, $orig, $mime, $size] = $this->saveUpload($rootReq->file('file'), $code, $asset->uuid);
             }
 
             $payload = [
@@ -400,7 +386,7 @@ class TransferApi extends Controller
 
                 'kode_status'      => $initialWorkflow,
                 'note'             => $data['note'] ?? null,
-                'pic_request_uid'  => $currentUid,
+                'pic_request_uid'  => $data['name'] ?? null,
                 'pic_approve_uid'  => null,
 
                 'file_path'        => $path,
@@ -414,7 +400,7 @@ class TransferApi extends Controller
             }
 
             if (in_array($data['type'], ['owner', 'user', 'maintenance', 'location'], true)) {
-                $payload['flow'] = $this->buildFlowTemplate($data['type'], $currentUid);
+                $payload['flow'] = $this->buildFlowTemplate($data['type'], $data['name'] ?? null);
             }
 
             return Transfer::create($payload);
@@ -527,7 +513,7 @@ class TransferApi extends Controller
                 $mtime  = $t->flow_file_updated_at
                     ? strtotime($t->flow_file_updated_at)
                     : ($exists ? $fs->lastModified($t->flow_file_path) : null);
-                    
+
                 $downloadUrl = route('files.download.kind', [
                     'kind' => 'transfer',
                     'uuid' => $t->uuid,
@@ -656,14 +642,14 @@ class TransferApi extends Controller
         };
     }
 
-    private function saveUpload(?UploadedFile $file, string $code): array
+    private function saveUpload(?UploadedFile $file, string $code, string $assetUuid): array
     {
         if (!$file) return [null, null, null, null];
 
         $disk   = 'public';
-        $folder = 'transfers/' . date('Y/m');
-        $name   = $code . '__' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
+        $folder = 'transfers/' . $assetUuid;
         $ext    = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
+        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
 
         $storedPath = $file->storeAs($folder, $name . '.' . $ext, $disk);
 
@@ -675,11 +661,11 @@ class TransferApi extends Controller
         ];
     }
 
-    private function saveBase64File(string $b64, string $originalName, string $mime, string $code): array
+    private function saveBase64File(string $b64, string $originalName, string $mime, string $code, string $assetUuid): array
     {
         $disk   = 'public';
-        $folder = 'transfers/' . date('Y/m');
-        $name   = $code . '__' . Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+        $folder = 'transfers/' . $assetUuid;
+        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6);
 
         if (str_starts_with($b64, 'data:')) {
             $b64 = substr($b64, strpos($b64, ',') + 1);
@@ -743,8 +729,22 @@ class TransferApi extends Controller
 
     private function generateTransferCode(string $assetCode): string
     {
-        $prefix = 'TRF-' . preg_replace('/[^A-Za-z0-9]/', '', $assetCode);
-        return sprintf('%s-%s-%s', $prefix, now()->format('Ymd'), strtoupper(Str::random(6)));
+        $now    = Carbon::now();
+        $prefix = 'MOV' . $now->format('ym');
+
+        $last = Transfer::where('transfer_code', 'like', $prefix . '%')
+            ->orderBy('transfer_code', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastSeq = (int) substr($last->transfer_code, -4);
+            $seq     = $lastSeq + 1;
+        } else {
+            $seq = 1;
+        }
+
+        $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+        return $code;
     }
     public function downloadForms(Request $request, Transfer $transfer): StreamedResponse
     {
@@ -911,5 +911,364 @@ class TransferApi extends Controller
         }, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
+    }
+
+    private function resolveLabel(?string $type, ?string $code): string
+    {
+        $type = is_string($type) ? trim($type) : '';
+        $code = is_string($code) ? trim($code) : '';
+
+        if ($code === '') {
+            return '(empty)';
+        }
+        if ($type === '') {
+            return $code;
+        }
+
+        static $cache = [
+            'usercode' => [],
+            'status'   => [],
+            'location' => [],
+        ];
+        $k  = $code;
+        $ck = mb_strtoupper($code);
+
+        switch ($type) {
+            case 'owner':
+            case 'user':
+            case 'maintenance':
+                if (!isset($cache['usercode'][$ck])) {
+                    $row = MasterUserCode::select('kode', 'department')
+                        ->where('kode', $code)
+                        ->first();
+                    $cache['usercode'][$ck] = $row ? "{$k} - {$row->department}" : $k;
+                }
+                return $cache['usercode'][$ck];
+
+            case 'status':
+                if (!isset($cache['status'][$ck])) {
+                    $row = MasterStatus::select('kode', 'name', 'type')
+                        ->where('kode', $code)
+                        ->where(function ($q) {
+                            $q->where('type', 'Asset')->orWhereNull('type');
+                        })
+                        ->first();
+                    $cache['status'][$ck] = $row ? "{$k} - {$row->name}" : $k;
+                }
+                return $cache['status'][$ck];
+
+            case 'location':
+                if (!isset($cache['location'][$ck])) {
+                    $row = MasterLocation::select('kode', 'name')
+                        ->where('kode', $code)
+                        ->first();
+                    $cache['location'][$ck] = $row ? "{$k} - {$row->name}" : $k;
+                }
+                return $cache['location'][$ck];
+
+            default:
+                return $k;
+        }
+    }
+    public function approve(Request $request)
+    {
+        $user = $request->user();
+        $uid  = $user?->name; // adjust if you use another field as UID
+        abort_if(!$uid, 401, 'No session UID.');
+
+        // Batch only (like store)
+        $root = $request->validate([
+            'items'                     => ['required', 'array', 'min:1'],
+            'items.*.uuid'              => ['required', 'uuid'],
+
+            'items.*.signed_form_b64'      => ['nullable', 'array'],
+            'items.*.signed_form_b64.name' => ['required_with:items.*.signed_form_b64', 'string', 'max:255'],
+            'items.*.signed_form_b64.mime' => ['required_with:items.*.signed_form_b64', 'string', 'max:100'],
+            'items.*.signed_form_b64.data' => ['required_with:items.*.signed_form_b64', 'string'],
+        ]);
+
+        $results = [];
+
+        foreach ($root['items'] as $idx => $payload) {
+            try {
+                $res = $this->approveOne($request, $payload, $uid, $user);
+            } catch (\Throwable $e) {
+                $res = [
+                    'ok'    => false,
+                    'index' => $idx,
+                    'uuid'  => $payload['uuid'] ?? null,
+                    'error' => $e->getMessage(),
+                ];
+            }
+            $results[] = $res;
+        }
+
+        return response()->json([
+            'ok'      => collect($results)->every(fn($r) => data_get($r, 'ok') === true),
+            'batch'   => true,
+            'results' => $results,
+        ]);
+    }
+    private function approveOne(Request $rootReq, array $data, string $uid, $user): array
+    {
+        $now = now()->toDateTimeString();
+
+        return DB::transaction(function () use ($data, $uid, $user, $now) {
+            $tf = Transfer::where('uuid', $data['uuid'] ?? null)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($tf->kode_status !== 'APR') {
+                throw new \RuntimeException('Only pending transfers can be approved.');
+            }
+
+            $type        = (string) $tf->type;
+            $hasFlow     = !empty($tf->flow);
+            $isFlowType  = in_array($type, ['owner', 'user', 'maintenance', 'location'], true);
+
+            // -------- 1) SIMPLE APPROVAL (status / non-flow) --------
+            if (!$isFlowType || !$hasFlow) {
+                $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
+                $val   = (string) data_get($tf->after, 'value');
+
+                switch ($type) {
+                    case 'owner':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_owner' => $val]
+                        );
+                        break;
+
+                    case 'user':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_user' => $val]
+                        );
+                        break;
+
+                    case 'maintenance':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_maintenance' => $val]
+                        );
+                        break;
+
+                    case 'status':
+                        $asset->kode_status = $val;
+                        $asset->save();
+                        break;
+
+                    case 'location':
+                        $asset->kode_location = $val;
+                        $asset->save();
+                        break;
+                }
+
+                $tf->kode_status     = 'ACC';
+                $tf->pic_approve_uid = $uid;
+                $tf->save();
+
+                return [
+                    'ok'          => true,
+                    'uuid'        => $tf->uuid,
+                    'completed'   => true,
+                    'kode_status' => $tf->kode_status,
+                    'flow'        => $tf->flow,
+                ];
+            }
+
+            // -------- 2) FLOW-BASED APPROVAL (owner/user/maintenance/location) --------
+
+            // Ensure flow exists
+            $flow = $tf->flow ?? $this->buildFlowTemplate($type, $tf->pic_request_uid);
+
+            $nextIdx = $this->getNextPendingFlowIndex($flow);
+            if ($nextIdx === null) {
+                throw new \RuntimeException('All steps already approved.');
+            }
+
+            $step = &$flow['steps'][$nextIdx];
+
+            $currentUser = $user;
+            $userRoles   = $currentUser->roles()->pluck('kode')->toArray();
+            $isSysAdmin  = in_array('SYSADMIN', $userRoles);
+
+            // ----- DEPT_HEAD validation (exclude SYSADMIN and USER) -----
+            if (in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
+                $userDept = $currentUser->kode_department;
+
+                if (!$userDept) {
+                    throw new \RuntimeException('Your department is not set. Please contact administrator.');
+                }
+
+                $asset = Assets::with(['assignment.owner', 'assignment.user', 'assignment.maintenance'])
+                    ->where('uuid', $tf->asset_uuid)
+                    ->firstOrFail();
+
+                $stepCode = $step['code'] ?? '';
+
+                if ($type === 'location') {
+                    if ($stepCode === 'dept_head') {
+                        $ownerCode = $asset->assignment?->asset_owner;
+                        if ($ownerCode) {
+                            $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                            if ($ownerUc && $ownerUc->kode !== $userDept) {
+                                throw new \RuntimeException('This user department not matching. Expected: ' . $ownerUc->kode);
+                            }
+                        }
+                    }
+                } elseif (in_array($type, ['owner', 'user', 'maintenance'], true)) {
+                    $beforeVal = data_get($tf->before, 'value');
+                    $afterVal  = data_get($tf->after, 'value');
+
+                    if ($stepCode === 'new_dept_head') {
+                        if ($afterVal) {
+                            $afterUc = MasterUserCode::where('kode', $afterVal)->first();
+                            if ($afterUc && $afterUc->kode !== $userDept) {
+                                throw new \RuntimeException('This user department not matching. Expected: ' . $afterUc->kode);
+                            }
+                        }
+                    } elseif ($stepCode === 'old_dept_head') {
+                        if ($beforeVal) {
+                            $beforeUc = MasterUserCode::where('kode', $beforeVal)->first();
+                            if ($beforeUc && $beforeUc->kode !== $userDept) {
+                                throw new \RuntimeException('This user department not matching. Expected: ' . $beforeUc->kode);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ----- AM_ADMIN validation for last step (exclude SYSADMIN) -----
+            $stepCode = $step['code'] ?? '';
+            if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+                $userDept = $currentUser->kode_department;
+
+                if (!$userDept) {
+                    throw new \RuntimeException('Your department is not set. Please contact administrator.');
+                }
+
+                if (!isset($asset)) {
+                    $asset = Assets::with(['assignment.owner', 'assignment.user', 'assignment.maintenance'])
+                        ->where('uuid', $tf->asset_uuid)
+                        ->firstOrFail();
+                }
+
+                if ($type === 'location') {
+                    $ownerCode = $asset->assignment?->asset_owner;
+                    if ($ownerCode) {
+                        $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                        if ($ownerUc && $ownerUc->kode !== $userDept) {
+                            throw new \RuntimeException('This user department not matching. Expected: ' . $ownerUc->kode);
+                        }
+                    }
+                } elseif (in_array($type, ['owner', 'user', 'maintenance'], true)) {
+                    $afterVal = data_get($tf->after, 'value');
+                    if ($afterVal) {
+                        $afterUc = MasterUserCode::where('kode', $afterVal)->first();
+                        if ($afterUc && $afterUc->kode !== $userDept) {
+                            throw new \RuntimeException('This user department not matching. Expected: ' . $afterUc->kode);
+                        }
+                    }
+                }
+            }
+
+            // Mark this step approved
+            $step['approved_by'] = $uid;
+            $step['approved_at'] = $now;
+
+            $isLastStep = ($nextIdx === count($flow['steps']) - 1);
+
+            if ($isLastStep) {
+                $asset = Assets::where('uuid', $tf->asset_uuid)->lockForUpdate()->firstOrFail();
+                $val   = (string) data_get($tf->after, 'value');
+
+                switch ($type) {
+                    case 'owner':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_owner' => $val]
+                        );
+                        break;
+
+                    case 'user':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_user' => $val]
+                        );
+                        break;
+
+                    case 'maintenance':
+                        $asset->assignment()->updateOrCreate(
+                            ['asset_uuid' => $asset->uuid],
+                            ['asset_maintenance' => $val]
+                        );
+                        break;
+
+                    case 'status':
+                        // should not normally be in flow; keep safe
+                        $asset->kode_status = $val;
+                        $asset->save();
+                        break;
+
+                    case 'location':
+                        $asset->kode_location = $val;
+                        $asset->save();
+                        break;
+                }
+
+                $tf->kode_status     = 'ACC';
+                $tf->pic_approve_uid = $uid;
+
+                // attach signed_form_b64 on last step for owner/user/maintenance
+                if (in_array($type, ['owner', 'user', 'maintenance'], true) && !empty($data['signed_form_b64'])) {
+                    $signed = $data['signed_form_b64'];
+
+                    $approxSize = $this->approxBase64Size($signed['data']);
+                    if ($approxSize > 20 * 1024 * 1024) {
+                        throw new \RuntimeException('Base64 signed form too large (max 20MB).');
+                    }
+                    $this->assertAllowedMime($signed['mime']);
+
+                    [$path, $orig, $mime, $size] = $this->saveBase64File(
+                        $signed['data'],
+                        $signed['name'],
+                        $signed['mime'],
+                        $tf->transfer_code . '-FORM',
+                        $asset->uuid
+                    );
+
+                    $tf->flow_file_path = $path;
+                    $tf->flow_file_name = $orig;
+                    $tf->flow_file_mime = $mime;
+                    $tf->flow_file_size = $size;
+                }
+            }
+
+            $tf->flow = $flow;
+            $tf->save();
+
+            return [
+                'ok'          => true,
+                'uuid'        => $tf->uuid,
+                'completed'   => $isLastStep,
+                'kode_status' => $tf->kode_status,
+                'flow'        => $tf->flow,
+            ];
+        });
+    }
+    protected function getNextPendingFlowIndex($flow): ?int
+    {
+        if (!$flow || !is_array($flow) || empty($flow['steps']) || !is_array($flow['steps'])) {
+            return null;
+        }
+
+        foreach ($flow['steps'] as $i => $step) {
+            if (empty($step['approved_at'])) {
+                return $i;
+            }
+        }
+
+        return null;
     }
 }
