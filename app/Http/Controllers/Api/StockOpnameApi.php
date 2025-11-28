@@ -935,7 +935,7 @@ class StockOpnameApi extends Controller
             case 'user':
             case 'maintenance':
                 $uc = MasterUserCode::whereRaw('upper(kode)=?', [mb_strtoupper($code)])->first();
-                return $uc ? trim($uc->kode . ' - ' . $uc->name) : $code;
+                return $uc ? trim($uc->kode . ' - ' . $uc->department) : $code;
             case 'status':
                 $s = MasterStatus::whereRaw('upper(kode)=?', [mb_strtoupper($code)])->first();
                 return $s ? trim($s->kode . ' - ' . $s->name) : $code;
