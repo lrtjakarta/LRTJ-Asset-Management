@@ -612,9 +612,8 @@ class DisposalApi extends Controller
                 'ba_file'           => $baFileObj,
                 'form_file_url'     => $t->flow_file_url ?? null,
                 'ba_file_url'       => $t->ba_file_url ?? null,
-
-                'form_download_url' => route('disposals.form.download', ['disposal' => $t->uuid]),
-                'ba_download_url'   => route('disposals.ba.download',   ['disposal' => $t->uuid]),
+                'form_download_url' => route('disposals.form.download', ['uuid' => $t->uuid]),
+                'ba_download_url'   => route('disposals.ba.download',   ['uuid' => $t->uuid]),
 
                 'flow'               => $flow,
                 'flow_pending_index' => $pendingIndex,
@@ -863,15 +862,19 @@ class DisposalApi extends Controller
             throw new \RuntimeException('MIME not allowed: ' . $mime);
         }
     }
-    public function downloadBa(Request $request, Disposal $disposal): StreamedResponse
+    public function downloadBa(Request $request): StreamedResponse
     {
         // inline the permission check for API
         abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
 
-        $disposal->load([
+        $v = $request->validate([
+            'uuid' => ['required', 'uuid', 'exists:assets_disposals,uuid'],
+        ]);
+
+        $disposal = Disposal::with([
             'asset.location',
             'asset.assignment.owner',
-        ]);
+        ])->where('uuid', $v['uuid'])->firstOrFail();
 
         $asset    = $disposal->asset;
         $location = $asset?->location;
@@ -919,21 +922,24 @@ class DisposalApi extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ]);
     }
-
     /**
-     * GET /api/v1/disposals/{disposal}/form
+     * GET /api/v1/disposals/form?uuid=...
      * Return Disposal Form XLSX as download.
      */
-    public function downloadForm(Request $request, Disposal $disposal): StreamedResponse
+    public function downloadForm(Request $request): StreamedResponse
     {
         // inline the permission check for API
         abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
 
-        $disposal->load([
+        $v = $request->validate([
+            'uuid' => ['required', 'uuid', 'exists:assets_disposals,uuid'],
+        ]);
+
+        $disposal = Disposal::with([
             'asset.value',
             'asset.location',
             'asset.assignment.owner.division',
-        ]);
+        ])->where('uuid', $v['uuid'])->firstOrFail();
 
         $asset    = $disposal->asset;
         $reason   = $disposal->reason ?? '';
@@ -1001,7 +1007,6 @@ class DisposalApi extends Controller
                         $at = $atRaw;
                     }
 
-                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
                     $line = trim(
                         ($label ?: '') .
                             ($role ? ' (' . $role . ')' : '') .
@@ -1276,7 +1281,6 @@ class DisposalApi extends Controller
         $v = $request->validate([
             'items'              => ['required', 'array', 'min:1'],
             'items.*.uuid'       => ['required', 'uuid', 'exists:assets_disposals,uuid'],
-            // if later you want reason, you can add items.*.reason here
         ]);
 
         $results = [];
