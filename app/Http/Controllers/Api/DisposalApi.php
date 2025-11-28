@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Assets;
 use App\Models\Disposal;
 use App\Models\MasterStatus;
+use App\Models\MasterUserCode;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
