@@ -264,9 +264,15 @@ class DisposalApi extends Controller
 
         return response()->json(['data' => $data]);
     }
-
     public function store(Request $request)
     {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'C'), 403);
+
+        $user = $request->user();
+        $uid  = $user?->name;
+        abort_if(!$uid, 401, 'No session UID.');
+
+        // Offline batch? items[] = [...]
         $isBatch = is_array($request->input('items'));
 
         if ($isBatch) {
@@ -275,30 +281,47 @@ class DisposalApi extends Controller
                 'items.*.uuid'                  => ['nullable', 'uuid'],
                 'items.*.asset_uuid'            => ['required', 'uuid', 'exists:assets,uuid'],
                 'items.*.note'                  => ['nullable', 'string', 'max:1000'],
-                'items.*.target_status'         => ['nullable', 'string', 'max:50'],
+                'items.*.target_status'         => ['nullable', 'string'],
+                'items.*.reason'                => [
+                    'required',
+                    Rule::in(['Sale', 'Waste', 'Donate', 'Held']),
+                ],
                 'items.*.created_at'            => ['nullable', 'date'],
+
+                // offline attachment (base64)
                 'items.*.file_b64'              => ['nullable', 'array'],
                 'items.*.file_b64.name'         => ['required_with:items.*.file_b64', 'string', 'max:255'],
                 'items.*.file_b64.mime'         => ['required_with:items.*.file_b64', 'string', 'max:100'],
                 'items.*.file_b64.data'         => ['required_with:items.*.file_b64', 'string'],
             ]);
         } else {
+            // Single payload (web or direct API)
             $root = $request->validate([
                 'uuid'              => ['nullable', 'uuid'],
                 'asset_uuid'        => ['required', 'uuid', 'exists:assets,uuid'],
                 'note'              => ['nullable', 'string', 'max:1000'],
-                'target_status'     => ['nullable', 'string', 'max:50'],
+                'target_status'     => ['nullable', 'string'],
+                'reason'            => [
+                    'required',
+                    Rule::in(['Sale', 'Waste', 'Donate', 'Held']),
+                ],
                 'created_at'        => ['nullable', 'date'],
-                'file'              => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
+
+                // standard file upload (web / multipart)
+                'file'              => [
+                    'nullable',
+                    'file',
+                    'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt',
+                    'max:20480',
+                ],
+
+                // offline attachment (base64) – for mobile
                 'file_b64'          => ['nullable', 'array'],
                 'file_b64.name'     => ['required_with:file_b64', 'string', 'max:255'],
                 'file_b64.mime'     => ['required_with:file_b64', 'string', 'max:100'],
                 'file_b64.data'     => ['required_with:file_b64', 'string'],
             ]);
         }
-
-        $uid = (string) data_get($request->session()->get('ldap_user'), 'uid', '');
-        abort_if($uid === '', 401, 'No session UID.');
 
         $items   = $isBatch ? $root['items'] : [$root];
         $results = [];
@@ -307,12 +330,17 @@ class DisposalApi extends Controller
             try {
                 $res = $this->createDisposalFromPayload($request, $payload, $uid);
             } catch (\Throwable $e) {
-                $res = ['ok' => false, 'index' => $idx, 'error' => $e->getMessage()];
+                $res = [
+                    'ok'    => false,
+                    'index' => $idx,
+                    'error' => $e->getMessage(),
+                ];
             }
 
             if ($isBatch) {
                 $results[] = $res;
             } else {
+                // Single mode: return HTTP 201 / 200 / 422
                 return response()->json(
                     $res,
                     ($res['ok'] ?? false)
@@ -322,15 +350,16 @@ class DisposalApi extends Controller
             }
         }
 
+        // Batch mode: wrap all results
         return response()->json([
             'ok'      => collect($results)->every(fn($r) => data_get($r, 'ok') === true),
             'batch'   => true,
             'results' => $results,
         ]);
     }
-
     private function createDisposalFromPayload(Request $rootReq, array $data, string $uid): array
     {
+        // Idempotent by UUID (offline replay)
         if (!empty($data['uuid'])) {
             if ($existing = Disposal::where('uuid', $data['uuid'])->first()) {
                 return [
@@ -343,18 +372,40 @@ class DisposalApi extends Controller
             }
         }
 
-        $asset = Assets::select('uuid', 'asset_code', 'kode_status')->findOrFail($data['asset_uuid']);
+        $asset = Assets::select('uuid', 'asset_code', 'kode_status')
+            ->findOrFail($data['asset_uuid']);
 
         $target = $data['target_status'] ?? 'DIS';
+
         $ok = MasterStatus::where('kode', $target)
-            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+            ->where(function ($q) {
+                $q->where('type', 'Asset')->orWhereNull('type');
+            })
             ->exists();
+
         abort_unless($ok, 422, 'Target disposal status not valid.');
 
-        $seq  = Disposal::where('asset_uuid', $asset->uuid)->count() + 1;
-        $code = 'DSP-' . str_replace(['-', ' '], '', $asset->asset_code) . '-' . $seq;
+        $now    = Carbon::now();
+        $prefix = 'DSP' . $now->format('ym');
+
+        $last = Disposal::where('disposal_code', 'like', $prefix . '%')
+            ->orderBy('disposal_code', 'desc')
+            ->first();
+
+        if ($last) {
+            $lastSeq = (int) substr($last->disposal_code, -4);
+            $seq     = $lastSeq + 1;
+        } else {
+            $seq = 1;
+        }
+
+        $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
+        $uuid = $data['uuid'] ?? (string) Str::uuid();
 
         $path = $orig = $mime = $size = null;
+
+        // 1) Offline base64 file from mobile (takes priority)
         if (!empty($data['file_b64'])) {
             $approx = $this->approxBase64Size($data['file_b64']['data']);
             if ($approx > 20 * 1024 * 1024) {
@@ -368,39 +419,47 @@ class DisposalApi extends Controller
                 $data['file_b64']['mime'],
                 $code
             );
-        } elseif ($rootReq->file('file')) {
-            [$path, $orig, $mime, $size] = $this->saveUpload($rootReq->file('file'), $code);
+        }
+        // 2) Normal uploaded file (web / multipart)
+        elseif ($rootReq->file('file')) {
+            [$path, $orig, $mime, $size] = $this->saveUpload(
+                $rootReq->file('file'),
+                $asset,
+                $code,
+                null
+            );
         }
 
-        $row = DB::transaction(function () use ($data, $asset, $target, $code, $uid, $path, $orig, $mime, $size) {
-            $payload = [
-                'uuid'            => $data['uuid'] ?? (string) Str::uuid(),
-                'asset_uuid'      => $asset->uuid,
-                'disposal_code'   => $code,
-                'target_status'   => $target,
-                'kode_status'     => 'APR',
-                'note'            => $data['note'] ?? null,
+        $payload = [
+            'uuid'            => $uuid,
+            'asset_uuid'      => $asset->uuid,
+            'disposal_code'   => $code,
+            'target_status'   => $target,
+            'kode_status'     => 'APR',
+            'note'            => $data['note'] ?? null,
 
-                'file_path'       => $path,
-                'file_name'       => $orig,
-                'file_mime'       => $mime,
-                'file_size'       => $size,
+            'file_path'       => $path,
+            'file_name'       => $orig,
+            'file_mime'       => $mime,
+            'file_size'       => $size,
 
-                'pic_request_uid' => $uid,
-                'before_status'   => $asset->kode_status,
+            'pic_request_uid' => $uid,
+            'before_status'   => $asset->kode_status,
+            'reason'          => $data['reason'], // required in validation
+            'flow'            => $this->buildFlowTemplate($uid),
+        ];
 
-                // NEW: initial flow (same idea as DisposalController)
-                'flow'            => $this->buildFlowTemplate($uid),
-            ];
+        if (!empty($data['created_at'])) {
+            $payload['created_at'] = $data['created_at'];
+        }
 
-            if (!empty($data['created_at'])) {
-                $payload['created_at'] = $data['created_at'];
-            }
+        $row = Disposal::create($payload);
 
-            return Disposal::create($payload);
-        });
-
-        return ['ok' => true, 'id' => $row->uuid, 'code' => $row->disposal_code];
+        return [
+            'ok'   => true,
+            'id'   => $row->uuid,
+            'code' => $row->disposal_code,
+        ];
     }
 
     /**
@@ -479,11 +538,18 @@ class DisposalApi extends Controller
                 $size   = $t->flow_file_size ?? ($exists ? $fs->size($t->flow_file_path) : null);
                 $mtime  = $exists ? $fs->lastModified($t->flow_file_path) : null;
 
+                $downloadUrl = route('files.download.kind', [
+                    'kind' => 'disposal',
+                    'uuid' => $t->uuid,
+                    'slot' => 'form',
+                ]);
+
                 $formFileObj = [
                     'name'          => $t->flow_file_name ?: basename($t->flow_file_path),
                     'mime'          => $t->flow_file_mime,
                     'size'          => $size,
                     'last_modified' => $mtime ? gmdate('c', $mtime) : null,
+                    'download_url'  => $downloadUrl,
                     'file_url'      => $exists ? url('storage/' . ltrim($t->flow_file_path, '/')) : null,
                 ];
             }
@@ -497,11 +563,18 @@ class DisposalApi extends Controller
                 $size   = $t->ba_file_size ?? ($exists ? $fs->size($t->ba_file_path) : null);
                 $mtime  = $exists ? $fs->lastModified($t->ba_file_path) : null;
 
+                $downloadUrl = route('files.download.kind', [
+                    'kind' => 'disposal',
+                    'uuid' => $t->uuid,
+                    'slot' => 'ba',
+                ]);
+
                 $baFileObj = [
                     'name'          => $t->ba_file_name ?: basename($t->ba_file_path),
                     'mime'          => $t->ba_file_mime,
                     'size'          => $size,
                     'last_modified' => $mtime ? gmdate('c', $mtime) : null,
+                    'download_url'  => $downloadUrl,
                     'file_url'      => $exists ? url('storage/' . ltrim($t->ba_file_path, '/')) : null,
                 ];
             }
@@ -532,7 +605,7 @@ class DisposalApi extends Controller
 
                 'note'              => $t->note,
                 'file'              => $fileObj,
-                'flow'         => $flow,    
+                'flow'              => $flow,
 
                 'form_file'         => $formFileObj,
                 'ba_file'           => $baFileObj,
@@ -551,14 +624,6 @@ class DisposalApi extends Controller
             ];
         });
     }
-
-
-    /**
-     * Build default disposal flow (same semantics as controller):
-     * 1. Create (User Department) – auto-approved by creator
-     * 2. Dept.Head / Section
-     * 3. Asset Management (BA)
-     */
     protected function buildFlowTemplate(?string $creatorName = null): array
     {
         $now = now()->toDateTimeString();
@@ -569,7 +634,7 @@ class DisposalApi extends Controller
                 [
                     'code'        => 'create',
                     'label'       => 'Create Disposal Request',
-                    'role'        => 'User Department',
+                    'role'        => 'User Departemen',
                     'approved_by' => $creatorName,
                     'approved_at' => $creatorName ? $now : null,
                 ],
@@ -581,8 +646,22 @@ class DisposalApi extends Controller
                     'approved_at' => null,
                 ],
                 [
+                    'code'        => 'am_head',
+                    'label'       => 'Approval Asset Management Head',
+                    'role'        => 'Asset Management Head',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
+                    'code'        => 'akp_head',
+                    'label'       => 'Approval Accounting',
+                    'role'        => 'Dept.Head AKP',
+                    'approved_by' => null,
+                    'approved_at' => null,
+                ],
+                [
                     'code'        => 'asset_mgt',
-                    'label'       => 'Execution & BA Disposal (Asset Management)',
+                    'label'       => 'Pelaksanaan & BA Disposal (Asset Management)',
                     'role'        => 'Asset Management',
                     'approved_by' => null,
                     'approved_at' => null,
@@ -591,25 +670,133 @@ class DisposalApi extends Controller
         ];
     }
 
-    private function saveUpload(?UploadedFile $file, string $code): array
+
+    private function saveUpload(?UploadedFile $file, Assets $asset, string $code, ?Disposal $existing = null): array
     {
         if (!$file) return [null, null, null, null];
 
-        $disk   = 'public';
-        $folder = 'disposals/' . date('Y/m');
-        $name   = $code . '__' . Str::slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
-        $ext    = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
+        $disk = 'public';
+        $dir  = 'disposals/' . $asset->uuid;
+        $ext  = $file->getClientOriginalExtension();
+        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
 
-        $storedPath = $file->storeAs($folder, $name . '.' . $ext, $disk);
+        $path = $file->storeAs($dir, $name, $disk);
+
+        if ($existing && $existing->file_path) {
+            Storage::disk($disk)->delete($existing->file_path);
+        }
 
         return [
-            $storedPath,
+            $path,
             $file->getClientOriginalName(),
             $file->getClientMimeType(),
             $file->getSize(),
         ];
     }
 
+    private function saveBaBase64(array $file, Disposal $d, string $code): array
+    {
+        $mime = $file['mime'] ?? '';
+        $data = $file['data'] ?? '';
+        $name = $file['name'] ?? 'ba';
+
+        $this->assertAllowedMime($mime);
+
+        $approx = $this->approxBase64Size($data);
+        if ($approx > 20 * 1024 * 1024) {
+            throw new \RuntimeException('BA base64 file too large (max 20MB).');
+        }
+
+        if (str_starts_with($data, 'data:')) {
+            $data = substr($data, strpos($data, ',') + 1);
+        }
+
+        $binary = base64_decode($data, true);
+        if ($binary === false) {
+            throw new \RuntimeException('Invalid base64 BA file data.');
+        }
+
+        $disk = 'public';
+        $dir  = 'disposals_ba/' . $d->asset_uuid;
+
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION) ?: match (strtolower($mime)) {
+            'application/pdf' => 'pdf',
+            'image/png'       => 'png',
+            'image/jpeg'      => 'jpg',
+            'image/webp'      => 'webp',
+            'image/gif'       => 'gif',
+            'text/plain'      => 'txt',
+            'text/csv'        => 'csv',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            default          => 'bin',
+        });
+
+        $filename  = $code . '-ba-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+        $storedPath = $dir . '/' . $filename;
+
+        Storage::disk($disk)->put($storedPath, $binary);
+
+        if ($d->ba_file_path) {
+            Storage::disk($disk)->delete($d->ba_file_path);
+        }
+
+        return [$storedPath, $name, $mime, strlen($binary)];
+    }
+
+    private function saveFormBase64(array $file, Disposal $d, string $code): array
+    {
+        $mime = $file['mime'] ?? '';
+        $data = $file['data'] ?? '';
+        $name = $file['name'] ?? 'form';
+
+        $this->assertAllowedMime($mime);
+
+        $approx = $this->approxBase64Size($data);
+        if ($approx > 20 * 1024 * 1024) {
+            throw new \RuntimeException('Form base64 file too large (max 20MB).');
+        }
+
+        if (str_starts_with($data, 'data:')) {
+            $data = substr($data, strpos($data, ',') + 1);
+        }
+
+        $binary = base64_decode($data, true);
+        if ($binary === false) {
+            throw new \RuntimeException('Invalid base64 Form file data.');
+        }
+
+        $disk = 'public';
+        $dir  = 'disposals_form/' . $d->asset_uuid;
+
+        $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION) ?: match (strtolower($mime)) {
+            'application/pdf' => 'pdf',
+            'image/png'       => 'png',
+            'image/jpeg'      => 'jpg',
+            'image/webp'      => 'webp',
+            'image/gif'       => 'gif',
+            'text/plain'      => 'txt',
+            'text/csv'        => 'csv',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'application/vnd.ms-excel' => 'xls',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => 'xlsx',
+            default          => 'bin',
+        });
+
+        $filename  = $code . '-form-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+        $storedPath = $dir . '/' . $filename;
+
+        Storage::disk($disk)->put($storedPath, $binary);
+
+        if ($d->flow_file_path) {
+            Storage::disk($disk)->delete($d->flow_file_path);
+        }
+
+        return [$storedPath, $name, $mime, strlen($binary)];
+    }
     private function saveBase64File(string $b64, string $originalName, string $mime, string $code): array
     {
         $disk   = 'public';
@@ -868,6 +1055,302 @@ class DisposalApi extends Controller
             $writer->save('php://output');
         }, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    public function approve(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'APR'), 403);
+
+        $user = $request->user();
+        $uid  = $user?->name;
+        abort_if(!$uid, 401, 'No session UID.');
+
+        $v = $request->validate([
+            'items'                           => ['required', 'array', 'min:1'],
+            'items.*.uuid'                    => ['required', 'uuid', 'exists:assets_disposals,uuid'],
+
+            // For FINAL step (asset_mgt) – BA file (required there)
+            'items.*.ba_file_b64'             => ['nullable', 'array'],
+            'items.*.ba_file_b64.name'        => ['required_with:items.*.ba_file_b64', 'string', 'max:255'],
+            'items.*.ba_file_b64.mime'        => ['required_with:items.*.ba_file_b64', 'string', 'max:100'],
+            'items.*.ba_file_b64.data'        => ['required_with:items.*.ba_file_b64', 'string'],
+
+            // Optional FLOW file (Form Disposal) at final step
+            'items.*.flow_file_b64'           => ['nullable', 'array'],
+            'items.*.flow_file_b64.name'      => ['required_with:items.*.flow_file_b64', 'string', 'max:255'],
+            'items.*.flow_file_b64.mime'      => ['required_with:items.*.flow_file_b64', 'string', 'max:100'],
+            'items.*.flow_file_b64.data'      => ['required_with:items.*.flow_file_b64', 'string'],
+        ]);
+
+        $items   = $v['items'];
+        $results = [];
+
+        foreach ($items as $index => $item) {
+            try {
+                $res = DB::transaction(function () use ($item, $uid) {
+                    return $this->approveSingleDisposalForApi($item, $uid);
+                });
+            } catch (\Throwable $e) {
+                $res = [
+                    'ok'    => false,
+                    'index' => $index,
+                    'uuid'  => $item['uuid'] ?? null,
+                    'error' => $e->getMessage(),
+                ];
+            }
+            $results[] = $res;
+        }
+
+        return response()->json([
+            'ok'      => collect($results)->every(fn($r) => data_get($r, 'ok') === true),
+            'batch'   => true,
+            'results' => $results,
+        ]);
+    }
+    private function approveSingleDisposalForApi(array $item, string $uid): array
+    {
+        $d = Disposal::where('uuid', $item['uuid'])->lockForUpdate()->firstOrFail();
+        abort_if($d->kode_status !== 'APR', 422, 'Only pending disposals can be approved.');
+
+        // Normalize / build flow (same idea as controller)
+        $flow = $d->flow ?? null;
+        if (is_string($flow) && $flow !== '') {
+            $decoded = json_decode($flow, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $flow = $decoded;
+            } else {
+                $flow = null;
+            }
+        }
+        if (!$flow) {
+            $flow = $this->buildFlowTemplate($d->pic_request_uid ?: $uid);
+        }
+
+        $idx = $this->getNextPendingFlowIndex($flow);
+        abort_if($idx === null, 422, 'All steps already approved.');
+
+        $step     = &$flow['steps'][$idx];
+        $stepCode = $step['code'] ?? null;
+        $now      = now()->toDateTimeString();
+        $isLast   = ($idx === count($flow['steps']) - 1);
+
+        // === role / department checks (same semantics as controller) ===
+        $currentUser = auth()->user();
+        $userRoles   = $currentUser?->roles()->pluck('kode')->toArray() ?? [];
+        $isSysAdmin  = in_array('SYSADMIN', $userRoles);
+        $userDept    = $currentUser->kode_department ?? null;
+
+        // STEP 2: Dept Head
+        if ($stepCode === 'dept_head') {
+            if (!in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin) {
+                abort(403, 'Only Dept Head can approve this step.');
+            }
+
+            if (!$userDept && !$isSysAdmin) {
+                abort(422, 'Your department is not set. Please contact administrator.');
+            }
+
+            $asset = Assets::with(['assignment.owner'])
+                ->where('uuid', $d->asset_uuid)
+                ->firstOrFail();
+
+            $ownerCode = $asset->assignment?->asset_owner;
+            if ($ownerCode) {
+                $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                if ($ownerUc && $ownerUc->kode !== $userDept && !$isSysAdmin) {
+                    abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                }
+            }
+        }
+
+        // STEP 3: AM_HEAD
+        if ($stepCode === 'am_head') {
+            if (!in_array('AM_HEAD', $userRoles) && !$isSysAdmin) {
+                abort(403, 'Only AM_HEAD can approve this step.');
+            }
+        }
+
+        // STEP 4: AKP Head
+        if ($stepCode === 'akp_head') {
+            if (!in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin) {
+                abort(403, 'Only Dept Head AKP can approve this step.');
+            }
+
+            if (!$userDept && !$isSysAdmin) {
+                abort(422, 'Your department is not set. Please contact administrator.');
+            }
+
+            if ($userDept !== 'AKP' && !$isSysAdmin) {
+                abort(422, 'This step can only be approved by Dept Head with code AKP.');
+            }
+        }
+
+        // STEP 5: Asset Management execution (final)
+        if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+            if (!$userDept) {
+                abort(422, 'Your department is not set. Please contact administrator.');
+            }
+
+            if (!isset($asset)) {
+                $asset = Assets::with(['assignment.owner'])
+                    ->where('uuid', $d->asset_uuid)
+                    ->firstOrFail();
+            }
+
+            $ownerCode = $asset->assignment?->asset_owner;
+            if ($ownerCode) {
+                $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
+                if ($ownerUc && $ownerUc->kode !== $userDept && !$isSysAdmin) {
+                    abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                }
+            }
+        }
+
+        // === Final step processing: BA + Form + change asset status ===
+        if ($isLast && $stepCode === 'asset_mgt') {
+            $baB64   = $item['ba_file_b64']   ?? null;
+            $formB64 = $item['flow_file_b64'] ?? null;
+
+            if (!$baB64) {
+                abort(422, 'BA file (ba_file_b64) is required to complete final step.');
+            }
+
+            [$baPath, $baOrig, $baMime, $baSize] = $this->saveBaBase64(
+                $baB64,
+                $d,
+                $d->disposal_code
+            );
+
+            $d->ba_file_path = $baPath;
+            $d->ba_file_name = $baOrig;
+            $d->ba_file_mime = $baMime;
+            $d->ba_file_size = $baSize;
+
+            if ($formB64) {
+                [$formPath, $formOrig, $formMime, $formSize] = $this->saveFormBase64(
+                    $formB64,
+                    $d,
+                    $d->disposal_code
+                );
+
+                $d->flow_file_path = $formPath;
+                $d->flow_file_name = $formOrig;
+                $d->flow_file_mime = $formMime;
+                $d->flow_file_size = $formSize;
+            }
+
+            // Update asset status to target_status
+            Assets::where('uuid', $d->asset_uuid)->update([
+                'kode_status' => $d->target_status,
+            ]);
+
+            $d->kode_status     = 'ACC';
+            $d->pic_approve_uid = $uid;
+        }
+
+        // Mark this step approved
+        $step['approved_by'] = $uid;
+        $step['approved_at'] = $now;
+
+        $d->flow = $flow;
+        $d->save();
+
+        return [
+            'ok'          => true,
+            'id'          => $d->uuid,
+            'kode_status' => $d->kode_status,
+            'flow'        => $flow,
+            'ba_file_url' => $d->ba_file_url ?? null,
+        ];
+    }
+    public function reject(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('DISPOSAL', 'APR'), 403);
+
+        $user = $request->user();
+        $uid  = $user?->name;
+        abort_if(!$uid, 401, 'No session UID.');
+
+        $v = $request->validate([
+            'items'              => ['required', 'array', 'min:1'],
+            'items.*.uuid'       => ['required', 'uuid', 'exists:assets_disposals,uuid'],
+            // if later you want reason, you can add items.*.reason here
+        ]);
+
+        $results = [];
+
+        foreach ($v['items'] as $index => $item) {
+            try {
+                $res = DB::transaction(function () use ($item, $uid) {
+                    $d = Disposal::where('uuid', $item['uuid'])
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
+                    abort_if(
+                        $d->kode_status !== 'APR',
+                        422,
+                        'Only pending disposals can be rejected.'
+                    );
+
+                    // normalize/build flow (same pattern as controller / approveStep)
+                    $flow = $d->flow ?? null;
+                    if (is_string($flow) && $flow !== '') {
+                        $decoded = json_decode($flow, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $flow = $decoded;
+                        } else {
+                            $flow = null;
+                        }
+                    }
+                    if (!$flow) {
+                        $flow = $this->buildFlowTemplate($d->pic_request_uid ?? null);
+                    }
+
+                    $now = now()->toDateTimeString();
+
+                    // Mark current pending step as rejected (if any)
+                    if (is_array($flow) && isset($flow['steps']) && is_array($flow['steps'])) {
+                        $nextIdx = $this->getNextPendingFlowIndex($flow);
+                        if ($nextIdx !== null) {
+                            $step = &$flow['steps'][$nextIdx];
+                            $step['rejected_by'] = $uid;
+                            $step['rejected_at'] = $now;
+                        }
+                    }
+
+                    // Root-level rejection info
+                    $flow['rejected_by'] = $uid;
+                    $flow['rejected_at'] = $now;
+
+                    $d->flow             = $flow;
+                    $d->kode_status      = 'REJ';
+                    $d->pic_approve_uid  = $uid;
+                    $d->save();
+
+                    return [
+                        'ok'          => true,
+                        'id'          => $d->uuid,
+                        'kode_status' => $d->kode_status,
+                        'flow'        => $flow,
+                    ];
+                });
+            } catch (\Throwable $e) {
+                $res = [
+                    'ok'    => false,
+                    'index' => $index,
+                    'uuid'  => $item['uuid'] ?? null,
+                    'error' => $e->getMessage(),
+                ];
+            }
+
+            $results[] = $res;
+        }
+
+        return response()->json([
+            'ok'      => collect($results)->every(fn($r) => data_get($r, 'ok') === true),
+            'batch'   => true,
+            'results' => $results,
         ]);
     }
 }

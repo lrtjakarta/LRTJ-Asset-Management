@@ -757,6 +757,7 @@ class ExportController
         $createdFrom = $request->input('created_from');
         $createdTo   = $request->input('created_to');
         $assetQ      = trim((string) $request->input('asset_q', ''));
+        $reason      = trim((string) $request->input('reason', ''));
 
         $q = DB::table('assets_disposals as d')
             ->leftJoin('assets as a', 'a.uuid', '=', 'd.asset_uuid')
@@ -798,7 +799,9 @@ class ExportController
                     ->orWhere('a.description', 'ilike', "%{$assetQ}%");
             });
         }
-
+        if ($reason !== '') {
+            $q->where('d.reason', $reason);
+        }
         $rows = $q->orderBy('d.updated_at', 'desc')->get();
 
         $spreadsheet = new Spreadsheet();
@@ -814,13 +817,14 @@ class ExportController
             'F1' => 'Approver',
             'G1' => 'Status',
             'H1' => 'File Name',
-            'I1' => 'Created At',
-            'J1' => 'Updated At',
+            'I1' => 'Reason',
+            'J1' => 'Created At',
+            'K1' => 'Updated At',
         ];
         foreach ($headers as $cell => $text) {
             $sheet->setCellValue($cell, $text);
         }
-        $sheet->getStyle('A1:J1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:K1')->getFont()->setBold(true);
 
         $rowNum = 2;
         foreach ($rows as $r) {
@@ -839,13 +843,14 @@ class ExportController
             $sheet->setCellValue("F{$rowNum}", $r->pic_approve_uid);
             $sheet->setCellValue("G{$rowNum}", $r->kode_status);
             $sheet->setCellValue("H{$rowNum}", $r->file_name);
-            $sheet->setCellValue("I{$rowNum}", $created);
-            $sheet->setCellValue("J{$rowNum}", $updated);
+            $sheet->setCellValue("I{$rowNum}", $r->reason);
+            $sheet->setCellValue("J{$rowNum}", $created);
+            $sheet->setCellValue("K{$rowNum}", $updated);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'J') as $col) {
+        foreach (range('A', 'K') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 

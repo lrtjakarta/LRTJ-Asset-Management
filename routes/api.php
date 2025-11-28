@@ -40,6 +40,8 @@ Route::prefix('v1')->group(function () {
         // DISPOSAL
         Route::get('/disposals', [DisposalApi::class, 'index']);
         Route::post('/disposals', [DisposalApi::class, 'store']);
+        Route::post('/disposals/approve', [DisposalApi::class, 'approve'])->name('disposals.approve');
+        Route::post('/disposals/reject', [DisposalApi::class, 'reject'])->name('disposals.reject');
         Route::get('/disposals/{disposal}/ba', [DisposalApi::class, 'downloadBa'])
             ->name('disposals.ba.download');
         Route::get('/disposals/{disposal}/form', [DisposalApi::class, 'downloadForm'])

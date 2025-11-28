@@ -361,6 +361,7 @@ class DisposalController extends Controller
         $createdFrom = $request->input('created_from');
         $createdTo   = $request->input('created_to');
         $assetQ      = trim((string) $request->input('asset_q', ''));
+        $reason      = trim((string) $request->input('reason', ''));
 
         $q = Disposal::query()
             ->with(['status', 'target', 'asset'])
@@ -398,6 +399,10 @@ class DisposalController extends Controller
                 $w->where('asset_code', 'ilike', "%{$assetQ}%")
                     ->orWhere('description', 'ilike', "%{$assetQ}%");
             });
+        }
+
+        if ($reason !== '') {
+            $q->where('reason', $reason);
         }
 
         $user = $request->user();

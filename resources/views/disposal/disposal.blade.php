@@ -55,6 +55,16 @@
                             <label class="form-label">Created To</label>
                             <input type="date" id="ds-created-to" class="form-control">
                         </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Reason</label>
+                            <select id="ds-reason" class="form-select">
+                                <option value="">All</option>
+                                <option value="Sale">Sale</option>
+                                <option value="Waste">Waste</option>
+                                <option value="Donate">Donate</option>
+                                <option value="Held">Held</option>
+                            </select>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="ds-asset-q" class="form-control"
@@ -512,6 +522,7 @@
                         d.created_from = $('#ds-created-from').val() || '';
                         d.created_to = $('#ds-created-to').val() || '';
                         d.asset_q = $('#ds-asset-q').val() || '';
+                        d.reason = $('#ds-reason').val() || '';
                     }
                 },
                 order: [
@@ -663,6 +674,7 @@
                 $('#ds-updated-to').val('');
                 $('#ds-created-from').val('');
                 $('#ds-created-to').val('');
+                $('#ds-reason').val('');
                 $('#ds-asset-q').val('');
                 dt.ajax.reload();
             });
@@ -677,6 +689,7 @@
                     updated_to: $('#ds-updated-to').val() || '',
                     created_from: $('#ds-created-from').val() || '',
                     created_to: $('#ds-created-to').val() || '',
+                    reason: $('#ds-reason').val() || '',
                     asset_q: $('#ds-asset-q').val() || '',
                 });
 
