@@ -546,6 +546,7 @@ class TransferApi extends Controller
                 'after_code'        => $afterCode,
                 'before_display'    => $beforeDisplay,
                 'after_display'     => $afterDisplay,
+                'note'             => $t->note,
 
                 'asset'             => $asset,
 
