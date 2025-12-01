@@ -296,6 +296,56 @@ class StockOpnameApi extends Controller
         $uid  = $user ? ($user->name ?? $user->id) : null;
         abort_if(!$uid, 401, 'No session UID');
 
+        // 🔹 MODE BATCH: body berisi { items: [ {...}, {...} ] }
+        if (is_array($request->input('items'))) {
+            $data = $request->validate([
+                'items'                      => ['required', 'array', 'min:1'],
+
+                'items.*.uuid'               => ['nullable', 'uuid'],
+                'items.*.asset_uuid'         => ['required', 'uuid', 'exists:assets,uuid'],
+                'items.*.type'               => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+                'items.*.after.value'        => ['required', 'string'],
+                'items.*.note'               => ['nullable', 'string', 'max:1000'],
+                'items.*.created_at'         => ['nullable', 'date'],
+
+                // base64 evidence + form (optional)
+                'items.*.file_b64'           => ['nullable', 'array'],
+                'items.*.file_b64.name'      => ['required_with:items.*.file_b64', 'string', 'max:255'],
+                'items.*.file_b64.mime'      => ['required_with:items.*.file_b64', 'string', 'max:100'],
+                'items.*.file_b64.data'      => ['required_with:items.*.file_b64', 'string'],
+
+                'items.*.flow_file_b64'      => ['nullable', 'array'],
+                'items.*.flow_file_b64.name' => ['required_with:items.*.flow_file_b64', 'string', 'max:255'],
+                'items.*.flow_file_b64.mime' => ['required_with:items.*.flow_file_b64', 'string', 'max:100'],
+                'items.*.flow_file_b64.data' => ['required_with:items.*.flow_file_b64', 'string'],
+            ]);
+
+            $results = [];
+
+            foreach ($data['items'] as $idx => $item) {
+                try {
+                    $results[] = [
+                        'index'        => $idx,
+                        'request_uuid' => $item['uuid'] ?? null,
+                        'result'       => $this->createStockOpnameTransfer($item, $uid),
+                    ];
+                } catch (\Throwable $e) {
+                    $results[] = [
+                        'index'        => $idx,
+                        'request_uuid' => $item['uuid'] ?? null,
+                        'error'        => $e->getMessage(),
+                    ];
+                }
+            }
+
+            return response()->json([
+                'ok'    => true,
+                'mode'  => 'batch',
+                'items' => $results,
+            ], 201);
+        }
+
+        // 🔹 MODE SINGLE (behaviour lama, tetap sama)
         $data = $request->validate([
             'uuid'                => ['nullable', 'uuid'],
             'asset_uuid'          => ['required', 'uuid', 'exists:assets,uuid'],
@@ -319,23 +369,30 @@ class StockOpnameApi extends Controller
             'flow_file_b64.data'  => ['required_with:flow_file_b64', 'string'],
         ]);
 
+        // pakai helper yang sama
+        $res = $this->createStockOpnameTransfer($data, $uid, $request);
+
+        return response()->json($res, 201);
+    }
+    protected function createStockOpnameTransfer(array $data, string $uid, ?Request $request = null): array
+    {
         // Idempotent by UUID
         if (!empty($data['uuid'])) {
             if ($existing = Transfer::where('uuid', $data['uuid'])->first()) {
-                return response()->json([
+                return [
                     'ok'        => true,
                     'duplicate' => true,
                     'via'       => 'uuid',
                     'id'        => $existing->uuid,
                     'code'      => $existing->transfer_code,
-                ], 200);
+                ];
             }
         }
 
         $asset = Assets::findOrFail($data['asset_uuid']);
 
-        $res = DB::transaction(function () use ($asset, $data, $uid, $request) {
-            // Lock asset untuk update assignment/status/location
+        return DB::transaction(function () use ($asset, $data, $uid, $request) {
+            // --- copy persis dari kode kamu sebelumnya ---
             $assetSv = Assets::where('uuid', $asset->uuid)->lockForUpdate()->first();
 
             $before = null;
@@ -407,7 +464,7 @@ class StockOpnameApi extends Controller
                     'transfers/' . $asset->uuid,
                     $code . '-file'
                 );
-            } elseif ($request->file('file')) {
+            } elseif ($request && $request->file('file')) {
                 [$path, $orig, $mime, $size] = $this->saveUploadTf(
                     $request->file('file'),
                     $asset,
@@ -430,7 +487,7 @@ class StockOpnameApi extends Controller
                     'transfers/' . $asset->uuid,
                     $code . '-form'
                 );
-            } elseif ($request->file('flow_file')) {
+            } elseif ($request && $request->file('flow_file')) {
                 [$flowPath, $flowOrig, $flowMime, $flowSize] = $this->saveUploadTf(
                     $request->file('flow_file'),
                     $asset,
@@ -476,10 +533,7 @@ class StockOpnameApi extends Controller
                 'code' => $row->transfer_code,
             ];
         });
-
-        return response()->json($res, 201);
     }
-
     /**
      * POST /api/v1/stock-opname/disposal
      *
@@ -496,6 +550,60 @@ class StockOpnameApi extends Controller
         $uid  = $user ? ($user->name ?? $user->id) : null;
         abort_if(!$uid, 401, 'No session UID');
 
+        // 🔹 MODE BATCH
+        if (is_array($request->input('items'))) {
+            $data = $request->validate([
+                'items'                      => ['required', 'array', 'min:1'],
+
+                'items.*.uuid'               => ['nullable', 'uuid'],
+                'items.*.asset_uuid'         => ['required', 'uuid', 'exists:assets,uuid'],
+                'items.*.note'               => ['nullable', 'string', 'max:1000'],
+                'items.*.target_status'      => ['nullable', 'string'],
+                'items.*.reason'             => ['required', Rule::in(['Sale', 'Waste', 'Donate', 'Held'])],
+                'items.*.created_at'         => ['nullable', 'date'],
+
+                'items.*.file_b64'           => ['nullable', 'array'],
+                'items.*.file_b64.name'      => ['required_with:items.*.file_b64', 'string', 'max:255'],
+                'items.*.file_b64.mime'      => ['required_with:items.*.file_b64', 'string', 'max:100'],
+                'items.*.file_b64.data'      => ['required_with:items.*.file_b64', 'string'],
+
+                'items.*.flow_file_b64'      => ['nullable', 'array'],
+                'items.*.flow_file_b64.name' => ['required_with:items.*.flow_file_b64', 'string', 'max:255'],
+                'items.*.flow_file_b64.mime' => ['required_with:items.*.flow_file_b64', 'string', 'max:100'],
+                'items.*.flow_file_b64.data' => ['required_with:items.*.flow_file_b64', 'string'],
+
+                'items.*.ba_file_b64'        => ['nullable', 'array'],
+                'items.*.ba_file_b64.name'   => ['required_with:items.*.ba_file_b64', 'string', 'max:255'],
+                'items.*.ba_file_b64.mime'   => ['required_with:items.*.ba_file_b64', 'string', 'max:100'],
+                'items.*.ba_file_b64.data'   => ['required_with:items.*.ba_file_b64', 'string'],
+            ]);
+
+            $results = [];
+
+            foreach ($data['items'] as $idx => $item) {
+                try {
+                    $results[] = [
+                        'index'        => $idx,
+                        'request_uuid' => $item['uuid'] ?? null,
+                        'result'       => $this->createStockOpnameDisposal($item, $uid),
+                    ];
+                } catch (\Throwable $e) {
+                    $results[] = [
+                        'index'        => $idx,
+                        'request_uuid' => $item['uuid'] ?? null,
+                        'error'        => $e->getMessage(),
+                    ];
+                }
+            }
+
+            return response()->json([
+                'ok'    => true,
+                'mode'  => 'batch',
+                'items' => $results,
+            ], 201);
+        }
+
+        // 🔹 MODE SINGLE (kode lama)
         $data = $request->validate([
             'uuid'          => ['nullable', 'uuid'],
             'asset_uuid'    => ['required', 'uuid', 'exists:assets,uuid'],
@@ -507,21 +615,18 @@ class StockOpnameApi extends Controller
             ],
             'created_at'    => ['nullable', 'date'],
 
-            // evidence file
             'file'          => ['nullable', 'file', 'max:51200'],
             'file_b64'      => ['nullable', 'array'],
             'file_b64.name' => ['required_with:file_b64', 'string', 'max:255'],
             'file_b64.mime' => ['required_with:file_b64', 'string', 'max:100'],
             'file_b64.data' => ['required_with:file_b64', 'string'],
 
-            // flow form (xlsx)
             'flow_file'           => ['nullable', 'file', 'max:51200'],
             'flow_file_b64'       => ['nullable', 'array'],
             'flow_file_b64.name'  => ['required_with:flow_file_b64', 'string', 'max:255'],
             'flow_file_b64.mime'  => ['required_with:flow_file_b64', 'string', 'max:100'],
             'flow_file_b64.data'  => ['required_with:flow_file_b64', 'string'],
 
-            // BA (docx)
             'ba_file'           => ['nullable', 'file', 'max:51200'],
             'ba_file_b64'       => ['nullable', 'array'],
             'ba_file_b64.name'  => ['required_with:ba_file_b64', 'string', 'max:255'],
@@ -529,16 +634,22 @@ class StockOpnameApi extends Controller
             'ba_file_b64.data'  => ['required_with:ba_file_b64', 'string'],
         ]);
 
+        $res = $this->createStockOpnameDisposal($data, $uid, $request);
+
+        return response()->json($res, 201);
+    }
+    protected function createStockOpnameDisposal(array $data, string $uid, ?Request $request = null): array
+    {
         // Idempotent by UUID
         if (!empty($data['uuid'])) {
             if ($existing = Disposal::where('uuid', $data['uuid'])->first()) {
-                return response()->json([
+                return [
                     'ok'        => true,
                     'duplicate' => true,
                     'via'       => 'uuid',
                     'id'        => $existing->uuid,
                     'code'      => $existing->disposal_code,
-                ], 200);
+                ];
             }
         }
 
@@ -552,7 +663,7 @@ class StockOpnameApi extends Controller
             ->exists();
         abort_unless($ok, 422, 'Target disposal status not valid');
 
-        $res = DB::transaction(function () use ($asset, $data, $uid, $request, $target) {
+        return DB::transaction(function () use ($asset, $data, $uid, $target, $request) {
             $now    = Carbon::now();
             $prefix = 'OPN' . $now->format('ym');
 
@@ -584,7 +695,7 @@ class StockOpnameApi extends Controller
                     'disposals/' . $asset->uuid,
                     $code . '-file'
                 );
-            } elseif ($request->file('file')) {
+            } elseif ($request && $request->file('file')) {
                 [$path, $orig, $mime, $size] = $this->saveUploadDis(
                     $request->file('file'),
                     $asset,
@@ -607,7 +718,7 @@ class StockOpnameApi extends Controller
                     'disposals/' . $asset->uuid,
                     $code . '-form'
                 );
-            } elseif ($request->file('flow_file')) {
+            } elseif ($request && $request->file('flow_file')) {
                 [$flowPath, $flowOrig, $flowMime, $flowSize] = $this->saveUploadDis(
                     $request->file('flow_file'),
                     $asset,
@@ -616,7 +727,7 @@ class StockOpnameApi extends Controller
                 );
             }
 
-            // BA file (wajib, minimal salah satu bentuk)
+            // BA file (wajib)
             if (!empty($data['ba_file_b64'])) {
                 $this->assertAllowedMime($data['ba_file_b64']['mime']);
                 $approx = $this->approxBase64Size($data['ba_file_b64']['data']);
@@ -630,7 +741,7 @@ class StockOpnameApi extends Controller
                     'disposals/' . $asset->uuid,
                     $code . '-ba'
                 );
-            } elseif ($request->file('ba_file')) {
+            } elseif ($request && $request->file('ba_file')) {
                 [$baPath, $baOrig, $baMime, $baSize] = $this->saveUploadDis(
                     $request->file('ba_file'),
                     $asset,
@@ -638,7 +749,6 @@ class StockOpnameApi extends Controller
                     null
                 );
             } else {
-                // tidak ada BA sama sekali
                 abort(422, 'BA file (ba_file or ba_file_b64) is required.');
             }
 
@@ -687,10 +797,7 @@ class StockOpnameApi extends Controller
                 'code' => $row->disposal_code,
             ];
         });
-
-        return response()->json($res, 201);
     }
-
     // ======================= helpers =========================
 
     protected function mapRows($rows, string $tz)
@@ -1095,6 +1202,127 @@ class StockOpnameApi extends Controller
             $tpl->saveAs('php://output');
         }, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ]);
+    }
+    public function previewTransferForm(Request $request)
+    {
+        abort_unless($this->canReadStockOpname($request), 403);
+
+        $v = $request->validate([
+            'asset_uuid'   => ['required', 'uuid', 'exists:assets,uuid'],
+            'target_type'  => ['nullable', Rule::in(['owner', 'user', 'maintenance', 'location'])],
+            'target_value' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $assetUuid   = $v['asset_uuid'];
+        $targetType  = $v['target_type']  ?? null;
+        $targetValue = $v['target_value'] ?? null;
+
+        $asset = Assets::with([
+            'assignment.owner.division',
+            'assignment.user.division',
+            'assignment.maintenance.division',
+            'location',
+            'value.uom',
+        ])->findOrFail($assetUuid);
+
+        $template = storage_path('app/public/template/form_transfer_asset.xlsx');
+        if (!file_exists($template)) {
+            return abort(404, 'Template not found');
+        }
+
+        $spreadsheet = IOFactory::load($template);
+        $sheet       = $spreadsheet->getSheetByName('Form Transfer')
+            ?? $spreadsheet->getActiveSheet();
+
+        $assign   = $asset->assignment;
+        $owner    = $assign?->owner;
+        $ownerDiv = $owner?->division;
+
+        $fromDeptLabel = $owner
+            ? trim(($owner->kode ?? '') . ' - ' . ($owner->department ?? ''))
+            : '';
+        $fromDivLabel = $ownerDiv?->name ?? '';
+
+        $loc          = $asset->location;
+        $fromLocLabel = $loc
+            ? trim(($loc->kode ?? '') . ' - ' . ($loc->name ?? ''))
+            : '';
+
+        $now = now()->timezone('Asia/Jakarta');
+
+        // Transfer Code (V11) – kosong untuk preview
+        $sheet->setCellValue('V11', '');
+
+        // FROM section (G15-G18)
+        $sheet->setCellValue('G15', $fromDeptLabel);
+        $sheet->setCellValue('G16', $fromDivLabel);
+        $sheet->setCellValue('G17', $fromLocLabel);
+        $sheet->setCellValue('G18', $now->format('d-m-Y'));
+
+        // TO section (S15-S18) - berdasarkan target_type & target_value
+        $toDeptLabel      = '';
+        $toDivLabel       = '';
+        $toLocLabel       = '';
+        $toSignatureLabel = '';
+
+        if ($targetType && $targetValue) {
+            if (in_array($targetType, ['owner', 'user', 'maintenance'], true)) {
+                $targetUc = MasterUserCode::with('division')
+                    ->where('kode', $targetValue)
+                    ->first();
+
+                if ($targetUc) {
+                    $toDeptLabel      = trim(($targetUc->kode ?? '') . ' - ' . ($targetUc->department ?? ''));
+                    $toDivLabel       = $targetUc->division?->name ?? '';
+                    $toSignatureLabel = $toDeptLabel;
+                }
+                // lokasi tetap sama
+                $toLocLabel = $fromLocLabel;
+            } elseif ($targetType === 'location') {
+                $targetLoc = MasterLocation::where('kode', $targetValue)->first();
+
+                if ($targetLoc) {
+                    $toLocLabel = trim(($targetLoc->kode ?? '') . ' - ' . ($targetLoc->name ?? ''));
+                }
+
+                // Dept/Div tetap pakai FROM
+                $toDeptLabel      = $fromDeptLabel;
+                $toDivLabel       = $fromDivLabel;
+                $toSignatureLabel = $toDeptLabel;
+            }
+        }
+
+        $sheet->setCellValue('S15', $toDeptLabel);
+        $sheet->setCellValue('S16', $toDivLabel);
+        $sheet->setCellValue('S17', $toLocLabel);
+        $sheet->setCellValue('S18', $now->format('d-m-Y'));
+
+        // Asset details (row 23)
+        $sheet->setCellValue('C23', $asset->asset_code ?? '');
+        $sheet->setCellValue('D23', $asset->description ?? '');
+
+        $qty = $asset->value?->quantity;
+        $sheet->setCellValue('L23', $qty !== null ? $qty : '');
+
+        $uomText = $asset->value?->uom?->name
+            ?? $asset->value?->kode_uom
+            ?? '';
+        $sheet->setCellValue('N23', $uomText);
+
+        $sheet->setCellValue('P23', $asset->notes ?? '');
+
+        // Signature sections
+        $sheet->setCellValue('C36', $fromDeptLabel);
+        $sheet->setCellValue('I36', $toDeptLabel);
+
+        $fileName = 'Form_Transfer_Preview_' . ($asset->asset_code ?? $assetUuid) . '.xlsx';
+
+        return response()->streamDownload(function () use ($spreadsheet) {
+            $writer = new XlsxWriter($spreadsheet);
+            $writer->save('php://output');
+        }, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
 }

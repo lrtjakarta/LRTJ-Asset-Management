@@ -57,10 +57,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/stock-opname', [StockOpnameApi::class, 'index'])->name('stockopname.api.index');
         Route::post('/stock-opname/transfer', [StockOpnameApi::class, 'storeTransfer'])->name('stockopname.api.transfer.store');
         Route::post('/stock-opname/disposal', [StockOpnameApi::class, 'storeDisposal'])->name('stockopname.api.disposal.store');
-        Route::get('/stock-opname/preview/disposal-form/{asset}', [StockOpnameApi::class, 'previewDisposalForm'])
-            ->name('stockopname.api.preview.disposal.form');
-        Route::get('/stock-opname/preview/disposal-ba/{asset}', [StockOpnameApi::class, 'previewDisposalBa'])
-            ->name('stockopname.api.preview.disposal.ba');
+        Route::get('stock-opname/preview/transfer-form', [StockOpnameApi::class, 'previewTransferForm'])
+            ->name('api.stockopname.preview.transfer-form');
+        Route::get('stock-opname/preview/disposal-form', [StockOpnameApi::class, 'previewDisposalForm'])
+            ->name('api.stockopname.preview.disposal-form');
+        Route::get('stock-opname/preview/disposal-ba', [StockOpnameApi::class, 'previewDisposalBa'])
+            ->name('api.stockopname.preview.disposal-ba');
 
         // FILES/STORAGE
         Route::get('/files/{kind}/{uuid}/download', [StorageApi::class, 'download'])->whereIn('kind', ['disposal', 'transfer'])
