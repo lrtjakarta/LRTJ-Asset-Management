@@ -35,8 +35,8 @@ class TransferApi extends Controller
 
             // NEW filters (mirroring datatable_all)
             'workflow'       => ['nullable', 'string', 'max:50'],   // kode_status
-            'requester'    => ['nullable', 'string', 'max:255'],  // pic_request_uid
-            'asset_q'      => ['nullable', 'string', 'max:200'],  // asset code/description search
+            'requester'      => ['nullable', 'string', 'max:255'],  // pic_request_uid
+            'asset_q'        => ['nullable', 'string', 'max:200'],  // asset code/description search
 
             // date filters
             'from'         => ['nullable', 'date'],               // legacy – created_at from
@@ -93,12 +93,19 @@ class TransferApi extends Controller
                 DB::raw('a.kode_status       as asset_kode_status'),
                 DB::raw('a.kode_sumber       as asset_kode_sumber'),
 
+                // 🔹 NEW: assignment fields from assets_assignment
+                DB::raw('g.asset_owner       as asset_owner'),
+                DB::raw('g.asset_user        as asset_user'),
+                DB::raw('g.asset_maintenance as asset_maintenance'),
+
                 DB::raw("CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS asset_kode_location_label"),
                 DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS asset_kode_asset_class_label"),
                 DB::raw("CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS asset_kode_status_label"),
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber     || ' - ' || msrc.name END AS asset_kode_sumber_label"),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
+            // 🔹 NEW: join assignment so we can expose asset owner/user/maintenance
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('master_location     as ml',   'ml.kode',   '=', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  '=', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   '=', 'a.kode_status')
@@ -181,7 +188,7 @@ class TransferApi extends Controller
                         'uuids'        => $uuidSet->all(),
                         'q'            => $request->query('q'),
                         'type'         => $request->query('type'),
-                        'workflow'       => $request->query('workflow'),
+                        'workflow'     => $request->query('workflow'),
                         'requester'    => $request->query('requester'),
                         'asset_q'      => $request->query('asset_q'),
                         'from'         => $request->query('from'),
@@ -219,7 +226,7 @@ class TransferApi extends Controller
                     'uuids'        => $uuidSet->all(),
                     'q'            => $request->query('q'),
                     'type'         => $request->query('type'),
-                    'workflow'       => $request->query('workflow'),
+                    'workflow'     => $request->query('workflow'),
                     'requester'    => $request->query('requester'),
                     'asset_q'      => $request->query('asset_q'),
                     'from'         => $request->query('from'),
@@ -240,10 +247,8 @@ class TransferApi extends Controller
         ]);
     }
 
-
     public function store(Request $request)
     {
-
         $isBatch = is_array($request->input('items'));
 
         if ($isBatch) {
@@ -270,7 +275,7 @@ class TransferApi extends Controller
                 'after.value'       => ['required', 'string'],
                 'note'              => ['nullable', 'string', 'max:1000'],
                 'created_at'        => ['nullable', 'date'],
-                'name'   => ['nullable', 'string', 'max:200'],
+                'name'              => ['nullable', 'string', 'max:200'],
 
                 'file'              => ['nullable', 'file', 'mimes:pdf,png,jpg,jpeg,webp,gif,doc,docx,xls,xlsx,csv,txt', 'max:20480'],
                 'file_b64'          => ['nullable', 'array'],
@@ -279,7 +284,6 @@ class TransferApi extends Controller
                 'file_b64.data'     => ['required_with:file_b64', 'string'],
             ]);
         }
-
 
         $items   = $isBatch ? $root['items'] : [$root];
         $results = [];
@@ -412,6 +416,7 @@ class TransferApi extends Controller
             'code' => $transfer->transfer_code,
         ];
     }
+
     private function mapRows($rows, string $tz)
     {
         $codes = ['usercode' => [], 'status' => [], 'location' => []];
@@ -421,24 +426,46 @@ class TransferApi extends Controller
             $before = data_get($t->before, 'value');
             $after  = data_get($t->after,  'value');
 
-            if (!$before && !$after) continue;
-
-            switch ($type) {
-                case 'owner':
-                case 'user':
-                case 'maintenance':
-                    if ($before) $codes['usercode'][] = $before;
-                    if ($after)  $codes['usercode'][] = $after;
-                    break;
-                case 'status':
-                    if ($before) $codes['status'][] = $before;
-                    if ($after)  $codes['status'][] = $after;
-                    break;
-                case 'location':
-                    if ($before) $codes['location'][] = $before;
-                    if ($after)  $codes['location'][] = $after;
-                    break;
+            if ($before) {
+                switch ($type) {
+                    case 'owner':
+                    case 'user':
+                    case 'maintenance':
+                        $codes['usercode'][] = $before;
+                        break;
+                    case 'status':
+                        $codes['status'][] = $before;
+                        break;
+                    case 'location':
+                        $codes['location'][] = $before;
+                        break;
+                }
             }
+
+            if ($after) {
+                switch ($type) {
+                    case 'owner':
+                    case 'user':
+                    case 'maintenance':
+                        $codes['usercode'][] = $after;
+                        break;
+                    case 'status':
+                        $codes['status'][] = $after;
+                        break;
+                    case 'location':
+                        $codes['location'][] = $after;
+                        break;
+                }
+            }
+
+            // 🔹 NEW: include current asset owner/user/maintenance codes into lookup pool
+            $assetOwner = $t->getAttribute('asset_owner');
+            $assetUser  = $t->getAttribute('asset_user');
+            $assetMaint = $t->getAttribute('asset_maintenance');
+
+            if ($assetOwner) $codes['usercode'][] = $assetOwner;
+            if ($assetUser)  $codes['usercode'][] = $assetUser;
+            if ($assetMaint) $codes['usercode'][] = $assetMaint;
         }
 
         $setUser   = collect($codes['usercode'])->filter()->unique();
@@ -451,8 +478,8 @@ class TransferApi extends Controller
 
         $mapStatus = $setStatus->isNotEmpty()
             ? MasterStatus::whereIn('kode', $setStatus)
-            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
-            ->pluck('name', 'kode')->all()
+                ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+                ->pluck('name', 'kode')->all()
             : [];
 
         $mapLoc = $setLoc->isNotEmpty()
@@ -470,6 +497,23 @@ class TransferApi extends Controller
                 ? ($t->kode_status . ' - ' . $t->status->name)
                 : $t->kode_status;
 
+            // 🔹 Build asset owner/user/maintenance label from mapUser
+            $assetOwner = $t->getAttribute('asset_owner');
+            $assetUser  = $t->getAttribute('asset_user');
+            $assetMaint = $t->getAttribute('asset_maintenance');
+
+            $assetOwnerLabel = $assetOwner
+                ? (isset($mapUser[$assetOwner]) ? "{$assetOwner} - {$mapUser[$assetOwner]}" : $assetOwner)
+                : '(empty)';
+
+            $assetUserLabel = $assetUser
+                ? (isset($mapUser[$assetUser]) ? "{$assetUser} - {$mapUser[$assetUser]}" : $assetUser)
+                : '(empty)';
+
+            $assetMaintLabel = $assetMaint
+                ? (isset($mapUser[$assetMaint]) ? "{$assetMaint} - {$mapUser[$assetMaint]}" : $assetMaint)
+                : '(empty)';
+
             $asset = [
                 'asset_uuid'                    => $t->asset_uuid,
                 'asset_code'                    => $t->getAttribute('asset_code'),
@@ -482,6 +526,14 @@ class TransferApi extends Controller
                 'asset_kode_asset_class_label'  => $t->getAttribute('asset_kode_asset_class_label'),
                 'asset_kode_status_label'       => $t->getAttribute('asset_kode_status_label'),
                 'asset_kode_sumber_label'       => $t->getAttribute('asset_kode_sumber_label'),
+
+                // 🔹 NEW: current assignment info
+                'asset_owner'                   => $assetOwner,
+                'asset_owner_label'             => $assetOwnerLabel,
+                'asset_user'                    => $assetUser,
+                'asset_user_label'              => $assetUserLabel,
+                'asset_maintenance'             => $assetMaint,
+                'asset_maintenance_label'       => $assetMaintLabel,
             ];
 
             $fileObj = null;
@@ -504,6 +556,7 @@ class TransferApi extends Controller
                     'file_url'      => $exists ? url('storage/' . ltrim($t->file_path, '/')) : null,
                 ];
             }
+
             $flowFileObj = null;
             if ($t->flow_file_path) {
                 $disk   = 'public';
@@ -546,7 +599,7 @@ class TransferApi extends Controller
                 'after_code'        => $afterCode,
                 'before_display'    => $beforeDisplay,
                 'after_display'     => $afterDisplay,
-                'note'             => $t->note,
+                'note'              => $t->note,
 
                 'asset'             => $asset,
 
@@ -650,7 +703,7 @@ class TransferApi extends Controller
         $disk   = 'public';
         $folder = 'transfers/' . $assetUuid;
         $ext    = strtolower($file->getClientOriginalExtension() ?: $file->guessExtension() ?: 'bin');
-        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $ext;
+        $name   = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6);
 
         $storedPath = $file->storeAs($folder, $name . '.' . $ext, $disk);
 
@@ -666,7 +719,7 @@ class TransferApi extends Controller
     {
         $disk   = 'public';
         $folder = 'transfers/' . $assetUuid;
-        $name = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6);
+        $name   = $code . '-' . now()->format('YmdHis') . '-' . Str::random(6);
 
         if (str_starts_with($b64, 'data:')) {
             $b64 = substr($b64, strpos($b64, ',') + 1);
@@ -747,14 +800,11 @@ class TransferApi extends Controller
         $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
         return $code;
     }
+
     public function downloadForms(Request $request, Transfer $transfer): StreamedResponse
     {
         // Authorization (API style, still fine)
         abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
-
-        // if (! in_array($transfer->type, ['owner', 'user', 'maintenance'], true)) {
-        //     abort(404, 'Form Transfer only available for Owner/User/Maintenance movement.');
-        // }
 
         $transfer->load([
             'asset.assignment.owner.division',
@@ -848,12 +898,11 @@ class TransferApi extends Controller
                         $at = $atRaw;
                     }
 
-                    // e.g. "Create Disposal Request (User Departemen) - 21-11-2025 15:53 - Administrator"
                     $line = trim(
                         ($label ?: '') .
-                            ($role ? ' (' . $role . ')' : '') .
-                            ($at ? ' - ' . $at : '') .
-                            ($by ? ' - ' . $by : '')
+                        ($role ? ' (' . $role . ')' : '') .
+                        ($at ? ' - ' . $at : '') .
+                        ($by ? ' - ' . $by : '')
                     );
 
                     if ($line !== '') {
@@ -865,7 +914,6 @@ class TransferApi extends Controller
 
         $flowText = implode("\n", $doneLines);
 
-        // Make sure this path exists in your project
         $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
         $spreadsheet  = IOFactory::load($templatePath);
 
@@ -971,13 +1019,13 @@ class TransferApi extends Controller
                 return $k;
         }
     }
+
     public function approve(Request $request)
     {
         $user = $request->user();
-        $uid  = $user?->name; // adjust if you use another field as UID
+        $uid  = $user?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
-        // Batch only (like store)
         $root = $request->validate([
             'items'                     => ['required', 'array', 'min:1'],
             'items.*.uuid'              => ['required', 'uuid'],
@@ -1010,6 +1058,7 @@ class TransferApi extends Controller
             'results' => $results,
         ]);
     }
+
     private function approveOne(Request $rootReq, array $data, string $uid, $user): array
     {
         $now = now()->toDateTimeString();
@@ -1080,7 +1129,6 @@ class TransferApi extends Controller
 
             // -------- 2) FLOW-BASED APPROVAL (owner/user/maintenance/location) --------
 
-            // Ensure flow exists
             $flow = $tf->flow ?? $this->buildFlowTemplate($type, $tf->pic_request_uid);
 
             $nextIdx = $this->getNextPendingFlowIndex($flow);
@@ -1094,7 +1142,6 @@ class TransferApi extends Controller
             $userRoles   = $currentUser->roles()->pluck('kode')->toArray();
             $isSysAdmin  = in_array('SYSADMIN', $userRoles);
 
-            // ----- DEPT_HEAD validation (exclude SYSADMIN and USER) -----
             if (in_array('DEPT_HEAD', $userRoles) && !$isSysAdmin && !in_array('USER', $userRoles)) {
                 $userDept = $currentUser->kode_department;
 
@@ -1140,7 +1187,6 @@ class TransferApi extends Controller
                 }
             }
 
-            // ----- AM_ADMIN validation for last step (exclude SYSADMIN) -----
             $stepCode = $step['code'] ?? '';
             if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
                 $userDept = $currentUser->kode_department;
@@ -1174,7 +1220,6 @@ class TransferApi extends Controller
                 }
             }
 
-            // Mark this step approved
             $step['approved_by'] = $uid;
             $step['approved_at'] = $now;
 
@@ -1207,7 +1252,6 @@ class TransferApi extends Controller
                         break;
 
                     case 'status':
-                        // should not normally be in flow; keep safe
                         $asset->kode_status = $val;
                         $asset->save();
                         break;
@@ -1221,7 +1265,6 @@ class TransferApi extends Controller
                 $tf->kode_status     = 'ACC';
                 $tf->pic_approve_uid = $uid;
 
-                // attach signed_form_b64 on last step for owner/user/maintenance
                 if (in_array($type, ['owner', 'user', 'maintenance'], true) && !empty($data['signed_form_b64'])) {
                     $signed = $data['signed_form_b64'];
 
@@ -1258,6 +1301,7 @@ class TransferApi extends Controller
             ];
         });
     }
+
     protected function getNextPendingFlowIndex($flow): ?int
     {
         if (!$flow || !is_array($flow) || empty($flow['steps']) || !is_array($flow['steps'])) {
@@ -1272,20 +1316,18 @@ class TransferApi extends Controller
 
         return null;
     }
+
     public function reject(Request $request)
     {
-        // Same permission style as approve()
         abort_unless($request->user()?->hasAction('MOVEMENT', 'U'), 403);
 
         $user = $request->user();
-        $uid  = $user?->name; // or uid/username, match what you use in approve()
+        $uid  = $user?->name;
         abort_if(!$uid, 401, 'No session UID.');
 
         $root = $request->validate([
             'items'            => ['required', 'array', 'min:1'],
             'items.*.uuid'     => ['required', 'uuid'],
-            // if later you want reject_reason, you can add it here as optional
-            // 'items.*.reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $results = [];
@@ -1311,6 +1353,7 @@ class TransferApi extends Controller
             'results' => $results,
         ]);
     }
+
     private function rejectOne(array $data, string $uid, $user): array
     {
         return DB::transaction(function () use ($data, $uid, $user) {
@@ -1325,7 +1368,6 @@ class TransferApi extends Controller
             $type = strtolower((string) $tf->type);
 
             if (in_array($type, ['owner', 'user', 'maintenance', 'location'], true)) {
-                // same behaviour as your original reject()
                 $flow = $tf->flow ?? $this->buildFlowTemplate($tf->type, $tf->pic_request_uid);
 
                 $now = now()->toDateTimeString();

@@ -29,9 +29,11 @@ use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+
 
 class AssetsController extends Controller
 {
@@ -705,7 +707,11 @@ class AssetsController extends Controller
     }
     public function bulk_upload()
     {
-        return view('assets.bulk_upload');
+        return view('assets.bulk_upload', [
+            'success'        => null,
+            'error'          => null,
+            'import_summary' => null,
+        ]);
     }
     public function download_template()
     {
@@ -723,16 +729,17 @@ class AssetsController extends Controller
     public function upload_excel(Request $request)
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'C'), 403);
+
         $request->validate([
             'file' => ['required', 'file', 'mimes:xlsx,xls,csv', 'max:20480'],
         ]);
 
-        $uploaded     = $request->file('file');
-        $spreadsheet  = \PhpOffice\PhpSpreadsheet\IOFactory::load($uploaded->getPathname());
-        $sheet        = $spreadsheet->getActiveSheet();
+        $uploaded    = $request->file('file');
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($uploaded->getPathname());
+        $sheet       = $spreadsheet->getActiveSheet();
 
         $normalize = function ($v) {
-            $v = trim((string)$v);
+            $v = trim((string) $v);
             $v = mb_strtolower($v);
             $v = preg_replace('/[^a-z0-9]+/u', '_', $v);
             return trim($v, '_');
@@ -740,7 +747,7 @@ class AssetsController extends Controller
 
         $resolveUom = function ($raw) {
             if ($raw === null) return null;
-            $txt = trim((string)$raw);
+            $txt = trim((string) $raw);
             if ($txt === '' || $txt === '0' || $txt === '0.0') return null;
 
             $row = DB::table('master_uom')
@@ -758,22 +765,23 @@ class AssetsController extends Controller
         };
 
         $toBool = function ($v) {
-            $s = strtolower(trim((string)$v));
+            $s = strtolower(trim((string) $v));
             return in_array($s, ['1', 'y', 'yes', 'true', 'ya'], true);
         };
 
         $getVatRate = function () {
             $raw = env('NILAI_PAJAK', 10);
-            $s   = is_string($raw) ? trim($raw) : (string)$raw;
+            $s   = is_string($raw) ? trim($raw) : (string) $raw;
             if (strpos($s, '%') !== false) {
-                $n = (float)str_replace('%', '', $s);
+                $n = (float) str_replace('%', '', $s);
                 return $n / 100.0;
             }
-            $n = (float)$raw;
+            $n = (float) $raw;
             return $n > 1 ? $n / 100.0 : $n;
         };
 
-        $headers = [];
+        // ==== HEADER ====
+        $headers  = [];
         $firstRow = $sheet->getRowIterator(1, 1)->current();
         $cellIter = $firstRow->getCellIterator();
         $cellIter->setIterateOnlyExistingCells(false);
@@ -820,9 +828,19 @@ class AssetsController extends Controller
 
         $colTargets = [];
         foreach ($headers as $col => $head) {
-            if (!isset($KNOWN[$head])) continue;
+            if (! isset($KNOWN[$head])) continue;
             [$group, $field] = explode('.', $KNOWN[$head], 2);
-            $colTargets[$col] = ['group' => $group, 'field' => $field, 'head' => $head];
+            $colTargets[$col] = [
+                'group' => $group,
+                'field' => $field,
+                'head'  => $head,
+            ];
+        }
+
+        if (empty($colTargets)) {
+            return redirect()
+                ->route('assets.upload.bulk')
+                ->with('error', 'Template Excel tidak dikenali. Pastikan header tidak diubah.');
         }
 
         $hasAssignments    = Schema::hasTable('assets_assignment');
@@ -833,13 +851,20 @@ class AssetsController extends Controller
         $tableClassif      = Schema::hasTable('assets_classification') ? 'assets_classification' : null;
         $tableDocuments    = Schema::hasTable('assets_document')       ? 'assets_document'       : null;
 
-        $inserted = 0;
-        $updated = 0;
-        $skipped = 0;
+        $rows      = 0;
+        $inserted  = 0;
+        $updated   = 0;
+        $skipped   = 0;
+        $rowErrors = [];
 
-        DB::beginTransaction();
-        try {
-            foreach ($sheet->getRowIterator(2) as $row) {
+        // ==== LOOP BARIS DATA ====
+        foreach ($sheet->getRowIterator(2) as $row) {
+            $rows++;
+            $rowIndex = $row->getRowIndex();
+
+            try {
+                DB::beginTransaction();
+
                 $cells = $row->getCellIterator();
                 $cells->setIterateOnlyExistingCells(false);
 
@@ -849,11 +874,10 @@ class AssetsController extends Controller
                 $identifiersPayload    = [];
                 $classificationPayload = [];
                 $documentsPayload      = [];
-
-                $isPajakFlag = null;
+                $isPajakFlag           = null;
 
                 foreach ($cells as $col => $cell) {
-                    if (!isset($colTargets[$col])) continue;
+                    if (! isset($colTargets[$col])) continue;
 
                     $target = $colTargets[$col];
                     $raw    = $cell->getCalculatedValue();
@@ -862,77 +886,117 @@ class AssetsController extends Controller
 
                     switch ($target['group']) {
                         case 'asset':
-                            if ($raw !== null) $assetPayload[$target['field']] = $raw;
+                            if ($raw !== null) {
+                                $assetPayload[$target['field']] = $raw;
+                            }
                             break;
 
                         case 'assignment':
-                            if ($raw !== null) $assignmentPayload[$target['field']] = $raw;
+                            if ($raw !== null) {
+                                $assignmentPayload[$target['field']] = $raw;
+                            }
                             break;
 
                         case 'value':
                             switch ($target['field']) {
                                 case 'kode_uom':
-                                    if ($raw !== null) $valuePayload['kode_uom'] = (string)$raw;
+                                    if ($raw !== null) {
+                                        $valuePayload['kode_uom'] = (string) $raw;
+                                    }
                                     break;
                                 case 'quantity':
                                 case 'price':
                                 case 'total':
                                     if ($raw !== null) {
                                         $valuePayload[$target['field']] =
-                                            is_numeric($raw) ? (float)$raw : (float)preg_replace('/[^\d.-]/', '', (string)$raw);
+                                            is_numeric($raw)
+                                            ? (float) $raw
+                                            : (float) preg_replace('/[^\d.-]/', '', (string) $raw);
                                     }
                                     break;
                                 case 'is_pajak':
-                                    if ($raw !== null) $isPajakFlag = $toBool($raw);
+                                    if ($raw !== null) {
+                                        $isPajakFlag = $toBool($raw);
+                                    }
                                     break;
                                 case 'useful_life_month':
-                                    if ($raw !== null) $valuePayload['useful_life_month'] = (int)round((float)$raw);
+                                    if ($raw !== null) {
+                                        $valuePayload['useful_life_month'] = (int) round((float) $raw);
+                                    }
                                     break;
                             }
                             break;
 
                         case 'identifiers':
-                            if ($raw !== null) $identifiersPayload[$target['field']] = $raw;
+                            if ($raw !== null) {
+                                $identifiersPayload[$target['field']] = $raw;
+                            }
                             break;
 
                         case 'classification':
-                            if ($raw !== null) $classificationPayload[$target['field']] = $raw;
+                            if ($raw !== null) {
+                                $classificationPayload[$target['field']] = $raw;
+                            }
                             break;
 
                         case 'documents':
-                            if ($raw !== null) $documentsPayload[$target['field']] = $raw;
+                            if ($raw !== null) {
+                                $documentsPayload[$target['field']] = $raw;
+                            }
                             break;
                     }
                 }
 
+                // === build asset_code ===
                 $parent = $assetPayload['asset_number_parent'] ?? null;
                 $child  = $assetPayload['asset_number_child']  ?? null;
-                if ($parent !== null) $parent = (string)$parent;
-                if ($child  !== null) $child  = (string)$child;
+                if ($parent !== null) $parent = (string) $parent;
+                if ($child  !== null) $child  = (string) $child;
 
                 $code = $assetPayload['asset_code'] ?? null;
-                if ($parent && $child) $code = $parent . '-' . $child;
-                if (!$code) {
+                if ($parent && $child) {
+                    $code = $parent . '-' . $child;
+                }
+                if (! $code) {
                     $skipped++;
+                    $rowErrors[] = "Row {$rowIndex}: asset_code / parent+child kosong, baris dilewati.";
+                    DB::rollBack();
                     continue;
                 }
                 $assetPayload['asset_code'] = $code;
 
                 if (empty($assetPayload['kode_group_category'])) {
-                    $assetPayload['kode_group_category'] = $parent ? substr($parent, 0, 5) : substr($code, 0, 5);
-                }
-                if (empty($assetPayload['kode_sumber'])) {
-                    $assetPayload['kode_sumber'] = 'EXC';
+                    $assetPayload['kode_group_category'] = $parent
+                        ? substr($parent, 0, 5)
+                        : substr($code, 0, 5);
                 }
 
+                if (empty($assetPayload['kode_sumber'])) {
+                    $assetPayload['kode_sumber'] = 'EXC'; // default sumber Excel
+                }
+
+                // pastikan kode_sumber valid
+                $kodeSumber = $assetPayload['kode_sumber'] ?? null;
+                if ($kodeSumber) {
+                    $existsSumber = DB::table('master_sumber')
+                        ->where('kode', $kodeSumber)
+                        ->exists();
+
+                    if (! $existsSumber) {
+                        throw new \RuntimeException("kode_sumber '{$kodeSumber}' tidak ditemukan di master_sumber");
+                    }
+                }
+
+                // === Assets main ===
                 $asset = Assets::where('asset_code', $code)->first();
                 $isNew = false;
-                if (!$asset) {
+                if (! $asset) {
                     $asset = new Assets();
-                    $asset->uuid = (string) Str::uuid();
+                    $asset->uuid       = (string) Str::uuid();
                     $asset->asset_code = $code;
-                    $isNew = true;
+                    $isNew             = true;
                 }
+
                 foreach (
                     [
                         'description',
@@ -943,25 +1007,27 @@ class AssetsController extends Controller
                         'asset_number_child',
                         'kode_group_category',
                         'kode_sumber',
+                        'notes',
                     ] as $f
                 ) {
-                    if (array_key_exists($f, $assetPayload)) $asset->{$f} = $assetPayload[$f];
+                    if (array_key_exists($f, $assetPayload)) {
+                        $asset->{$f} = $assetPayload[$f];
+                    }
                 }
+
                 $asset->save();
                 $isNew ? $inserted++ : $updated++;
 
-                // generate qr
+                // === QR ===
                 try {
                     $displayLabel = $asset->asset_code . ($asset->description ? (' (' . $asset->description . ')') : '');
-
-                    $labeledSvg = $this->generate_qr($asset->uuid, $displayLabel);
+                    $labeledSvg   = $this->generate_qr($asset->uuid, $displayLabel);
 
                     if (! Storage::disk('public')->exists('qrcodes')) {
                         Storage::disk('public')->makeDirectory('qrcodes');
                     }
 
                     $qrRelativePath = "qrcodes/{$asset->uuid}.svg";
-
                     Storage::disk('public')->put($qrRelativePath, $labeledSvg);
 
                     $qr = AssetsQr::firstOrNew(['asset_uuid' => $asset->uuid]);
@@ -971,22 +1037,29 @@ class AssetsController extends Controller
                     $qr->generated_at = now();
                     $qr->save();
                 } catch (\Throwable $e) {
-                    report($e);
+                    report($e); // jangan hentikan import kalau QR gagal
                 }
 
-                if ($hasAssignments && !empty($assignmentPayload)) {
-                    $exists = DB::table('assets_assignment')->where('asset_uuid', $asset->uuid)->first();
+                // === Assignment ===
+                if ($hasAssignments && ! empty($assignmentPayload)) {
+                    $exists = DB::table('assets_assignment')
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
                     $assignmentPayload['asset_uuid'] = $asset->uuid;
                     $assignmentPayload['updated_at'] = now();
                     if ($exists) {
-                        DB::table('assets_assignment')->where('asset_uuid', $asset->uuid)->update($assignmentPayload);
+                        DB::table('assets_assignment')
+                            ->where('asset_uuid', $asset->uuid)
+                            ->update($assignmentPayload);
                     } else {
                         $assignmentPayload['created_at'] = now();
-                        DB::table('assets_assignment')->insert($assignmentPayload);
+                        DB::table('assets_assignment')
+                            ->insert($assignmentPayload);
                     }
                 }
 
-                if ($tableValues && (!empty($valuePayload) || $isPajakFlag !== null)) {
+                // === Values ===
+                if ($tableValues && (! empty($valuePayload) || $isPajakFlag !== null)) {
                     if (array_key_exists('kode_uom', $valuePayload)) {
                         $kode = $resolveUom($valuePayload['kode_uom']);
                         if ($kode) {
@@ -996,79 +1069,120 @@ class AssetsController extends Controller
                         }
                     }
 
-                    $qty      = (float)($valuePayload['quantity'] ?? 0);
-                    $price    = (float)($valuePayload['price'] ?? 0);
+                    $qty      = (float) ($valuePayload['quantity'] ?? 0);
+                    $price    = (float) ($valuePayload['price'] ?? 0);
                     $subtotal = $qty * $price;
 
                     if ($isPajakFlag !== null) {
                         $valuePayload['is_pajak'] = $isPajakFlag ? 1 : 0;
-                        $rate = $getVatRate();
-                        $valuePayload['vat_in'] = $isPajakFlag ? round($subtotal * $rate, 2) : 0.0;
+                        $rate                     = $getVatRate();
+                        $valuePayload['vat_in']   = $isPajakFlag ? round($subtotal * $rate, 2) : 0.0;
                     }
 
-                    if (!array_key_exists('total', $valuePayload)) {
-                        $vat = (float)($valuePayload['vat_in'] ?? 0);
+                    if (! array_key_exists('total', $valuePayload)) {
+                        $vat = (float) ($valuePayload['vat_in'] ?? 0);
                         $valuePayload['total'] = round($subtotal + $vat, 2);
                     }
+
                     if (isset($valuePayload['useful_life_month']) && $valuePayload['useful_life_month'] !== null) {
-                        $months = (float)$valuePayload['useful_life_month'];
+                        $months = (float) $valuePayload['useful_life_month'];
                         $valuePayload['useful_life_year'] = round($months / 12, 2);
                     }
 
-                    $existsV = DB::table($tableValues)->where('asset_uuid', $asset->uuid)->first();
+                    $existsV = DB::table($tableValues)
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
                     $valuePayload['asset_uuid'] = $asset->uuid;
                     $valuePayload['updated_at'] = now();
                     if ($existsV) {
-                        DB::table($tableValues)->where('asset_uuid', $asset->uuid)->update($valuePayload);
+                        DB::table($tableValues)
+                            ->where('asset_uuid', $asset->uuid)
+                            ->update($valuePayload);
                     } else {
                         $valuePayload['created_at'] = now();
                         DB::table($tableValues)->insert($valuePayload);
                     }
                 }
 
-                if ($tableIdentifiers && !empty($identifiersPayload)) {
-                    $existsI = DB::table($tableIdentifiers)->where('asset_uuid', $asset->uuid)->first();
+                // === Identifiers ===
+                if ($tableIdentifiers && ! empty($identifiersPayload)) {
+                    $existsI = DB::table($tableIdentifiers)
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
                     $identifiersPayload['asset_uuid'] = $asset->uuid;
                     $identifiersPayload['updated_at'] = now();
                     if ($existsI) {
-                        DB::table($tableIdentifiers)->where('asset_uuid', $asset->uuid)->update($identifiersPayload);
+                        DB::table($tableIdentifiers)
+                            ->where('asset_uuid', $asset->uuid)
+                            ->update($identifiersPayload);
                     } else {
                         $identifiersPayload['created_at'] = now();
                         DB::table($tableIdentifiers)->insert($identifiersPayload);
                     }
                 }
 
-                if ($tableClassif && !empty($classificationPayload)) {
-                    $existsC = DB::table($tableClassif)->where('asset_uuid', $asset->uuid)->first();
+                // === Classification ===
+                if ($tableClassif && ! empty($classificationPayload)) {
+                    $existsC = DB::table($tableClassif)
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
                     $classificationPayload['asset_uuid'] = $asset->uuid;
                     $classificationPayload['updated_at'] = now();
                     if ($existsC) {
-                        DB::table($tableClassif)->where('asset_uuid', $asset->uuid)->update($classificationPayload);
+                        DB::table($tableClassif)
+                            ->where('asset_uuid', $asset->uuid)
+                            ->update($classificationPayload);
                     } else {
                         $classificationPayload['created_at'] = now();
                         DB::table($tableClassif)->insert($classificationPayload);
                     }
                 }
 
-                if ($tableDocuments && !empty($documentsPayload)) {
-                    $existsD = DB::table($tableDocuments)->where('asset_uuid', $asset->uuid)->first();
+                // === Documents ===
+                if ($tableDocuments && ! empty($documentsPayload)) {
+                    $existsD = DB::table($tableDocuments)
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
                     $documentsPayload['asset_uuid'] = $asset->uuid;
                     $documentsPayload['updated_at'] = now();
                     if ($existsD) {
-                        DB::table($tableDocuments)->where('asset_uuid', $asset->uuid)->update($documentsPayload);
+                        DB::table($tableDocuments)
+                            ->where('asset_uuid', $asset->uuid)
+                            ->update($documentsPayload);
                     } else {
                         $documentsPayload['created_at'] = now();
                         DB::table($tableDocuments)->insert($documentsPayload);
                     }
                 }
-            }
 
-            DB::commit();
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return back()->with('error', 'Import failed: ' . $e->getMessage());
+                DB::commit();
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                $skipped++;
+                $rowErrors[] = "Row {$rowIndex}: " . $e->getMessage();
+                continue;
+            }
         }
 
-        return back()->with('success', "Import done. Inserted: {$inserted}, Updated: {$updated}, Skipped: {$skipped}.");
+        // log dikit biar kelihatan di laravel.log kalau mau cek
+        Log::info('ASSETS_UPLOAD_EXCEL_SUMMARY', [
+            'rows'     => $rows,
+            'inserted' => $inserted,
+            'updated'  => $updated,
+            'skipped'  => $skipped,
+            'errors'   => $rowErrors,
+        ]);
+
+        return view('assets.bulk_upload', [
+            'success'        => "Import done. Inserted: {$inserted}, Updated: {$updated}, Skipped: {$skipped}.",
+            'error'          => null,
+            'import_summary' => [
+                'rows'     => $rows,
+                'inserted' => $inserted,
+                'updated'  => $updated,
+                'skipped'  => $skipped,
+                'errors'   => $rowErrors,
+            ],
+        ]);
     }
 }

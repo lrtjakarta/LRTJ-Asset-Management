@@ -98,13 +98,20 @@ class DisposalApi extends Controller
             ->with([
                 'status:uuid,kode,name',
                 'target:uuid,kode,name',
-                'asset:uuid,asset_code,description',
+                // asset + relations we need for location/status/owner/user/maintenance + value
+                'asset.value',
+                'asset.location',
+                'asset.status',
+                'asset.assignment.owner',
+                'asset.assignment.user',
+                'asset.assignment.maintenance',
             ])
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($uuidSet->isNotEmpty(),    fn($x) => $x->whereIn('assets_disposals.uuid', $uuidSet))
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
             // keep old "target"
             ->when(!empty($v['target']),      fn($x) => $x->where('assets_disposals.target_status', $v['target']));
+
 
         // === workflow / status logic (match datatable_all) ===
         if ($request->filled('workflow') && $status === '') {
@@ -258,7 +265,12 @@ class DisposalApi extends Controller
         $row = Disposal::with([
             'status:id,kode,name',
             'target:id,kode,name',
-            'asset:uuid,asset_code,description',
+            'asset.value',
+            'asset.location',
+            'asset.status',
+            'asset.assignment.owner',
+            'asset.assignment.user',
+            'asset.assignment.maintenance',
         ])->where('uuid', $uuid)->firstOrFail();
 
         $data = $this->mapRows(collect([$row]), $tz)->first();
@@ -500,12 +512,130 @@ class DisposalApi extends Controller
         }
         return null;
     }
-
     protected function mapRows($rows, string $tz)
     {
-        return $rows->map(function (Disposal $t) use ($tz) {
-            $workflowLabel = $t->status ? ($t->kode_status . ' - ' . $t->status->name) : $t->kode_status;
-            $targetLabel   = $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status;
+        // Preload depreciation ledger sums per asset (like AssetsApi)
+        $assetUuids = $rows->pluck('asset_uuid')->filter()->unique()->values();
+
+        $ledgerMap = [];
+        if ($assetUuids->isNotEmpty()) {
+            $ledgerRows = DB::table('assets_depr_ledger_monthly')
+                ->selectRaw('asset_uuid, COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
+                ->whereIn('asset_uuid', $assetUuids)
+                ->groupBy('asset_uuid')
+                ->get();
+
+            $ledgerMap = $ledgerRows->keyBy('asset_uuid')->map(function ($r) {
+                return [
+                    'acc_sum' => (float) $r->acc_sum,
+                    'nbv_sum' => (float) $r->nbv_sum,
+                ];
+            })->all();
+        }
+
+        return $rows->map(function (Disposal $t) use ($tz, $ledgerMap) {
+            $workflowLabel = $t->status
+                ? ($t->kode_status . ' - ' . $t->status->name)
+                : $t->kode_status;
+
+            $targetLabel   = $t->target
+                ? ($t->target_status . ' - ' . $t->target->name)
+                : $t->target_status;
+
+            // --- Asset & relations ---
+            $asset     = $t->asset;
+            $assign    = $asset?->assignment;
+            $ownerUc   = $assign?->owner;
+            $userUc    = $assign?->user;
+            $maintUc   = $assign?->maintenance;
+            $loc       = $asset?->location;
+            $statusRel = $asset?->status;
+            $value     = $asset?->value;
+
+            // Location
+            $locCode = $loc?->kode ?? $asset?->kode_location;
+            $locLabel = $locCode
+                ? trim($locCode . ' - ' . ($loc->name ?? ''))
+                : null;
+
+            // Status
+            $statusCode = $statusRel?->kode ?? $asset?->kode_status;
+            $statusLabel = $statusCode
+                ? trim($statusCode . ' - ' . ($statusRel->name ?? ''))
+                : null;
+
+            // Owner / User / Maintenance (from assignment + MasterUserCode)
+            $ownerCode = $assign?->asset_owner ?? $ownerUc?->kode;
+            $ownerLabel = $ownerCode
+                ? trim($ownerCode . ' - ' . ($ownerUc?->department ?? ''))
+                : null;
+
+            $userCode = $assign?->asset_user ?? $userUc?->kode;
+            $userLabel = $userCode
+                ? trim($userCode . ' - ' . ($userUc?->department ?? ''))
+                : null;
+
+            $maintCode = $assign?->asset_maintenance ?? $maintUc?->kode;
+            $maintLabel = $maintCode
+                ? trim($maintCode . ' - ' . ($maintUc?->department ?? ''))
+                : null;
+
+            // Acquisition date like AssetsApi
+            $acqDateFmt = null;
+            if ($value?->actual_date) {
+                if ($value->actual_date instanceof Carbon) {
+                    $acqDateFmt = $value->actual_date->format('d F Y');
+                } else {
+                    try {
+                        $acqDateFmt = Carbon::parse($value->actual_date)->format('d F Y');
+                    } catch (\Throwable $e) {
+                        $acqDateFmt = (string) $value->actual_date;
+                    }
+                }
+            }
+
+            // Ledger sums (Commercial Accumulated Depreciation + NBV)
+            $ledger = $ledgerMap[$t->asset_uuid] ?? null;
+            $accSum = $ledger['acc_sum'] ?? 0;
+            $nbvSum = $ledger['nbv_sum'] ?? 0;
+
+            // Build asset block (same spirit as AssetsApi)
+            $assetArr = [
+                'asset_uuid'        => $t->asset_uuid,
+                'asset_code'        => $t->getAttribute('asset_code') ?? $asset?->asset_code,
+                'asset_description' => $t->getAttribute('asset_description') ?? $asset?->description,
+                'asset_label'       => $asset?->asset_code
+                    ? ($asset->asset_code . ' — ' . ($asset->description ?? ''))
+                    : $t->asset_uuid,
+
+                // location & status
+                'asset_kode_location'       => $locCode,
+                'asset_kode_location_label' => $locLabel,
+                'asset_kode_status'         => $statusCode,
+                'asset_kode_status_label'   => $statusLabel,
+
+                // owner / user / maintenance
+                'asset_owner'             => $ownerCode,
+                'asset_owner_label'       => $ownerLabel,
+                'asset_user'              => $userCode,
+                'asset_user_label'        => $userLabel,
+                'asset_maintenance'       => $maintCode,
+                'asset_maintenance_label' => $maintLabel,
+
+                // value fields (from AssetsApi)
+                'price'             => $value?->price,
+                'quantity'          => $value?->quantity,
+                'vat_in'            => $value?->vat_in,
+                'total'             => $value?->total,
+                'kode_uom'          => $value?->kode_uom,
+                'useful_life_month' => $value?->useful_life_month,
+
+                // NEW: depreciation / NBV (same meaning as AssetsApi)
+                'acquisition_date'       => $acqDateFmt,        // Acquisition Date
+                'commercial_acq_cost'    => $value?->total,     // Commercial Acquisition Cost (IDR)
+                'commercial_accum_depr'  => $accSum,            // Commercial Accumulated Depreciation (IDR)
+                'commercial_nbv'         => $nbvSum,            // Commercial Net Book Value (IDR)
+            ];
 
             // main attachment (original file)
             $fileObj = null;
@@ -524,7 +654,6 @@ class DisposalApi extends Controller
                     'size'          => $size,
                     'sha256'        => $t->file_sha256 ?? null,
                     'last_modified' => $mtime ? gmdate('c', $mtime) : null,
-                    // prefer kind-based download route
                     'download_url'  => route('files.download.kind', ['kind' => 'disposal', 'uuid' => $t->uuid]),
                     'file_url'      => $exists ? url('storage/' . ltrim($t->file_path, '/')) : null,
                 ];
@@ -588,10 +717,8 @@ class DisposalApi extends Controller
                 'uuid'              => $t->uuid,
                 'disposal_code'     => $t->disposal_code,
 
-                'asset_uuid'        => $t->asset_uuid,
-                'asset_code'        => $t->getAttribute('asset_code') ?? $t->asset?->asset_code,
-                'asset_description' => $t->getAttribute('asset_description') ?? $t->asset?->description,
-                'asset_label'       => ($t->asset?->asset_code ? $t->asset->asset_code : $t->asset_uuid),
+                // FULL asset block (with location/status/owner/user/maintenance + value fields)
+                'asset'             => $assetArr,
 
                 'kode_status'       => $t->kode_status,
                 'workflow_label'    => $workflowLabel,
@@ -606,7 +733,6 @@ class DisposalApi extends Controller
 
                 'note'              => $t->note,
                 'file'              => $fileObj,
-                'flow'              => $flow,
 
                 'form_file'         => $formFileObj,
                 'ba_file'           => $baFileObj,
@@ -624,6 +750,7 @@ class DisposalApi extends Controller
             ];
         });
     }
+
     protected function buildFlowTemplate(?string $creatorName = null): array
     {
         $now = now()->toDateTimeString();

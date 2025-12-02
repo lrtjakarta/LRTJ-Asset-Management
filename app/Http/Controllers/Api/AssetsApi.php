@@ -75,6 +75,15 @@ class AssetsApi extends Controller
             ->leftJoin('master_user_code    as ou',   'ou.kode',   '=', 'g.asset_owner')
             ->leftJoin('master_user_code    as uu',   'uu.kode',   '=', 'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',  '=', 'g.asset_maintenance')
+            // NEW: aggregated ledger (accumulated depreciation & NBV)
+            ->leftJoin(DB::raw("(
+                SELECT
+                    asset_uuid,
+                    COALESCE(SUM(accumulated_depr_end), 0) AS commercial_accum_depr,
+                    COALESCE(SUM(ending_balance), 0)       AS commercial_nbv
+                FROM assets_depr_ledger_monthly
+                GROUP BY asset_uuid
+            ) as l"), 'l.asset_uuid', '=', 'a.uuid')
             ->when(!$withTrashed, fn($qb) => $qb->whereNull('a.deleted_at'));
 
         // ---- search (q / asset_q) ----
@@ -147,7 +156,7 @@ class AssetsApi extends Controller
         $q->when(!empty($v['updated_from']), fn($qb) => $qb->where('a.updated_at', '>=', $v['updated_from']));
         $q->when(!empty($v['updated_to']),   fn($qb) => $qb->where('a.updated_at', '<=', $v['updated_to']));
 
-        // ---- SELECT: copied from datatable() (plus upload_code) ----
+        // ---- SELECT: copied from datatable() (plus upload_code & new commercial fields) ----
         $q->select(
             'a.uuid',
             'a.asset_code',
@@ -187,6 +196,13 @@ class AssetsApi extends Controller
             'a.deleted_at',
 
             DB::raw("CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label"),
+
+            // NEW: fields right below location_label
+            'v.actual_date as acquisition_date',                                     // Acquisition Date (raw, frontend can format)
+            DB::raw('v.total AS commercial_acq_cost'),                               // Commercial Acquisition Cost (IDR)
+            DB::raw('COALESCE(l.commercial_accum_depr, 0) AS commercial_accum_depr'),// Commercial Accumulated Depreciation (IDR)
+            DB::raw('COALESCE(l.commercial_nbv, 0) AS commercial_nbv'),              // Commercial Net Book Value (IDR)
+
             DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label"),
             DB::raw("CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label"),
             DB::raw("CASE WHEN mu.name  IS NULL THEN v.kode_uom         ELSE v.kode_uom         || ' - ' || mu.name  END AS kode_uom_label"),
@@ -195,7 +211,6 @@ class AssetsApi extends Controller
             DB::raw("CASE WHEN uu.department  IS NULL THEN g.asset_user       ELSE g.asset_user          || ' - ' || uu.department  END AS asset_user_label"),
             DB::raw("CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance || ' - ' || muw.department END AS asset_maintenance_label"),
             DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at_local"),
-
         )
             ->orderBy($sortBy, $sortDir);
 

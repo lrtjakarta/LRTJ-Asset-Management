@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DepreciationController;
 use App\Http\Controllers\DisposalController;
 use App\Http\Controllers\ExportController;
+use App\Http\Controllers\LabelPrintingController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\MasterRoleController;
@@ -378,6 +379,16 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/transfer-requests', [ExportController::class, 'transfer_requests_export'])->name('transfer-requests');
         Route::get('/depreciation-monthly', [ExportController::class, 'depreciation_monthly_export'])->name('depreciation.monthly');
     });
+    
+    // LABEL PRINTING ROUTE
+    Route::prefix('label-printing')->name('label.')->group(function () {
+        // Pakai permission ASSETS,R (boleh lihat asset berarti boleh print label)
+        Route::middleware('role.action:ASSETS,R')->group(function () {
+            Route::get('/', [LabelPrintingController::class, 'index'])->name('index');
+            Route::post('/print', [LabelPrintingController::class, 'print'])->name('print');
+        });
+    });
+
 
     // TRASH ROUTE
     Route::prefix('trash')->name('trash.')->group(function () {

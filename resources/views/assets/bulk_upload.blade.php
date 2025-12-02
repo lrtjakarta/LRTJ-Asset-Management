@@ -24,12 +24,19 @@
         <div id="kt_app_content_container" class="app-container container-fluid">
 
             {{-- Messages --}}
-            @if (session('success'))
-                <div class="alert alert-success">{{ session('success') }}</div>
+            @php
+                $successMsg = $success ?? session('success');
+                $errorMsg = $error ?? session('error');
+            @endphp
+
+            @if ($successMsg)
+                <div class="alert alert-success">{{ $successMsg }}</div>
             @endif
-            @if (session('error'))
-                <div class="alert alert-danger">{!! session('error') !!}</div>
+
+            @if ($errorMsg)
+                <div class="alert alert-danger">{!! $errorMsg !!}</div>
             @endif
+
             @if ($errors->any())
                 <div class="alert alert-danger">
                     <div class="fw-bold mb-2">Upload failed:</div>
@@ -103,10 +110,14 @@
                             </div>
                         </form>
 
-                        @if (session('import_summary'))
+                        @php
+                            $summary = $import_summary ?? session('import_summary');
+                        @endphp
+
+                        @if (!empty($summary))
                             <div class="card-body border-top pt-6">
                                 <h5 class="fw-bold mb-4">Import Summary</h5>
-                                @php($s = session('import_summary'))
+                                @php($s = $summary)
                                 <div class="row g-6 mb-4">
                                     <div class="col-sm-4">
                                         <div class="border rounded p-4">
@@ -140,6 +151,7 @@
                                 @endif
                             </div>
                         @endif
+
                     </div>
                 </div>
             </div>

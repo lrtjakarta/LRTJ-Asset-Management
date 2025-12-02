@@ -217,10 +217,13 @@
                     </div>
                     <!--end:Menu item-->
                     @endcanAction
+
+                    @canAction('ASSETS','R')
                     <!--begin:Menu item-->
-                    <div data-kt-menu-trigger="click" class="menu-item menu-accordion">
+                    <div class="menu-item">
                         <!--begin:Menu link-->
-                        <span class="menu-link" href="#">
+                        <a class="menu-link {{ request()->segment(1) == 'label-printing' ? 'active' : '' }}"
+                            href="{{ route('label.index') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-printer fs-2">
                                     <span class="path1"></span>
@@ -231,10 +234,12 @@
                                 </i>
                             </span>
                             <span class="menu-title">Printing Label</span>
-                        </span>
+                        </a>
                         <!--end:Menu link-->
                     </div>
                     <!--end:Menu item-->
+                    @endcanAction
+
                     @canAction('ASSETS','R')
                     <!--begin:Menu item-->
                     <div data-kt-menu-trigger="click"
@@ -467,7 +472,8 @@
                     <!--begin:Menu item-->
                     <div class="menu-item">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->segment(1) == 'reporting' ? 'active' : '' }}" href="{{ route('reporting.index') }}">
+                        <a class="menu-link {{ request()->segment(1) == 'reporting' ? 'active' : '' }}"
+                            href="{{ route('reporting.index') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-document fs-2">
                                     <span class="path1"></span>
