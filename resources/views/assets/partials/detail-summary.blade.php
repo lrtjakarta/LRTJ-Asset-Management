@@ -14,9 +14,23 @@
                     Updated:
                     {{ optional($asset->updated_at)->timezone('Asia/Jakarta')->format('d M Y H:i') }}
                 </div>
-                <a href="#" class="btn btn-sm btn-danger mt-2">Print Page</a>
+
+                {{-- Print Label (single asset) --}}
+                <form action="{{ route('label.print') }}"
+                      method="POST"
+                      target="_blank"
+                      class="mt-2 d-inline">
+                    @csrf
+                    {{-- controller expect JSON array of uuids --}}
+                    <input type="hidden" name="asset_uuids"
+                           value='["{{ $asset->uuid }}"]'>
+
+                    <button type="submit" class="btn btn-sm btn-danger mt-2">
+                        Print Label
+                    </button>
+                </form>
             </div>
         </div>
     </div>
 </div>
-{{-- End Summary Card --}}  
+{{-- End Summary Card --}}
