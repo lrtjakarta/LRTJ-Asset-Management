@@ -10,7 +10,7 @@
 
         body {
             font-family: Arial, sans-serif;
-            margin: 10px;
+            margin: 10px; /* buat preview di layar, nanti di-print jadi 0 */
         }
 
         .labels-container {
@@ -19,62 +19,80 @@
         }
 
         .label-item {
-            width: 90mm;      /* sesuaikan dengan ukuran kertas label */
-            height: 45mm;
-            border: 1px solid #ddd;
-            padding: 6px;
-            margin: 4px;
+            width: 90mm;      /* lebar label fisik */
+            height: 45mm;     /* tinggi label fisik */
+            padding: 3mm 3mm 3mm 3mm;
+            margin: 3mm 3mm;
             display: flex;
             align-items: center;
             page-break-inside: avoid;
+            border: 1px dashed #ccc; /* hanya untuk preview di layar */
+            background: #fff;
         }
 
         .label-qr {
-            flex: 0 0 40mm;
+            flex: 0 0 32mm; /* sedikit lebih kecil biar muat teks */
             text-align: center;
         }
 
         .label-qr img {
-            max-width: 38mm;
-            max-height: 38mm;
+            max-width: 30mm;
+            max-height: 30mm;
         }
 
         .label-info {
             flex: 1;
-            padding-left: 6px;
-            font-size: 11px;
+            padding-left: 3mm;
+            font-size: 9pt;
             overflow: hidden;
         }
 
         .label-code {
             font-weight: bold;
-            font-size: 12px;
+            font-size: 10pt;
             margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .label-desc {
-            font-size: 11px;
+            font-size: 9pt;
             margin-bottom: 2px;
             max-height: 3.2em;
             overflow: hidden;
         }
 
         .label-meta {
-            font-size: 10px;
+            font-size: 8pt;
             color: #333;
         }
 
         .label-meta div {
-            line-height: 1.3;
+            line-height: 1.25;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
+        /* Ukuran halaman untuk driver yang respect @page (beberapa driver thermal nurut) */
         @page {
-            margin: 8mm;
+            size: 90mm 45mm;
+            margin: 0;
         }
 
         @media print {
             body {
                 margin: 0;
+            }
+
+            .labels-container {
+                margin: 0;
+            }
+
+            .label-item {
+                margin: 0;          /* antar label tanpa gap, ikut setting gap di driver Sato */
+                border: none;       /* border hanya buat preview layar */
             }
         }
     </style>
@@ -103,12 +121,19 @@
                                 - {{ $item->location_name }}
                             @endif
                         </div>
+
                         @if(!empty($item->rfid_epc))
                             <div>RFID: {{ $item->rfid_epc }}</div>
                         @endif
-                        {{-- Kalau mau, bisa tambahkan Owner / User --}}
-                        {{-- <div>Owner: {{ $item->asset_owner }}</div> --}}
-                        {{-- <div>User: {{ $item->asset_user }}</div> --}}
+
+                        {{-- Kalau mau diaktifkan:
+                        @if (!empty($item->asset_owner))
+                            <div>Owner: {{ $item->asset_owner }}</div>
+                        @endif
+                        @if (!empty($item->asset_user))
+                            <div>User: {{ $item->asset_user }}</div>
+                        @endif
+                        --}}
                     </div>
                 </div>
             </div>

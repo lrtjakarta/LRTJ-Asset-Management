@@ -26,7 +26,9 @@ class AuthLdapController extends Controller
         $username = $data['username'];
         $password = $data['password'];
 
+        // --- Rate limiting ---------------------------------------------------
         $key = 'ldap-login:' . Str::lower($request->input('username')) . '|' . $request->ip();
+
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
 
@@ -35,9 +37,9 @@ class AuthLdapController extends Controller
             ])->status(429);
         }
 
-        RateLimiter::hit($key, 60);
+        RateLimiter::hit($key, 60); // 5 attempts per 60 seconds
 
-        // --- STATIC ADMIN SHORT-CIRCUIT ---
+        // --- STATIC ADMIN SHORT-CIRCUIT -------------------------------------
         $staticUser = strtolower((string) config('auth.static_admin.username'));
         $staticPass = (string) config('auth.static_admin.password');
 
@@ -52,7 +54,6 @@ class AuthLdapController extends Controller
                 name: 'Administrator',
                 email: 'admin@example.com',
                 ou: 'local',
-                kodeDepartment: null,
                 isStaticAdmin: true,
             );
 
@@ -62,15 +63,11 @@ class AuthLdapController extends Controller
                 ->with('success', 'Welcome, admin!');
         }
 
-        /**
-         * 1) LOCAL DB LOGIN (users table)
-         *    If you have users with username + hashed password, this will log them in
-         *    WITHOUT touching LDAP.
-         */
+        // --- 1) LOCAL DB LOGIN (users table, username + hashed password) -----
         if (
             Auth::attempt(
                 ['username' => $username, 'password' => $password],
-                $request->boolean('remember') // if you have "remember me" checkbox
+                $request->boolean('remember')
             )
         ) {
             $request->session()->regenerate();
@@ -79,7 +76,7 @@ class AuthLdapController extends Controller
             return redirect()->intended(route('dashboard'));
         }
 
-        // 2) LDAP CONFIG
+        // --- 2) LDAP CONFIG --------------------------------------------------
         $host    = env('LDAP_HOST', 'ldap.forumsys.com');
         $port    = (int) env('LDAP_PORT', 389);
         $baseDn  = env('LDAP_BASE_DN', 'dc=example,dc=com');
@@ -89,9 +86,10 @@ class AuthLdapController extends Controller
 
         $userDn = "uid={$username},{$baseDn}";
 
-        // 3) Try direct bind
+        // --- 3) Try direct bind ---------------------------------------------
         if ($this->ldapBind($host, $port, $userDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+
             $cn    = $attrs['cn'][0]   ?? $username;
             $email = $attrs['mail'][0] ?? null;
 
@@ -105,14 +103,13 @@ class AuthLdapController extends Controller
             }
             $ou = $ous[0] ?? null;
 
-            // sync local user & login via Auth (session from users table)
+            // Only auth via LDAP; roles & departments are internal
             $this->syncAndLoginUser(
                 $request,
                 username: $username,
                 name: $cn,
                 email: $email,
                 ou: $ou,
-                kodeDepartment: $attrs['departmentNumber'][0] ?? null,
                 isStaticAdmin: false,
             );
 
@@ -121,10 +118,12 @@ class AuthLdapController extends Controller
             return redirect()->intended(route('dashboard'));
         }
 
-        // 4) Fallback: find DN then bind
+        // --- 4) Fallback: search DN then bind -------------------------------
         $foundDn = $this->ldapFindUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+
         if ($foundDn && $this->ldapBind($host, $port, $foundDn, $password, $timeout)) {
             $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+
             $cn    = $attrs['cn'][0]   ?? $username;
             $email = $attrs['mail'][0] ?? null;
 
@@ -144,7 +143,6 @@ class AuthLdapController extends Controller
                 name: $cn,
                 email: $email,
                 ou: $ou,
-                kodeDepartment: $attrs['departmentNumber'][0] ?? null,
                 isStaticAdmin: false,
             );
 
@@ -153,6 +151,7 @@ class AuthLdapController extends Controller
             return redirect()->route('dashboard');
         }
 
+        // --- 5) Failed -------------------------------------------------------
         return back()
             ->withErrors(['username' => 'Invalid credentials.'])
             ->onlyInput('username');
@@ -167,70 +166,113 @@ class AuthLdapController extends Controller
         return redirect()->route('ldap.login');
     }
 
+    /**
+     * Sync LDAP user into local users table & log them in.
+     *
+     * - LDAP is only for auth.
+     * - Roles and kode_department are managed internally.
+     */
     private function syncAndLoginUser(
         Request $request,
         string $username,
         string $name,
         ?string $email,
         ?string $ou,
-        ?string $kodeDepartment = null,
         bool $isStaticAdmin = false,
     ): void {
-        // sync to users table
-        $user = User::updateOrCreate(
+        // Create user if not exists; do NOT set kode_department here.
+        $user = User::firstOrCreate(
             ['username' => $username],
             [
                 'name'  => $name,
                 'email' => $email,
                 'ou'    => $ou,
-                'kode_department' => $kodeDepartment,
             ]
         );
+
+        $isNew = $user->wasRecentlyCreated;
+
+        // Keep some basic info in sync with LDAP (optional)
+        $user->name = $name;
+        if ($email) {
+            $user->email = $email;
+        }
+        if ($ou) {
+            $user->ou = $ou;
+        }
+        $user->save();
+
+        // ROLES:
+        //  - Static admin: force SYSADMIN
+        //  - Others: give default AUDITOR only on first login if no role yet
+        //  - After that, all role changes are via internal UI.
 
         if ($isStaticAdmin) {
             $user->roles()->syncWithoutDetaching(['SYSADMIN']);
 
             if (empty($user->role_kode)) {
                 $user->role_kode = 'SYSADMIN';
+                $user->save();
             }
-            $user->save();
+        } else {
+            if ($isNew && empty($user->role_kode)) {
+                $user->roles()->syncWithoutDetaching(['AUDITOR']);
+                $user->role_kode = 'AUDITOR';
+                $user->save();
+            }
         }
 
-        // session always uses users table
         Auth::login($user, remember: true);
         $request->session()->regenerate();
     }
 
-    /* ---------- LDAP helpers---------- */
+    /* ---------------------------------------------------------------------- */
+    /* ----------------------------- LDAP helpers --------------------------- */
+    /* ---------------------------------------------------------------------- */
 
     private function ldapConnect(string $host, int $port, int $timeout)
     {
         $conn = @ldap_connect($host, $port);
-        if (! $conn) {
+        if (!$conn) {
             return null;
         }
+
         ldap_set_option($conn, LDAP_OPT_PROTOCOL_VERSION, 3);
         ldap_set_option($conn, LDAP_OPT_REFERRALS, 0);
         ldap_set_option($conn, LDAP_OPT_NETWORK_TIMEOUT, $timeout);
+
         return $conn;
     }
 
     private function ldapBind(string $host, int $port, string $dn, string $password, int $timeout): bool
     {
         $conn = $this->ldapConnect($host, $port, $timeout);
-        if (! $conn) return false;
+        if (!$conn) {
+            return false;
+        }
+
         $ok = @ldap_bind($conn, $dn, $password);
         ldap_unbind($conn);
+
         return (bool) $ok;
     }
 
-    private function ldapFindUserDn(string $host, int $port, ?string $bindDn, ?string $bindPass, string $baseDn, string $username, int $timeout): ?string
-    {
+    private function ldapFindUserDn(
+        string $host,
+        int $port,
+        ?string $bindDn,
+        ?string $bindPass,
+        string $baseDn,
+        string $username,
+        int $timeout
+    ): ?string {
         $conn = $this->ldapConnect($host, $port, $timeout);
-        if (! $conn) return null;
+        if (!$conn) {
+            return null;
+        }
 
         if ($bindDn && $bindPass) {
-            if (! @ldap_bind($conn, $bindDn, $bindPass)) {
+            if (!@ldap_bind($conn, $bindDn, $bindPass)) {
                 ldap_unbind($conn);
                 return null;
             }
@@ -240,8 +282,9 @@ class AuthLdapController extends Controller
 
         $filter = sprintf('(uid=%s)', ldap_escape($username, '', LDAP_ESCAPE_FILTER));
         $attrs  = ['dn'];
-        $sr     = @ldap_search($conn, $baseDn, $filter, $attrs, 0, 1);
-        if (! $sr) {
+
+        $sr = @ldap_search($conn, $baseDn, $filter, $attrs, 0, 1);
+        if (!$sr) {
             ldap_unbind($conn);
             return null;
         }
@@ -252,16 +295,26 @@ class AuthLdapController extends Controller
         if ($entries && $entries['count'] > 0) {
             return $entries[0]['dn'] ?? null;
         }
+
         return null;
     }
 
-    private function ldapFetchAttributes(string $host, int $port, ?string $bindDn, ?string $bindPass, string $baseDn, string $username, int $timeout): array
-    {
+    private function ldapFetchAttributes(
+        string $host,
+        int $port,
+        ?string $bindDn,
+        ?string $bindPass,
+        string $baseDn,
+        string $username,
+        int $timeout
+    ): array {
         $conn = $this->ldapConnect($host, $port, $timeout);
-        if (! $conn) return [];
+        if (!$conn) {
+            return [];
+        }
 
         if ($bindDn && $bindPass) {
-            if (! @ldap_bind($conn, $bindDn, $bindPass)) {
+            if (!@ldap_bind($conn, $bindDn, $bindPass)) {
                 ldap_unbind($conn);
                 return [];
             }
@@ -270,9 +323,12 @@ class AuthLdapController extends Controller
         }
 
         $filter = sprintf('(uid=%s)', ldap_escape($username, '', LDAP_ESCAPE_FILTER));
+
+        // 'memberOf' will come back as 'memberof' key (lowercase) in PHP
         $attrs  = ['cn', 'uid', 'mail', 'memberOf', 'sn', 'givenName', 'ou', 'departmentNumber'];
-        $sr     = @ldap_search($conn, $baseDn, $filter, $attrs, 0, 1);
-        if (! $sr) {
+
+        $sr = @ldap_search($conn, $baseDn, $filter, $attrs, 0, 1);
+        if (!$sr) {
             ldap_unbind($conn);
             return [];
         }
@@ -283,6 +339,7 @@ class AuthLdapController extends Controller
         if ($entries && $entries['count'] > 0) {
             return $entries[0];
         }
+
         return [];
     }
 
@@ -292,26 +349,32 @@ class AuthLdapController extends Controller
             $parts = @ldap_explode_dn($dn, 0);
             if (is_array($parts)) {
                 $out = [];
-                for ($i = 0; $i < ($parts['count'] ?? 0); $i++) {   // <-- fixed: $i
+                $count = $parts['count'] ?? 0;
+
+                for ($i = 0; $i < $count; $i++) {
                     $p = $parts[$i];
                     if (stripos($p, 'ou=') === 0) {
                         $out[] = substr($p, 3);
                     }
                 }
+
                 return $out;
             }
         }
 
         preg_match_all('/ou=([^,]+)/i', $dn, $m);
+
         return array_map('strval', $m[1] ?? []);
     }
 
     private function extractOusFromMemberOf(array $attrs): array
     {
         $res = [];
+
         if (!empty($attrs['memberof'])) {
             for ($i = 0; $i < $attrs['memberof']['count']; $i++) {
                 $dn = $attrs['memberof'][$i];
+
                 if (preg_match('/ou=([^,]+)/i', $dn, $m)) {
                     $res[] = $m[1];
                 } elseif (preg_match('/cn=([^,]+)/i', $dn, $m)) {
@@ -319,6 +382,7 @@ class AuthLdapController extends Controller
                 }
             }
         }
+
         return $res;
     }
 }
