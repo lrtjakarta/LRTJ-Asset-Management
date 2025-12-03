@@ -25,7 +25,11 @@ class AuthController extends Controller
             'device_name' => ['nullable', 'string', 'max:100'],
         ]);
 
-        $key = 'api-login:' . Str::lower($request->input('username')) . '|' . $request->ip();
+        $usernameInput = trim($request->input('username'));
+        $password      = (string) $request->input('password');
+        $device        = $request->input('device_name', 'api');
+
+        $key = 'api-login:' . Str::lower($usernameInput) . '|' . $request->ip();
         if (RateLimiter::tooManyAttempts($key, 10)) {
             $seconds = RateLimiter::availableIn($key);
             return response()->json([
@@ -34,16 +38,19 @@ class AuthController extends Controller
         }
         RateLimiter::hit($key, 60);
 
-        $username = Str::lower(trim($request->input('username')));
-        $password = (string) $request->input('password');
-        $device   = $request->input('device_name', 'api');
+        // Normalize username (same idea as web)
+        $username = $usernameInput;
 
-        // --- STATIC ADMIN SHORT-CIRCUIT (same idea as web) ---
-        $staticUser = Str::lower((string) config('auth.static_admin.username', ''));
+        /* ------------------------------------------------------------------ *
+         * 1) STATIC ADMIN (same idea as web AuthLdapController)
+         * ------------------------------------------------------------------ */
+        $staticUser = strtolower((string) config('auth.static_admin.username', ''));
         $staticPass = (string) config('auth.static_admin.password', '');
+
         if (
             $staticUser !== '' && $staticPass !== '' &&
-            hash_equals($staticUser, $username) && hash_equals($staticPass, $password)
+            hash_equals($staticUser, Str::lower($username)) &&
+            hash_equals($staticPass, $password)
         ) {
             $user = User::firstOrCreate(
                 ['username' => $staticUser],
@@ -54,9 +61,11 @@ class AuthController extends Controller
                 ]
             );
 
-            // Ensure SYSADMIN role attached (like web AuthLdapController)
-            if (! $user->roles()->where('kode', 'SYSADMIN')->exists()) {
-                $user->roles()->syncWithoutDetaching(['SYSADMIN']);
+            // Ensure SYSADMIN role + primary role, like web syncAndLoginUser
+            $user->roles()->syncWithoutDetaching(['SYSADMIN']);
+            if (empty($user->role_kode)) {
+                $user->role_kode = 'SYSADMIN';
+                $user->save();
             }
 
             $token = $user->createToken($device)->plainTextToken;
@@ -67,12 +76,35 @@ class AuthController extends Controller
                 'token_type'   => 'Bearer',
                 'user'         => $this->buildUserPayload($user, [
                     'auth' => 'static',
-                    // no DN for static user
                 ]),
             ], 201);
         }
 
-        // --- LDAP LOGIN (mirrors web logic as much as possible) ---
+        /* ------------------------------------------------------------------ *
+         * 2) LOCAL DB LOGIN (users table, username + hashed password)
+         *    Mirrors Auth::attempt(['username' => ..., 'password' => ...])
+         * ------------------------------------------------------------------ */
+        $localUser = User::where('username', $username)->first();
+
+        if ($localUser && $localUser->password && Hash::check($password, $localUser->password)) {
+            // Local DB auth only — do NOT touch kode_department or roles here.
+            $token = $localUser->createToken($device)->plainTextToken;
+            RateLimiter::clear($key);
+
+            return response()->json([
+                'access_token' => $token,
+                'token_type'   => 'Bearer',
+                'user'         => $this->buildUserPayload($localUser, [
+                    'auth' => 'local',
+                ]),
+            ], 201);
+        }
+
+        /* ------------------------------------------------------------------ *
+         * 3) LDAP LOGIN (same logic as AuthLdapController, but via LdapAuth)
+         *     - Only used when static admin & local DB login both fail.
+         *     - Does NOT set kode_department; roles remain internal.
+         * ------------------------------------------------------------------ */
         $host    = config('ldap.host');
         $port    = (int) config('ldap.port', 389);
         $baseDn  = (string) config('ldap.base_dn');
@@ -96,18 +128,31 @@ class AuthController extends Controller
             $cn    = $attrs['cn'][0]   ?? $username;
             $mail  = $attrs['mail'][0] ?? null;
 
-            // kode_department from LDAP like web AuthLdapController
-            $kodeDepartment = $attrs['departmentNumber'][0] ?? null;
-
-            $user = User::updateOrCreate(
+            // Do NOT take kode_department from LDAP; internal only
+            $user = User::firstOrCreate(
                 ['username' => $username],
                 [
-                    'name'            => $cn,
-                    'email'           => $mail,
-                    'password'        => Hash::make(Str::random(32)),
-                    'kode_department' => $kodeDepartment,
+                    'name'     => $cn,
+                    'email'    => $mail,
+                    'password' => Hash::make(Str::random(32)),
                 ]
             );
+
+            $isNew = $user->wasRecentlyCreated;
+
+            // Keep basic info in sync, like web syncAndLoginUser
+            $user->name = $cn;
+            if ($mail) {
+                $user->email = $mail;
+            }
+            $user->save();
+
+            // Default role for brand new LDAP users (same as web: AUDITOR)
+            if ($isNew && empty($user->role_kode)) {
+                $user->roles()->syncWithoutDetaching(['AUDITOR']);
+                $user->role_kode = 'AUDITOR';
+                $user->save();
+            }
 
             $token = $user->createToken($device)->plainTextToken;
             RateLimiter::clear($key);
@@ -122,6 +167,9 @@ class AuthController extends Controller
             ], 201);
         }
 
+        /* ------------------------------------------------------------------ *
+         * 4) FAILED
+         * ------------------------------------------------------------------ */
         return response()->json(['message' => 'Invalid credentials.'], 422);
     }
 
