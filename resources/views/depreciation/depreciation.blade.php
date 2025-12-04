@@ -548,12 +548,13 @@
 
             $('#btnReset').on('click', function() {
                 $('#f-period').val(DEFAULT_PERIOD_MONTH);
-                $('#f-asset-status').val('');
+                $('#f-asset-status').val('').trigger('change');
                 $('#f-cap-from').val('');
                 $('#f-cap-to').val('');
                 $('#f-asset').val('');
                 tbl.ajax.reload();
                 updatePeriodText();
+                console.log('Filters reset');
             });
 
             $('#btnExport').on('click', function(e) {

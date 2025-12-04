@@ -8,6 +8,7 @@ use Yajra\DataTables\Facades\DataTables;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class ReportingController extends Controller
 {
@@ -219,6 +220,10 @@ class ReportingController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Reporting');
+        $set = function ($colIndex, $rowIndex, $value) use ($sheet) {
+            $cell = Coordinate::stringFromColumnIndex($colIndex) . $rowIndex;
+            $sheet->setCellValue($cell, $value);
+        };
 
         // Header row
         $headers = [
@@ -255,7 +260,7 @@ class ReportingController extends Controller
 
         $col = 1;
         foreach ($headers as $h) {
-            $sheet->setCellValueByColumnAndRow($col++, 1, $h);
+            $set($col++, 1, $h);
         }
 
         // Data rows
@@ -263,36 +268,36 @@ class ReportingController extends Controller
         foreach ($rows as $r) {
             $col = 1;
 
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->asset_code);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->description);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->kode_asset_class_label);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->kode_location_label);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->kode_status_label);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->asset_owner_label);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->asset_user_label);
+            $set($col++, $rowIdx, $r->asset_code);
+            $set($col++, $rowIdx, $r->description);
+            $set($col++, $rowIdx, $r->kode_asset_class_label);
+            $set($col++, $rowIdx, $r->kode_location_label);
+            $set($col++, $rowIdx, $r->kode_status_label);
+            $set($col++, $rowIdx, $r->asset_owner_label);
+            $set($col++, $rowIdx, $r->asset_user_label);
 
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->price);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->quantity);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->vat_in);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->kode_uom_label);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->total);
+            $set($col++, $rowIdx, $r->price);
+            $set($col++, $rowIdx, $r->quantity);
+            $set($col++, $rowIdx, $r->vat_in);
+            $set($col++, $rowIdx, $r->kode_uom_label);
+            $set($col++, $rowIdx, $r->total);
 
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->cap_date);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->period);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->depr_code);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->opening_balance);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->additions);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->transfers_in);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->transfers_out);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->disposals);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->adjustment_value);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->adjustment_depreciation);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->depr_expense);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->ending_balance);
+            $set($col++, $rowIdx, $r->cap_date);
+            $set($col++, $rowIdx, $r->period);
+            $set($col++, $rowIdx, $r->depr_code);
+            $set($col++, $rowIdx, $r->opening_balance);
+            $set($col++, $rowIdx, $r->additions);
+            $set($col++, $rowIdx, $r->transfers_in);
+            $set($col++, $rowIdx, $r->transfers_out);
+            $set($col++, $rowIdx, $r->disposals);
+            $set($col++, $rowIdx, $r->adjustment_value);
+            $set($col++, $rowIdx, $r->adjustment_depreciation);
+            $set($col++, $rowIdx, $r->depr_expense);
+            $set($col++, $rowIdx, $r->ending_balance);
 
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->no_po_perjanjian_spk);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->nota_referensi);
-            $sheet->setCellValueByColumnAndRow($col++, $rowIdx, $r->updated_at);
+            $set($col++, $rowIdx, $r->no_po_perjanjian_spk);
+            $set($col++, $rowIdx, $r->nota_referensi);
+            $set($col++, $rowIdx, $r->updated_at);
 
             $rowIdx++;
         }

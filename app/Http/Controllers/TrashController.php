@@ -189,7 +189,7 @@ class TrashController extends Controller
                     $btns .= '<button type="button" class="btn btn-sm btn-light-success btn-restore" data-type="' . $r->type . '" data-id="' . $r->id . '">Restore</button>';
                 }
                 if ($canDelete) {
-                    $btns .= '<button type="button" class="btn btn-sm btn-light-danger btn-force" data-type="' . $r->type . '" data-id="' . $r->id . '">Force Delete</button>';
+                    // $btns .= '<button type="button" class="btn btn-sm btn-light-danger btn-force" data-type="' . $r->type . '" data-id="' . $r->id . '">Force Delete</button>';
                 }
                 $btns .= '</div>';
                 return $btns;

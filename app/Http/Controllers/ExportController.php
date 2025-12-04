@@ -766,6 +766,7 @@ class ExportController
                 'a.asset_code',
                 'a.description',
                 'd.note',
+                'd.reason',
                 'd.pic_request_uid',
                 'd.pic_approve_uid',
                 'd.kode_status',
