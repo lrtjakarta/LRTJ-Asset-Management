@@ -22,7 +22,7 @@
                     <input type="hidden" name="asset_uuids" value='["{{ $asset->uuid }}"]'>
 
                     <button type="submit" class="btn btn-sm btn-danger mt-2">
-                        Print Label
+                        Print QR/Barcode
                     </button>
                 </form>
 

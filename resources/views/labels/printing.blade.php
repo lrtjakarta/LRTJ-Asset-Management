@@ -97,7 +97,7 @@
                 <div class="card-footer">
                     <div class="d-flex gap-2">
                         <button id="btn-print-selected" class="btn btn-primary">
-                            Print Selected
+                            Print QR/Barcode
                         </button>
                         <button id="btn-print-selected-rfid" class="btn btn-danger">
                             Print RFID (LAN)

@@ -45,8 +45,8 @@ class SatoRfidPrinter
 
     /**
      * Build SBPL string untuk 1 label (1 asset + 1 tag).
-     * NOTE: Ini skeleton, nanti bagian command-nya kamu sesuaikan
-     * dengan contoh dari manual / All-In-One Tool yang sudah WORK.
+     * NOTE: bagian command-nya sesuaikan
+     * dari manual / All-In-One Tool yang sudah WORK.
      */
     protected function buildLabelCommand(Assets $asset, AssetsRfid $rfid): string
     {
@@ -57,7 +57,7 @@ class SatoRfidPrinter
 
         $cmd  = $esc . "A";  // start format
 
-        // tulis asset code di label (XY & font-nya tinggal kamu sesuaikan)
+        // tulis asset code di label
         // Hxxxx = horizontal, Vxxxx = vertical, L/F = font, X = print text
         $cmd .= $esc . "H0100" . $esc . "V0100" . $esc . "L0202";
         $cmd .= $esc . "X" . $asset->asset_code . "\r\n";
@@ -67,8 +67,8 @@ class SatoRfidPrinter
         $cmd .= $esc . "X" . mb_substr($asset->description ?? '', 0, 30) . "\r\n";
 
         // *** RFID EPC WRITE ***
-        // Sintaks pastinya ambil dari sample Sato (misal <ESC>IP0 + EPC atau sejenis).
-        // Misal (contoh, HARUS kamu sesuaikan):
+        // Sintaks ambil dari sample Sato (<ESC>IP0 + EPC atau sejenis).
+        // (contoh, HARUS kamu sesuaikan):
         $cmd .= $esc . "IP0" . $epc . "\r\n";
 
         // Print quantity 1
