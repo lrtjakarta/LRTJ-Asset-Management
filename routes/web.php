@@ -379,13 +379,15 @@ Route::middleware('ldap.session')->group(function () {
         Route::get('/transfer-requests', [ExportController::class, 'transfer_requests_export'])->name('transfer-requests');
         Route::get('/depreciation-monthly', [ExportController::class, 'depreciation_monthly_export'])->name('depreciation.monthly');
     });
-    
+
     // LABEL PRINTING ROUTE
     Route::prefix('label-printing')->name('label.')->group(function () {
         // Pakai permission ASSETS,R (boleh lihat asset berarti boleh print label)
         Route::middleware('role.action:ASSETS,R')->group(function () {
             Route::get('/', [LabelPrintingController::class, 'index'])->name('index');
             Route::post('/print', [LabelPrintingController::class, 'print'])->name('print');
+            Route::post('/print-rfid-lan', [LabelPrintingController::class, 'printRfidLan'])
+                ->name('print-rfid-lan');
         });
     });
 

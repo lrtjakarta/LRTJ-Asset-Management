@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\MasterDataApi;
 use App\Http\Controllers\Api\TransferApi;
 use App\Http\Controllers\Api\DisposalApi;
 use App\Http\Controllers\Api\ReturnHistoryApi;
+use App\Http\Controllers\Api\RfidApiController;
 use App\Http\Controllers\Api\StockOpnameApi;
 use App\Http\Controllers\Api\StorageApi;
 
@@ -70,6 +71,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/files/manifest', [StorageApi::class, 'manifest'])->name('files.manifest');
         Route::get('/files/{uuid}/download', [StorageApi::class, 'downloadLegacy'])
             ->name('files.download');
+
+        Route::get('/rfid/lookup', [RfidApiController::class, 'lookupByEpc']);
 
         // LOGOUT
         Route::post('logout', [AuthController::class, 'logout']);

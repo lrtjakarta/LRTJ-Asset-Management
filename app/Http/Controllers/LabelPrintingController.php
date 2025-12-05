@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\SatoRfidPrinter;
 
 class LabelPrintingController extends Controller
 {
@@ -77,5 +78,36 @@ class LabelPrintingController extends Controller
         return view('labels.print', [
             'items' => $items,
         ]);
+    }
+    public function printRfidLan(Request $request, SatoRfidPrinter $printer)
+    {
+        $raw = $request->input('asset_uuids');
+        $uuids = [];
+
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $uuids = array_values(array_filter($decoded, function ($v) {
+                    return is_string($v) && $v !== '';
+                }));
+            }
+        }
+
+        if (empty($uuids)) {
+            return back()->with('error', 'Tidak ada asset yang dipilih untuk print RFID.');
+        }
+
+        try {
+            $printer->printByAssetUuids($uuids);
+
+            // optional: update encoded_at semua tag
+            \App\Models\AssetsRfid::whereIn('asset_uuid', $uuids)
+                ->update(['encoded_at' => now()]);
+
+            return back()->with('success', 'Perintah print RFID sudah dikirim ke printer.');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->with('error', 'Gagal mengirim ke printer: ' . $e->getMessage());
+        }
     }
 }

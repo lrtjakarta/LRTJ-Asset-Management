@@ -16,17 +16,22 @@
                 </div>
 
                 {{-- Print Label (single asset) --}}
-                <form action="{{ route('label.print') }}"
-                      method="POST"
-                      target="_blank"
-                      class="mt-2 d-inline">
+                <form action="{{ route('label.print') }}" method="POST" target="_blank" class="mt-2 d-inline">
                     @csrf
                     {{-- controller expect JSON array of uuids --}}
-                    <input type="hidden" name="asset_uuids"
-                           value='["{{ $asset->uuid }}"]'>
+                    <input type="hidden" name="asset_uuids" value='["{{ $asset->uuid }}"]'>
 
                     <button type="submit" class="btn btn-sm btn-danger mt-2">
                         Print Label
+                    </button>
+                </form>
+
+                {{-- Print RFID via Sato LAN --}}
+                <form action="{{ route('label.print-rfid-lan') }}" method="POST" class="mt-2 d-inline">
+                    @csrf
+                    <input type="hidden" name="asset_uuids" value='["{{ $asset->uuid }}"]'>
+                    <button type="submit" class="btn btn-sm btn-danger mt-2">
+                        Print RFID (LAN)
                     </button>
                 </form>
             </div>

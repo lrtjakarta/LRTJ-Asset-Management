@@ -95,9 +95,12 @@
                     </table>
                 </div>
                 <div class="card-footer">
-                    <div class="col-2">
+                    <div class="d-flex gap-2">
                         <button id="btn-print-selected" class="btn btn-primary">
                             Print Selected
+                        </button>
+                        <button id="btn-print-selected-rfid" class="btn btn-danger">
+                            Print RFID (LAN)
                         </button>
                     </div>
                 </div>
@@ -107,6 +110,11 @@
             <form id="print-form" method="POST" action="{{ route('label.print') }}" target="_blank" style="display:none;">
                 @csrf
                 <input type="hidden" name="asset_uuids" id="input-asset-uuids">
+            </form>
+            {{-- Form hidden untuk POST ke /label-printing/print-rfid-lan (raw SBPL ke printer LAN) --}}
+            <form id="print-rfid-form" method="POST" action="{{ route('label.print-rfid-lan') }}" style="display:none;">
+                @csrf
+                <input type="hidden" name="asset_uuids" id="input-asset-uuids-rfid">
             </form>
 
         </div>
@@ -231,11 +239,17 @@
             });
 
             // Tombol Print Selected
-            $('#btn-print-selected').on('click', function() {
+            function collectSelectedIds() {
                 const ids = [];
                 $('#printAssetsTable').find('input.row-select:checked').each(function() {
                     ids.push(this.value);
                 });
+                return ids;
+            }
+
+            // Tombol Print Selected (HTML)
+            $('#btn-print-selected').on('click', function() {
+                const ids = collectSelectedIds();
 
                 if (!ids.length) {
                     Swal.fire('Tidak ada asset', 'Pilih minimal satu asset untuk dicetak label.', 'warning');
@@ -243,8 +257,22 @@
                 }
 
                 $('#input-asset-uuids').val(JSON.stringify(ids));
-                $('#print-form').submit(); // open tab baru ke label.print
+                $('#print-form').submit(); // 
             });
+
+            // Tombol Print RFID (LAN)
+            $('#btn-print-selected-rfid').on('click', function() {
+                const ids = collectSelectedIds();
+
+                if (!ids.length) {
+                    Swal.fire('Tidak ada asset', 'Pilih minimal satu asset untuk print RFID.', 'warning');
+                    return;
+                }
+
+                $('#input-asset-uuids-rfid').val(JSON.stringify(ids));
+                $('#print-rfid-form').submit();
+            });
+
 
             initMasterSelect2(
                 $('#flt-asset-class'),
