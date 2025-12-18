@@ -716,9 +716,7 @@ class DepreciationController extends Controller
     {
         $monthStart = $actualDate->copy()->startOfMonth();
 
-        $total = (float) DB::table('assets_value')
-            ->where('asset_uuid', $assetUuid)
-            ->value('total');
+        $total = (float) DB::table('assets_value')->where('asset_uuid', $assetUuid)->value('total');
 
         $lastRow = AssetDeprMonthly::query()
             ->where('asset_uuid', $assetUuid)
@@ -730,26 +728,18 @@ class DepreciationController extends Controller
         $lastPeriod = $lastRow?->period;
 
         $nbvClamped = min($lastNbv, $total);
-
-        $max = max(0.0, $total - $nbvClamped);
-
-        $alreadyOut = (float) AssetDeprMovement::query()
-            ->where('asset_uuid', $assetUuid)
-            ->where('category', AssetDeprMovement::TRANSFER_OUT)
-            ->whereDate('period', $monthStart)
-            ->sum('amount');
-
-        $remaining = max(0.0, $max - $alreadyOut);
+        $max        = max(0.0, $total - $nbvClamped);
 
         return [
             'begin_total'        => (float) $total,
             'last_closed_period' => $lastPeriod,
             'last_nbv'           => (float) $lastNbv,
             'max'                => (float) $max,
-            'already_out'        => (float) $alreadyOut,
-            'remaining'          => (float) $remaining,
+            'already_out'        => 0.0,        // no longer relevant
+            'remaining'          => (float) $max // remaining == max
         ];
     }
+
 
     public function carryOverPreview(Request $r)
     {
@@ -778,11 +768,7 @@ class DepreciationController extends Controller
 
     private function grossRemaining(string $assetUuid): float
     {
-        $total = (float) DB::table('assets_value')->where('asset_uuid', $assetUuid)->value('total');
-        $outAll = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
-            ->where('category', AssetDeprMovement::TRANSFER_OUT)
-            ->sum('amount');
-        return max(0.0, $total - $outAll);
+        return (float) DB::table('assets_value')->where('asset_uuid', $assetUuid)->value('total');
     }
 
     private function computeCarryOver(string $fromUuid, Carbon $actualDate, float $amount): array

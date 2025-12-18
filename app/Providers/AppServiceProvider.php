@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use App\Models\AssetDeprMovement;
+use App\Observers\AssetDeprMovementObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -63,5 +65,7 @@ class AppServiceProvider extends ServiceProvider
             $user = auth()->user();
             return $user && $user->hasAction($menuKode, $action);
         });
+
+        AssetDeprMovement::observe(AssetDeprMovementObserver::class);
     }
 }

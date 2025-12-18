@@ -632,9 +632,9 @@ class DisposalApi extends Controller
 
                 // NEW: depreciation / NBV (same meaning as AssetsApi)
                 'acquisition_date'       => $acqDateFmt,        // Acquisition Date
-                'commercial_acq_cost'    => $value?->total,     // Commercial Acquisition Cost (IDR)
-                'commercial_accum_depr'  => $accSum,            // Commercial Accumulated Depreciation (IDR)
-                'commercial_nbv'         => $nbvSum,            // Commercial Net Book Value (IDR)
+                'commercial_acq_cost'    => intval($value?->total),     // Commercial Acquisition Cost (IDR)
+                'commercial_accum_depr'  => intval($accSum),            // Commercial Accumulated Depreciation (IDR)
+                'commercial_nbv'         => intval($nbvSum),            // Commercial Net Book Value (IDR)
             ];
 
             // main attachment (original file)
