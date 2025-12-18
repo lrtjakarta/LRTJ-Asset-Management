@@ -5,13 +5,11 @@ namespace App\Services;
 use App\Models\Assets;
 use App\Models\AssetsRfid;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class SatoRfidPrinter
 {
     public function printByAssetUuids(array $assetUuids): void
     {
-        // load asset + relasi rfid
         $assets = Assets::with('rfids')
             ->whereIn('uuid', $assetUuids)
             ->get();
@@ -25,14 +23,16 @@ class SatoRfidPrinter
         foreach ($assets as $asset) {
             $rfid = $asset->rfids; // hasOne
 
-            // kalau belum ada RFID, generate baru dari UUID
+            // kalau belum punya tag, generate dari UUID (32 hex)
             if (! $rfid) {
                 $epc = strtoupper(str_replace('-', '', $asset->uuid));
+                // pastikan hanya HEX
+                $epc = preg_replace('/[^0-9A-F]/', '', $epc);
 
                 $rfid = AssetsRfid::create([
                     'asset_uuid' => $asset->uuid,
                     'epc'        => $epc,
-                    'tag_type'   => 'UHF', // yang dipakai Sato
+                    'tag_type'   => 'UHF',
                     'is_active'  => true,
                 ]);
             }
@@ -44,45 +44,51 @@ class SatoRfidPrinter
     }
 
     /**
-     * Build SBPL string untuk 1 label (1 asset + 1 tag).
-     * NOTE: bagian command-nya sesuaikan
-     * dari manual / All-In-One Tool yang sudah WORK.
+     * SBPL per label (print + tulis EPC).
+     * Contoh ini pakai "old" EPC write: <ESC>IP0xxxxxxxx...
+     * Kalau nanti sudah dapat SBPL dari SATO All-In-One, tinggal
+     * ganti isi function ini sesuai template yang sudah terbukti jalan.
      */
     protected function buildLabelCommand(Assets $asset, AssetsRfid $rfid): string
     {
-        $esc = "\x1B"; // ESC character
-        $epc = strtoupper($rfid->epc);
+        $esc = "\x1B";
+        $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', $rfid->epc));
 
-        // TODO: ganti isi $cmd sesuai SBPL real
+        // --- MULAI FORMAT ---
+        $cmd  = $esc . "A";
 
-        $cmd  = $esc . "A";  // start format
-
-        // tulis asset code di label
-        // Hxxxx = horizontal, Vxxxx = vertical, L/F = font, X = print text
-        $cmd .= $esc . "H0100" . $esc . "V0100" . $esc . "L0202";
+        // Asset code (font besar sedikit)
+        $cmd .= $esc . "H0100" . $esc . "V0080" . $esc . "L0202";
         $cmd .= $esc . "X" . $asset->asset_code . "\r\n";
 
-        // tulis description di baris bawah
-        $cmd .= $esc . "H0100" . $esc . "V0200" . $esc . "L0101";
-        $cmd .= $esc . "X" . mb_substr($asset->description ?? '', 0, 30) . "\r\n";
+        // Description (dipotong biar muat)
+        $desc = mb_substr($asset->description ?? '', 0, 30);
+        $cmd .= $esc . "H0100" . $esc . "V0140" . $esc . "L0101";
+        $cmd .= $esc . "X" . $desc . "\r\n";
 
-        // *** RFID EPC WRITE ***
-        // Sintaks ambil dari sample Sato (<ESC>IP0 + EPC atau sejenis).
-        // (contoh, HARUS kamu sesuaikan):
+        // *** EPC WRITE ***
+        // Old format: <ESC>IP0 + EPC_HEX
+        // Contoh dari manual:
+        //   <ESC>A
+        //   ...
+        //   <ESC>IP08000000040000001
+        //   <ESC>Q1
+        //   <ESC>Z
         $cmd .= $esc . "IP0" . $epc . "\r\n";
 
-        // Print quantity 1
+        // Qty 1 label
         $cmd .= $esc . "Q1";
-        $cmd .= $esc . "Z"; // end format
+        // END
+        $cmd .= $esc . "Z";
 
         return $cmd;
     }
 
     protected function sendToPrinter(string $data): void
     {
-        $cfg   = config('printing.sato_rfid');
-        $host  = $cfg['host'] ?? '127.0.0.1';
-        $port  = (int) ($cfg['port'] ?? 9100);
+        $cfg     = config('printing.sato_rfid');
+        $host    = $cfg['host'] ?? '127.0.0.1';
+        $port    = (int) ($cfg['port'] ?? 9100);
         $timeout = (int) ($cfg['timeout'] ?? 5);
 
         $errno  = 0;

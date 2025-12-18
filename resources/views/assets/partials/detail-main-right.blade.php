@@ -9,6 +9,18 @@
             <dd class="col-sm-7"> :
                 {{ is_null($asset->value?->price) ? '' : number_format($asset->value->price, 2) }}
             </dd>
+            
+            <dt class="col-sm-5">Depreciation</dt>
+            <dd class="col-sm-7"> :
+                {{ is_null($depreciation) ? '' : number_format($depreciation, 2)  }}
+            </dd>
+
+
+            <dt class="col-sm-5">Ending Balance</dt>
+            <dd class="col-sm-7"> :
+                {{ is_null($endingBalance) ? '' : number_format($endingBalance, 2)  }}
+            </dd>
+
 
             <dt class="col-sm-5">Quantity</dt>
             <dd class="col-sm-7"> :

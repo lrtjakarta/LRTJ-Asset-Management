@@ -300,8 +300,8 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>UUID</th>
-                                            <th>Kode</th>
-                                            <th>Department</th>
+                                            <th>Kode Department</th>
+                                            <th>Department Name</th>
                                             <th>Description</th>
                                             <th>Division</th>
                                             <th>Status</th>
@@ -343,12 +343,12 @@
                     <div class="modal-body">
                         <input type="hidden" name="uuid">
                         <div class="mb-5">
-                            <label class="form-label required">Kode</label>
+                            <label class="form-label required">Kode Department</label>
                             <input type="text" name="kode" class="form-control" required maxlength="50"
                                 placeholder="e.g. KD-1">
                         </div>
                         <div class="mb-5">
-                            <label class="form-label required">Department</label>
+                            <label class="form-label required">Department Name</label>
                             <input type="text" name="department" class="form-control" required maxlength="191">
                         </div>
                         <div class="mb-5">

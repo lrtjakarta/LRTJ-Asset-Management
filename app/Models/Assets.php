@@ -208,4 +208,5 @@ class Assets extends Model
     {
         return $this->hasOne(AssetsRfid::class, 'asset_uuid')->where('is_active', true);
     }
+    
 }

@@ -8,6 +8,7 @@ use App\Actions\BuildGroupCategoryCode;
 use App\Http\Requests\AssetStoreRequest;
 use App\Http\Requests\AssetUpdateRequest;
 use App\Models\{
+    AssetDeprMonthly,
     Assets,
     AssetsIdentifier,
     AssetsClassification,
@@ -33,6 +34,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Shared\Date as XlsDate;
 
 
 class AssetsController extends Controller
@@ -45,6 +47,12 @@ class AssetsController extends Controller
     public function create()
     {
         return view('assets.assets_create');
+    }
+    protected function canEditAssetStatus(\App\Models\User $user = null): bool
+    {
+        if (!$user) return false;
+
+        return $user->hasAnyRoleKode(['AM_HEAD', 'AM_ADMIN', 'SYSADMIN']);
     }
     public function detail(string $uuid)
     {
@@ -67,8 +75,20 @@ class AssetsController extends Controller
             'activeRfid',
         ])->findOrFail($uuid);
 
-        return view('assets.assets_detail', compact('asset'));
+        // latest ending_balance for this asset
+        $row = AssetDeprMonthly::query()
+            ->where('asset_uuid', $asset->uuid)
+            ->orderByDesc('period')
+            ->select(['period', 'ending_balance', 'accumulated_depr_end'])
+            ->first();
+
+        $endingBalance = (float) ($row?->ending_balance ?? 0);
+        $endingPeriod  = $row?->period;
+        $depreciation = (float) ($row?->accumulated_depr_end ?? 0);
+
+        return view('assets.assets_detail', compact('asset', 'endingBalance', 'endingPeriod', 'depreciation'));
     }
+
     public function edit(string $uuid)
     {
         $asset = Assets::with([
@@ -91,12 +111,28 @@ class AssetsController extends Controller
     }
     public function datatable(Request $request)
     {
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            DISTINCT ON (m.asset_uuid)
+            m.asset_uuid,
+            m.period,
+            m.accumulated_depr_end,
+            m.ending_balance
+        ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
+
         $q = DB::table('assets as a')
             // child tables
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
+
+            ->leftJoinSub($lastDepr, 'dm', function ($j) {
+                $j->on('dm.asset_uuid', '=', 'a.uuid');
+            })
+
             // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',   'a.kode_asset_class')
@@ -106,7 +142,7 @@ class AssetsController extends Controller
             ->leftJoin('master_user_code    as ou',   'ou.kode',    'g.asset_owner')
             ->leftJoin('master_user_code    as uu',   'uu.kode',    'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
-            ->where('a.deleted_at', null)
+            ->whereNull('a.deleted_at')
             ->select(
                 'a.uuid',
                 'a.asset_code',
@@ -115,16 +151,20 @@ class AssetsController extends Controller
                 'a.asset_number_child',
                 'a.description',
                 'a.upload_code',
+
                 'i.asset_number_maximo',
                 'i.asset_number_dynamic_365',
                 'i.asset_number_internal',
                 'i.alias',
+
                 'g.asset_owner',
                 'g.asset_user',
                 'g.asset_maintenance',
+
                 'a.kode_location',
                 'a.kode_asset_class',
                 'a.kode_status',
+
                 'v.price',
                 'v.quantity',
                 'v.vat_in',
@@ -132,23 +172,31 @@ class AssetsController extends Controller
                 'v.total',
                 'v.useful_life_month',
                 'v.useful_life_year',
+
                 'd.no_po_perjanjian_spk',
                 'd.nota_referensi',
                 'd.no_document',
+
                 'a.kode_sumber',
+
+                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
+                DB::raw("COALESCE(dm.ending_balance, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("dm.period as last_depr_period"),
+
                 DB::raw("
-                    CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
-                    CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label,
-                    CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label,
-                    CASE WHEN mu.name  IS NULL THEN v.kode_uom         ELSE v.kode_uom         || ' - ' || mu.name  END AS kode_uom_label,
-                    CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber      || ' - ' || msrc.name END AS kode_sumber_label,
-                    
-                    CASE WHEN ou.department  IS NULL THEN g.asset_owner      ELSE g.asset_owner         || ' - ' || ou.department  END AS asset_owner_label,
-                    CASE WHEN uu.department  IS NULL THEN g.asset_user       ELSE g.asset_user          || ' - ' || uu.department  END AS asset_user_label,
-                    CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance  || ' - ' || muw.department END AS asset_maintenance_label,
-                    to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at
-                ")
+                CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
+                CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label,
+                CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label,
+                CASE WHEN mu.name  IS NULL THEN v.kode_uom         ELSE v.kode_uom         || ' - ' || mu.name  END AS kode_uom_label,
+                CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber      || ' - ' || msrc.name END AS kode_sumber_label,
+
+                CASE WHEN ou.department  IS NULL THEN g.asset_owner      ELSE g.asset_owner         || ' - ' || ou.department  END AS asset_owner_label,
+                CASE WHEN uu.department  IS NULL THEN g.asset_user       ELSE g.asset_user          || ' - ' || uu.department  END AS asset_user_label,
+                CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance  || ' - ' || muw.department END AS asset_maintenance_label,
+                to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at
+            ")
             );
+
         if ($assetClass = $request->input('asset_class')) {
             $q->where('a.kode_asset_class', $assetClass);
         }
@@ -157,30 +205,37 @@ class AssetsController extends Controller
         if ($transaction = $request->input('transaction')) {
             $q->where('mac.kode_transaction', $transaction);
         }
+
         // Location
         if ($location = $request->input('location')) {
             $q->where('a.kode_location', $location);
         }
+
         // Status
         if ($status = $request->input('status')) {
             $q->where('a.kode_status', $status);
         }
+
         // Owner
         if ($owner = $request->input('owner')) {
             $q->where('g.asset_owner', $owner);
         }
+
         // User
         if ($user = $request->input('user')) {
             $q->where('g.asset_user', $user);
         }
+
         // Maintenance
         if ($maintenance = $request->input('maintenance')) {
             $q->where('g.asset_maintenance', $maintenance);
         }
+
         // Sumber
         if ($sumber = $request->input('sumber')) {
             $q->where('a.kode_sumber', $sumber);
         }
+
         if ($search = trim((string) $request->input('asset_q', ''))) {
             $q->where(function ($w) use ($search) {
                 $w->where('a.asset_code', 'ilike', "%{$search}%")
@@ -190,6 +245,7 @@ class AssetsController extends Controller
 
         return DataTables::of($q)->make(true);
     }
+
     private function generate_qr(string $uuid, string $asset_code)
     {
         $size   = 300;
@@ -378,8 +434,18 @@ class AssetsController extends Controller
         abort_unless($request->user()?->hasAction('ASSETS', 'U'), 403);
         $v = (object) $request->validated();
         $asset = Assets::with(['classification'])->findOrFail($uuid);
+        $canEditStatus = $request->user()?->hasAnyRoleKode(['AM_HEAD', 'AM_ADMIN', 'SYSADMIN']) ?? false;
 
-        $vatRate = (float) env('NILAI_PAJAK', 10);
+        $inputStatus = $request->input('kode_status');
+
+        if ($inputStatus !== null && $inputStatus !== $asset->kode_status && ! $canEditStatus) {
+            abort(403, 'Status hanya bisa diubah oleh AM_HEAD / AM_ADMIN / SYSADMIN.');
+        }
+
+        if (!$canEditStatus) {
+            $request->merge(['kode_status' => $asset->kode_status]);
+        }
+        $vatRate = (float) env('NILAI_PAJAK', 11);
         // $oldParent = $asset->asset_number_parent;
         // $oldGroup  = $asset->kode_group_category;
 
@@ -745,6 +811,17 @@ class AssetsController extends Controller
             return trim($v, '_');
         };
 
+        $parseNum = function ($raw) {
+            if ($raw === null) return null;
+            if (is_string($raw)) {
+                $raw = trim($raw);
+                if ($raw === '') return null;
+                $raw = preg_replace('/[^\d\.\-]/', '', $raw);
+                if ($raw === '' || $raw === '-' || $raw === '.') return null;
+            }
+            return is_numeric($raw) ? (float)$raw : null;
+        };
+
         $resolveUom = function ($raw) {
             if ($raw === null) return null;
             $txt = trim((string) $raw);
@@ -780,6 +857,45 @@ class AssetsController extends Controller
             return $n > 1 ? $n / 100.0 : $n;
         };
 
+        // ✅ Parse Excel date: supports serial, date cells, and common strings
+        $parseExcelDate = function ($raw, $cell) {
+            if ($raw === null) return null;
+            if (is_string($raw) && trim($raw) === '') return null;
+            if (is_numeric($raw) && (float)$raw == 0.0) return null;
+
+            if ($raw instanceof \DateTimeInterface) {
+                return \Carbon\Carbon::instance($raw)->startOfDay();
+            }
+
+            if (is_numeric($raw)) {
+                try {
+                    if (\PhpOffice\PhpSpreadsheet\Shared\Date::isDateTime($cell) || ((float)$raw > 20000 && (float)$raw < 60000)) {
+                        $dt = \PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject((float) $raw);
+                        return \Carbon\Carbon::instance($dt)->startOfDay();
+                    }
+                } catch (\Throwable $e) {
+                }
+            }
+
+            $s = trim((string) $raw);
+            if ($s === '') return null;
+
+            $s = str_replace(['.', '/'], '-', $s);
+
+            foreach (['Y-m-d', 'd-m-Y', 'd-m-y', 'Y-m-d H:i:s', 'd-m-Y H:i:s'] as $fmt) {
+                try {
+                    return \Carbon\Carbon::createFromFormat($fmt, $s)->startOfDay();
+                } catch (\Throwable $e) {
+                }
+            }
+
+            try {
+                return \Carbon\Carbon::parse($s)->startOfDay();
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+
         // ==== HEADER ====
         $headers  = [];
         $firstRow = $sheet->getRowIterator(1, 1)->current();
@@ -790,6 +906,7 @@ class AssetsController extends Controller
         }
 
         $KNOWN = [
+            // asset
             'asset_code'               => 'asset.asset_code',
             'asset_number_parent'      => 'asset.asset_number_parent',
             'asset_number_child'       => 'asset.asset_number_child',
@@ -799,18 +916,23 @@ class AssetsController extends Controller
             'location'                 => 'asset.kode_location',
             'asset_class'              => 'asset.kode_asset_class',
             'sumber'                   => 'asset.kode_sumber',
+            'notes'                    => 'asset.notes',
 
+            // identifiers
             'asset_number_maximo'      => 'identifiers.asset_number_maximo',
             'asset_number_erp_365'     => 'identifiers.asset_number_dynamic_365',
             'asset_number_internal'    => 'identifiers.asset_number_internal',
             'asset_alias'              => 'identifiers.alias',
 
+            // classification
             'company'                  => 'classification.kode_asset_transaction',
 
+            // assignment
             'owner'                    => 'assignment.asset_owner',
             'user'                     => 'assignment.asset_user',
             'maintenance'              => 'assignment.asset_maintenance',
 
+            // value
             'acquisition'              => 'value.total',
             'total'                    => 'value.total',
             'uom'                      => 'value.kode_uom',
@@ -820,10 +942,18 @@ class AssetsController extends Controller
             'pajak'                    => 'value.is_pajak',
             'is_pajak'                 => 'value.is_pajak',
             'useful_life_month'        => 'value.useful_life_month',
+            'actual_date'              => 'value.actual_date',
+            'capitalization_date'      => 'value.capitalization_date',
 
+            // documents
             'no_po_perjanjian_spk'     => 'documents.no_po_perjanjian_spk',
             'nota_referensi'           => 'documents.nota_referensi',
-            'notes'                    => 'asset.notes',
+
+            'begining'                 => 'depr.opening_balance',
+            'addition_month'           => 'depr.additions',
+            'total_adition'            => 'depr.additions_total',
+            'ending_balance'           => 'depr.ending_balance',
+            'net_book_value'           => 'depr.net_book_value',
         ];
 
         $colTargets = [];
@@ -851,13 +981,14 @@ class AssetsController extends Controller
         $tableClassif      = Schema::hasTable('assets_classification') ? 'assets_classification' : null;
         $tableDocuments    = Schema::hasTable('assets_document')       ? 'assets_document'       : null;
 
+        $tableDeprMonthly  = Schema::hasTable('assets_depr_ledger_monthly') ? 'assets_depr_ledger_monthly' : null;
+
         $rows      = 0;
         $inserted  = 0;
         $updated   = 0;
         $skipped   = 0;
         $rowErrors = [];
 
-        // ==== LOOP BARIS DATA ====
         foreach ($sheet->getRowIterator(2) as $row) {
             $rows++;
             $rowIndex = $row->getRowIndex();
@@ -874,7 +1005,18 @@ class AssetsController extends Controller
                 $identifiersPayload    = [];
                 $classificationPayload = [];
                 $documentsPayload      = [];
+                $deprPayload           = [];
+
                 $isPajakFlag           = null;
+
+                // temp for NBV calc
+                $tmpDepr = [
+                    'opening_balance' => null,
+                    'additions'       => null,
+                    'additions_total' => null,
+                    'ending_balance'  => null,
+                    'net_book_value'  => null,
+                ];
 
                 foreach ($cells as $col => $cell) {
                     if (! isset($colTargets[$col])) continue;
@@ -886,62 +1028,62 @@ class AssetsController extends Controller
 
                     switch ($target['group']) {
                         case 'asset':
-                            if ($raw !== null) {
-                                $assetPayload[$target['field']] = $raw;
-                            }
+                            if ($raw !== null) $assetPayload[$target['field']] = $raw;
                             break;
 
                         case 'assignment':
-                            if ($raw !== null) {
-                                $assignmentPayload[$target['field']] = $raw;
-                            }
+                            if ($raw !== null) $assignmentPayload[$target['field']] = $raw;
                             break;
 
                         case 'value':
                             switch ($target['field']) {
                                 case 'kode_uom':
-                                    if ($raw !== null) {
-                                        $valuePayload['kode_uom'] = (string) $raw;
-                                    }
+                                    if ($raw !== null) $valuePayload['kode_uom'] = (string) $raw;
                                     break;
+
                                 case 'quantity':
                                 case 'price':
                                 case 'total':
-                                    if ($raw !== null) {
-                                        $valuePayload[$target['field']] =
-                                            is_numeric($raw)
-                                            ? (float) $raw
-                                            : (float) preg_replace('/[^\d.-]/', '', (string) $raw);
-                                    }
+                                    $n = $parseNum($raw);
+                                    if ($n !== null) $valuePayload[$target['field']] = $n;
                                     break;
+
                                 case 'is_pajak':
-                                    if ($raw !== null) {
-                                        $isPajakFlag = $toBool($raw);
-                                    }
+                                    if ($raw !== null) $isPajakFlag = $toBool($raw);
                                     break;
+
                                 case 'useful_life_month':
-                                    if ($raw !== null) {
-                                        $valuePayload['useful_life_month'] = (int) round((float) $raw);
-                                    }
+                                    if ($raw !== null) $valuePayload['useful_life_month'] = (int) round((float) $raw);
+                                    break;
+
+                                case 'actual_date':
+                                    $dt = $parseExcelDate($raw, $cell);
+                                    if ($dt) $valuePayload['actual_date'] = $dt;
+                                    break;
+
+                                case 'capitalization_date':
+                                    $dt = $parseExcelDate($raw, $cell);
+                                    if ($dt) $valuePayload['capitalization_date'] = $dt;
                                     break;
                             }
                             break;
 
                         case 'identifiers':
-                            if ($raw !== null) {
-                                $identifiersPayload[$target['field']] = $raw;
-                            }
+                            if ($raw !== null) $identifiersPayload[$target['field']] = $raw;
                             break;
 
                         case 'classification':
-                            if ($raw !== null) {
-                                $classificationPayload[$target['field']] = $raw;
-                            }
+                            if ($raw !== null) $classificationPayload[$target['field']] = $raw;
                             break;
 
                         case 'documents':
-                            if ($raw !== null) {
-                                $documentsPayload[$target['field']] = $raw;
+                            if ($raw !== null) $documentsPayload[$target['field']] = $raw;
+                            break;
+
+                        case 'depr':
+                            $field = $target['field'];
+                            if (in_array($field, ['opening_balance', 'additions', 'additions_total', 'ending_balance', 'net_book_value'], true)) {
+                                $tmpDepr[$field] = $parseNum($raw);
                             }
                             break;
                     }
@@ -954,9 +1096,8 @@ class AssetsController extends Controller
                 if ($child  !== null) $child  = (string) $child;
 
                 $code = $assetPayload['asset_code'] ?? null;
-                if ($parent && $child) {
-                    $code = $parent . '-' . $child;
-                }
+                if ($parent && $child) $code = $parent . '-' . $child;
+
                 if (! $code) {
                     $skipped++;
                     $rowErrors[] = "Row {$rowIndex}: asset_code / parent+child kosong, baris dilewati.";
@@ -972,16 +1113,12 @@ class AssetsController extends Controller
                 }
 
                 if (empty($assetPayload['kode_sumber'])) {
-                    $assetPayload['kode_sumber'] = 'EXC'; // default sumber Excel
+                    $assetPayload['kode_sumber'] = 'EXC';
                 }
 
-                // pastikan kode_sumber valid
                 $kodeSumber = $assetPayload['kode_sumber'] ?? null;
                 if ($kodeSumber) {
-                    $existsSumber = DB::table('master_sumber')
-                        ->where('kode', $kodeSumber)
-                        ->exists();
-
+                    $existsSumber = DB::table('master_sumber')->where('kode', $kodeSumber)->exists();
                     if (! $existsSumber) {
                         throw new \RuntimeException("kode_sumber '{$kodeSumber}' tidak ditemukan di master_sumber");
                     }
@@ -990,6 +1127,7 @@ class AssetsController extends Controller
                 // === Assets main ===
                 $asset = Assets::where('asset_code', $code)->first();
                 $isNew = false;
+
                 if (! $asset) {
                     $asset = new Assets();
                     $asset->uuid       = (string) Str::uuid();
@@ -1010,9 +1148,7 @@ class AssetsController extends Controller
                         'notes',
                     ] as $f
                 ) {
-                    if (array_key_exists($f, $assetPayload)) {
-                        $asset->{$f} = $assetPayload[$f];
-                    }
+                    if (array_key_exists($f, $assetPayload)) $asset->{$f} = $assetPayload[$f];
                 }
 
                 $asset->save();
@@ -1037,24 +1173,21 @@ class AssetsController extends Controller
                     $qr->generated_at = now();
                     $qr->save();
                 } catch (\Throwable $e) {
-                    report($e); // jangan hentikan import kalau QR gagal
+                    report($e);
                 }
 
                 // === Assignment ===
                 if ($hasAssignments && ! empty($assignmentPayload)) {
-                    $exists = DB::table('assets_assignment')
-                        ->where('asset_uuid', $asset->uuid)
-                        ->first();
+                    $exists = DB::table('assets_assignment')->where('asset_uuid', $asset->uuid)->first();
+
                     $assignmentPayload['asset_uuid'] = $asset->uuid;
                     $assignmentPayload['updated_at'] = now();
+
                     if ($exists) {
-                        DB::table('assets_assignment')
-                            ->where('asset_uuid', $asset->uuid)
-                            ->update($assignmentPayload);
+                        DB::table('assets_assignment')->where('asset_uuid', $asset->uuid)->update($assignmentPayload);
                     } else {
                         $assignmentPayload['created_at'] = now();
-                        DB::table('assets_assignment')
-                            ->insert($assignmentPayload);
+                        DB::table('assets_assignment')->insert($assignmentPayload);
                     }
                 }
 
@@ -1062,11 +1195,8 @@ class AssetsController extends Controller
                 if ($tableValues && (! empty($valuePayload) || $isPajakFlag !== null)) {
                     if (array_key_exists('kode_uom', $valuePayload)) {
                         $kode = $resolveUom($valuePayload['kode_uom']);
-                        if ($kode) {
-                            $valuePayload['kode_uom'] = $kode;
-                        } else {
-                            unset($valuePayload['kode_uom']);
-                        }
+                        if ($kode) $valuePayload['kode_uom'] = $kode;
+                        else unset($valuePayload['kode_uom']);
                     }
 
                     $qty      = (float) ($valuePayload['quantity'] ?? 0);
@@ -1076,7 +1206,7 @@ class AssetsController extends Controller
                     if ($isPajakFlag !== null) {
                         $valuePayload['is_pajak'] = $isPajakFlag ? 1 : 0;
                         $rate                     = $getVatRate();
-                        $valuePayload['vat_in']   = $isPajakFlag ? round($subtotal * $rate, 2) : 0.0;
+                        $valuePayload['vat_in']    = $isPajakFlag ? round($subtotal * $rate, 2) : 0.0;
                     }
 
                     if (! array_key_exists('total', $valuePayload)) {
@@ -1089,15 +1219,13 @@ class AssetsController extends Controller
                         $valuePayload['useful_life_year'] = round($months / 12, 2);
                     }
 
-                    $existsV = DB::table($tableValues)
-                        ->where('asset_uuid', $asset->uuid)
-                        ->first();
+                    $existsV = DB::table($tableValues)->where('asset_uuid', $asset->uuid)->first();
+
                     $valuePayload['asset_uuid'] = $asset->uuid;
                     $valuePayload['updated_at'] = now();
+
                     if ($existsV) {
-                        DB::table($tableValues)
-                            ->where('asset_uuid', $asset->uuid)
-                            ->update($valuePayload);
+                        DB::table($tableValues)->where('asset_uuid', $asset->uuid)->update($valuePayload);
                     } else {
                         $valuePayload['created_at'] = now();
                         DB::table($tableValues)->insert($valuePayload);
@@ -1106,15 +1234,13 @@ class AssetsController extends Controller
 
                 // === Identifiers ===
                 if ($tableIdentifiers && ! empty($identifiersPayload)) {
-                    $existsI = DB::table($tableIdentifiers)
-                        ->where('asset_uuid', $asset->uuid)
-                        ->first();
+                    $existsI = DB::table($tableIdentifiers)->where('asset_uuid', $asset->uuid)->first();
+
                     $identifiersPayload['asset_uuid'] = $asset->uuid;
                     $identifiersPayload['updated_at'] = now();
+
                     if ($existsI) {
-                        DB::table($tableIdentifiers)
-                            ->where('asset_uuid', $asset->uuid)
-                            ->update($identifiersPayload);
+                        DB::table($tableIdentifiers)->where('asset_uuid', $asset->uuid)->update($identifiersPayload);
                     } else {
                         $identifiersPayload['created_at'] = now();
                         DB::table($tableIdentifiers)->insert($identifiersPayload);
@@ -1123,15 +1249,13 @@ class AssetsController extends Controller
 
                 // === Classification ===
                 if ($tableClassif && ! empty($classificationPayload)) {
-                    $existsC = DB::table($tableClassif)
-                        ->where('asset_uuid', $asset->uuid)
-                        ->first();
+                    $existsC = DB::table($tableClassif)->where('asset_uuid', $asset->uuid)->first();
+
                     $classificationPayload['asset_uuid'] = $asset->uuid;
                     $classificationPayload['updated_at'] = now();
+
                     if ($existsC) {
-                        DB::table($tableClassif)
-                            ->where('asset_uuid', $asset->uuid)
-                            ->update($classificationPayload);
+                        DB::table($tableClassif)->where('asset_uuid', $asset->uuid)->update($classificationPayload);
                     } else {
                         $classificationPayload['created_at'] = now();
                         DB::table($tableClassif)->insert($classificationPayload);
@@ -1140,18 +1264,85 @@ class AssetsController extends Controller
 
                 // === Documents ===
                 if ($tableDocuments && ! empty($documentsPayload)) {
-                    $existsD = DB::table($tableDocuments)
-                        ->where('asset_uuid', $asset->uuid)
-                        ->first();
+                    $existsD = DB::table($tableDocuments)->where('asset_uuid', $asset->uuid)->first();
+
                     $documentsPayload['asset_uuid'] = $asset->uuid;
                     $documentsPayload['updated_at'] = now();
+
                     if ($existsD) {
-                        DB::table($tableDocuments)
-                            ->where('asset_uuid', $asset->uuid)
-                            ->update($documentsPayload);
+                        DB::table($tableDocuments)->where('asset_uuid', $asset->uuid)->update($documentsPayload);
                     } else {
                         $documentsPayload['created_at'] = now();
                         DB::table($tableDocuments)->insert($documentsPayload);
+                    }
+                }
+
+                if ($tableDeprMonthly) {
+                    $hasAnyDepr = false;
+                    foreach ($tmpDepr as $v) {
+                        if ($v !== null) {
+                            $hasAnyDepr = true;
+                            break;
+                        }
+                    }
+
+                    if ($hasAnyDepr) {
+                        // period: use cap date > actual date > now
+                        $cap = $valuePayload['capitalization_date'] ?? null;
+                        $act = $valuePayload['actual_date'] ?? null;
+
+                        $period = $cap instanceof \Carbon\Carbon
+                            ? $cap->copy()->startOfMonth()->toDateString()
+                            : ($act instanceof \Carbon\Carbon
+                                ? $act->copy()->startOfMonth()->toDateString()
+                                : now()->startOfMonth()->toDateString()
+                            );
+
+                        // map fields
+                        if ($tmpDepr['opening_balance'] !== null) $deprPayload['opening_balance'] = $tmpDepr['opening_balance'];
+
+                        // additions: prefer Addition Month, fallback Total Adition
+                        $add = $tmpDepr['additions'] !== null ? $tmpDepr['additions'] : $tmpDepr['additions_total'];
+                        if ($add !== null) $deprPayload['additions'] = $add;
+
+                        if ($tmpDepr['ending_balance'] !== null) $deprPayload['ending_balance'] = $tmpDepr['ending_balance'];
+
+                        // if ending_balance + nbv provided, derive accumulated_depr_end
+                        if ($tmpDepr['ending_balance'] !== null && $tmpDepr['net_book_value'] !== null) {
+                            $acc = (float)$tmpDepr['ending_balance'] - (float)$tmpDepr['net_book_value'];
+                            if ($acc < 0) $acc = 0;
+                            $deprPayload['accumulated_depr_end'] = $acc;
+                        }
+
+                        // optional: compute ending_balance if not provided
+                        if (
+                            !isset($deprPayload['ending_balance'])
+                            && isset($deprPayload['opening_balance'])
+                            && isset($deprPayload['additions'])
+                        ) {
+                            $deprPayload['ending_balance'] = (float)$deprPayload['opening_balance'] + (float)$deprPayload['additions'];
+                        }
+
+                        $existsM = DB::table($tableDeprMonthly)
+                            ->where('asset_uuid', $asset->uuid)
+                            ->whereDate('period', $period)
+                            ->first();
+
+                        $deprPayload['asset_uuid']  = $asset->uuid;
+                        $deprPayload['period']      = $period;
+                        $deprPayload['depr_code']   = $deprPayload['depr_code'] ?? 'EXCEL';
+                        $deprPayload['updated_at']  = now();
+
+                        if ($existsM) {
+                            DB::table($tableDeprMonthly)
+                                ->where('asset_uuid', $asset->uuid)
+                                ->whereDate('period', $period)
+                                ->update($deprPayload);
+                        } else {
+                            $deprPayload['uuid']       = (string) Str::uuid();
+                            $deprPayload['created_at'] = now();
+                            DB::table($tableDeprMonthly)->insert($deprPayload);
+                        }
                     }
                 }
 
@@ -1164,7 +1355,6 @@ class AssetsController extends Controller
             }
         }
 
-        // log dikit biar kelihatan di laravel.log kalau mau cek
         Log::info('ASSETS_UPLOAD_EXCEL_SUMMARY', [
             'rows'     => $rows,
             'inserted' => $inserted,

@@ -184,9 +184,9 @@ class ReportingController extends Controller
                 END AS asset_maintenance_label
             "),
             DB::raw("
-                to_char(
+                  to_char(
                     COALESCE(l.updated_at, a.updated_at) at time zone 'Asia/Jakarta',
-                    'YYYY-MM-DD HH24:MI'
+                    'YYYY-MM-DD\"T\"HH24:MI:SS'
                 ) as updated_at
             "),
         ]);

@@ -142,10 +142,26 @@
                                                 required></select>
                                         </div>
 
+                                        @php
+                                            $canEditStatus =
+                                                auth()
+                                                    ->user()
+                                                    ?->hasAnyRoleKode(['AM_HEAD', 'AM_ADMIN', 'SYSADMIN']) ?? false;
+                                        @endphp
+
                                         <div class="col-md-4">
                                             <label class="form-label required">Status</label>
-                                            <select name="kode_status" id="sel-status" class="form-select"></select>
+                                            <select name="kode_status" id="sel-status" class="form-select"
+                                                {{ $canEditStatus ? '' : 'disabled' }}></select>
+
+                                            @unless ($canEditStatus)
+                                                <input type="hidden" name="kode_status"
+                                                    value="{{ old('kode_status', $asset->kode_status) }}">
+                                                <div class="form-text text-muted">Status hanya bisa diubah oleh AM_HEAD /
+                                                    AM_ADMIN / SYSADMIN.</div>
+                                            @endunless
                                         </div>
+
                                     </div>
 
                                     <hr class="my-6" />
@@ -397,7 +413,7 @@
         };
 
         const CURRENT = @json($current);
-
+        const CAN_EDIT_STATUS = @json($canEditStatus);
         $(function() {
             initSelect2('#sel-sumber', R.sumber);
             initSelect2('#sel-transaction', R.trx);
@@ -412,6 +428,11 @@
             initSelect2('#sel-maintenance', R.usercode);
             initSelect2('#sel-parent', R.parent);
             preloadValue('#sel-transaction', CURRENT['trx'], R.trx);
+
+            if (!CAN_EDIT_STATUS) {
+                $('#sel-status').prop('disabled', true);
+            }
+
 
             // Mode toggle display
             function applyModeUI(mode) {

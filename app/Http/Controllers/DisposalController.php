@@ -565,7 +565,7 @@ class DisposalController extends Controller
             // -------------------------------------------------
             if ($stepCode === 'am_head') {
                 if (!in_array('AM_HEAD', $userRoles) && !$isSysAdmin) {
-                    abort(403, 'Only AM_HEAD can approve this step.');
+                    abort(403, 'Only Asset Management Head can approve this step.');
                 }
 
                 // (Optional) if you also want AM_HEAD to match some department,
@@ -595,7 +595,10 @@ class DisposalController extends Controller
             // -------------------------------------------------
             // STEP 5: Asset Management execution (final)
             // -------------------------------------------------
-            if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+            if ($stepCode === 'asset_mgt') {
+                if (!in_array('AM_HEAD', $userRoles) && !in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+                    abort(403, 'Only Asset Management can approve this step.');
+                }
                 if (!$userDept) {
                     abort(422, 'Your department is not set. Please contact administrator.');
                 }

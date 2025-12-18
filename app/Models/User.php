@@ -71,4 +71,13 @@ class User extends Authenticatable
             ->whereJsonContains('actions', $action)
             ->exists();
     }
+    public function hasRoleKode(string $kode): bool
+    {
+        return $this->roles()->where('master_role.kode', $kode)->exists();
+    }
+
+    public function hasAnyRoleKode(array $kodes): bool
+    {
+        return $this->roles()->whereIn('master_role.kode', $kodes)->exists();
+    }
 }

@@ -986,7 +986,10 @@ class TransferController extends Controller
 
             // AM_ADMIN validation for last step (exclude SYSADMIN)
             $stepCode = $step['code'] ?? '';
-            if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
+            if ($stepCode === 'asset_mgt') {
+                if (!in_array('AM_HEAD', $userRoles) && !$isSysAdmin) {
+                    abort(403, 'Only Asset Management Head can approve this step.');
+                }
                 $userDept = $currentUser->kode_department;
 
                 if (!$userDept) {

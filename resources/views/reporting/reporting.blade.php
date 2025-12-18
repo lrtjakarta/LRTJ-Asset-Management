@@ -385,14 +385,14 @@
                         render: formatNumber,
                         className: 'text-end'
                     },
-
                     {
                         data: 'cap_date',
-                        name: 'cap_date',
+                        name: 'v.capitalization_date',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
                             const d = new Date(iso);
+                            if (isNaN(d.getTime())) return iso;
                             return new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
                                 day: '2-digit',
@@ -401,6 +401,7 @@
                             }).format(d);
                         }
                     },
+
                     {
                         data: 'period',
                         name: 'l.period',
@@ -481,27 +482,31 @@
                     {
                         data: 'nota_referensi',
                         name: 'd.nota_referensi'
-                    },
-
-                    {
+                    }, {
                         data: 'updated_at',
-                        name: 'updated_at',
+                        name: 'l.updated_at', // atau disable order/search kalau mau
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
+
                             const d = new Date(iso);
+                            if (isNaN(d.getTime()))
+                        return iso; // fallback kalau ada data lama formatnya beda
+
                             const dateStr = new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
                                 day: '2-digit',
                                 month: 'long',
                                 year: 'numeric'
                             }).format(d);
+
                             const timeStr = new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
                                 hour: '2-digit',
                                 minute: '2-digit',
                                 hour12: false
                             }).format(d);
+
                             return `${dateStr} ${timeStr}`;
                         }
                     },

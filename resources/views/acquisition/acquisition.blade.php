@@ -418,6 +418,7 @@
                 $('#acq-uom').val(null).trigger('change');
 
                 setExistingMode(false);
+                
             }
 
 
@@ -462,7 +463,7 @@
                             totalRaw !== undefined &&
                             Number(totalRaw) !== 0;
 
-                        setExistingMode(shouldLock);
+                        // setExistingMode(shouldLock);
                     })
                     .fail(() => {
                         clearFormValues();

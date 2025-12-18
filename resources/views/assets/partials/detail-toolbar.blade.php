@@ -34,14 +34,14 @@
             @canAction('ASSETS','U')
             <a href="{{ route('assets.edit', $asset->uuid) }}" class="btn btn-sm fw-bold btn-danger">Edit</a>
             @endcanAction
-            @canAction('ASSETS','D')
+            {{-- @canAction('ASSETS','D')
             <form id="assetDeleteForm" action="{{ route('assets.destroy', $asset->uuid) }}" method="POST"
                   class="d-inline">
                 @csrf
                 @method('DELETE')
                 <button type="button" id="btnDeleteAsset" class="btn btn-sm fw-bold btn-danger">Delete</button>
             </form>
-            @endcanAction
+            @endcanAction --}}
         </div>
     </div>
 </div>
