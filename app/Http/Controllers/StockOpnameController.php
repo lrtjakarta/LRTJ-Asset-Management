@@ -497,74 +497,134 @@ class StockOpnameController extends Controller
     public function store_transfer(Request $request)
     {
         abort_unless($this->canCreateStockOpname(), 403);
-        $data = $request->validate(['asset_uuid' => ['required', 'uuid', 'exists:assets,uuid'], 'type' => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])], 'after.value' => ['required', 'string'], 'note' => ['nullable', 'string', 'max:1000'], 'file' => ['nullable', 'file', 'max:51200'], 'flow_file' => ['nullable', 'file', 'max:51200']]);
+
+        $data = $request->validate([
+            'asset_uuid'  => ['required', 'uuid', 'exists:assets,uuid'],
+            'type'        => ['required', Rule::in(['owner', 'user', 'maintenance', 'status', 'location'])],
+            'after.value' => ['required', 'string'],
+            'is_same'     => ['nullable', 'boolean'],
+            'note'        => ['nullable', 'string', 'max:1000'],
+            'file'        => ['nullable', 'file', 'max:51200'],
+            'flow_file'   => ['nullable', 'file', 'max:51200'],
+        ]);
+
         $user = auth()->user();
-        $uid = $user ? ($user->name ?? $user->id) : null;
+        $uid  = $user ? ($user->name ?? $user->id) : null;
         abort_if(!$uid, 401, 'No session UID');
-        $asset = Assets::findOrFail($data['asset_uuid']);
-        $assetSv = Assets::where('uuid', $asset->uuid)->lockForUpdate()->first();
-        $before = null;
-        switch ($data['type']) {
-            case 'owner':
-                $before = optional($assetSv->assignment)->asset_owner;
-                $assetSv->assignment()->updateOrCreate(['asset_uuid' => $assetSv->uuid], ['asset_owner' => data_get($data, 'after.value')]);
-                break;
-            case 'user':
-                $before = optional($assetSv->assignment)->asset_user;
-                $assetSv->assignment()->updateOrCreate(['asset_uuid' => $assetSv->uuid], ['asset_user' => data_get($data, 'after.value')]);
-                break;
-            case 'maintenance':
-                $before = optional($assetSv->assignment)->asset_maintenance;
-                $assetSv->assignment()->updateOrCreate(['asset_uuid' => $assetSv->uuid], ['asset_maintenance' => data_get($data, 'after.value')]);
-                break;
-            case 'status':
-                $before = $assetSv->kode_status;
-                $assetSv->kode_status = data_get($data, 'after.value');
-                $assetSv->save();
-                break;
-            case 'location':
-                $before = $assetSv->kode_location;
-                $assetSv->kode_location = data_get($data, 'after.value');
-                $assetSv->save();
-                break;
-        }
 
-        $beforeLabel = $this->resolveLabel($data['type'], $before);
-        $afterLabel = $this->resolveLabel($data['type'], data_get($data, 'after.value'));
+        $result = DB::transaction(function () use ($request, $data, $uid) {
+            $assetSv = Assets::where('uuid', $data['asset_uuid'])->lockForUpdate()->firstOrFail();
 
-        $transfer = DB::transaction(function () use ($asset, $data, $before, $beforeLabel, $afterLabel, $uid, $request) {
-            $now = Carbon::now();
+            // BEFORE (current)
+            $before = null;
+            switch ($data['type']) {
+                case 'owner':
+                    $before = optional($assetSv->assignment)->asset_owner;
+                    break;
+                case 'user':
+                    $before = optional($assetSv->assignment)->asset_user;
+                    break;
+                case 'maintenance':
+                    $before = optional($assetSv->assignment)->asset_maintenance;
+                    break;
+                case 'status':
+                    $before = $assetSv->kode_status;
+                    break;
+                case 'location':
+                    $before = $assetSv->kode_location;
+                    break;
+            }
+
+            $isSame = (bool)($data['is_same'] ?? false);
+
+            // AFTER (requested)
+            $after = data_get($data, 'after.value');
+
+            // Hard-enforce: kalau Sesuai => after harus = before
+            if ($isSame) {
+                $after = $before;
+            }
+
+            // Update asset hanya kalau bukan "sesuai" DAN nilainya berubah
+            if (!$isSame && (string)$after !== (string)$before) {
+                switch ($data['type']) {
+                    case 'owner':
+                        $assetSv->assignment()->updateOrCreate(
+                            ['asset_uuid' => $assetSv->uuid],
+                            ['asset_owner' => $after]
+                        );
+                        break;
+                    case 'user':
+                        $assetSv->assignment()->updateOrCreate(
+                            ['asset_uuid' => $assetSv->uuid],
+                            ['asset_user' => $after]
+                        );
+                        break;
+                    case 'maintenance':
+                        $assetSv->assignment()->updateOrCreate(
+                            ['asset_uuid' => $assetSv->uuid],
+                            ['asset_maintenance' => $after]
+                        );
+                        break;
+                    case 'status':
+                        $assetSv->kode_status = $after;
+                        $assetSv->save();
+                        break;
+                    case 'location':
+                        $assetSv->kode_location = $after;
+                        $assetSv->save();
+                        break;
+                }
+            }
+
+            $beforeLabel = $this->resolveLabel($data['type'], $before);
+            $afterLabel  = $this->resolveLabel($data['type'], $after);
+
+            // Marking supaya kebaca jelas di list
+            $note = trim((string)($data['note'] ?? ''));
+            if ((string)$after === (string)$before) {
+                $note = trim('[SESUAI] ' . $note);
+            }
+
+            $now    = Carbon::now();
             $prefix = 'OPN' . $now->format('ym');
-            $last = Transfer::where('transfer_code', 'like', $prefix . '%')->orderBy('transfer_code', 'desc')->first();
-            $seq = $last ? ((int)substr($last->transfer_code, -4)) + 1 : 1;
-            $code = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
-            [$path, $orig, $mime, $size] = $this->saveUploadTf($request->file('file'), $asset, $code, null);
-            [$flowPath, $flowOrig, $flowMime, $flowSize] = $this->saveUploadTf($request->file('flow_file'), $asset, $code, null);
-            return Transfer::create([
-                'uuid' => (string)Str::uuid(),
-                'asset_uuid' => $asset->uuid,
-                'transfer_code' => $code,
-                'type' => $data['type'],
-                'before' => ['value' => $before],
-                'after' => ['value' => data_get($data, 'after.value')],
-                'before_label' => $beforeLabel,
-                'after_label' => $afterLabel,
-                'kode_status' => 'ACC',
-                'note' => $data['note'] ?? null,
-                'pic_request_uid' => $uid,
-                'pic_approve_uid' => $uid,
-                'file_path' => $path,
-                'file_name' => $orig,
-                'file_mime' => $mime,
-                'file_size' => $size,
-                'flow_file_path' => $flowPath,
-                'flow_file_name' => $flowOrig,
-                'flow_file_mime' => $flowMime,
-                'flow_file_size' => $flowSize
+            $last   = Transfer::where('transfer_code', 'like', $prefix . '%')
+                ->orderBy('transfer_code', 'desc')->first();
+            $seq    = $last ? ((int)substr($last->transfer_code, -4)) + 1 : 1;
+            $code   = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+
+            [$path, $orig, $mime, $size] = $this->saveUploadTf($request->file('file'), $assetSv, $code, null);
+            [$flowPath, $flowOrig, $flowMime, $flowSize] = $this->saveUploadTf($request->file('flow_file'), $assetSv, $code, null);
+
+            $transfer = Transfer::create([
+                'uuid'            => (string) Str::uuid(),
+                'asset_uuid'       => $assetSv->uuid,
+                'transfer_code'    => $code,
+                'type'             => $data['type'],
+                'before'           => ['value' => $before],
+                'after'            => ['value' => $after],
+                'before_label'     => $beforeLabel,
+                'after_label'      => $afterLabel,
+                'kode_status'      => 'ACC',
+                'note'             => $note ?: null,
+                'pic_request_uid'  => $uid,
+                'pic_approve_uid'  => $uid,
+                'file_path'        => $path,
+                'file_name'        => $orig,
+                'file_mime'        => $mime,
+                'file_size'        => $size,
+                'flow_file_path'   => $flowPath,
+                'flow_file_name'   => $flowOrig,
+                'flow_file_mime'   => $flowMime,
+                'flow_file_size'   => $flowSize,
             ]);
+
+            return $transfer;
         });
-        return response()->json(['ok' => true, 'id' => $transfer->uuid, 'code' => $transfer->transfer_code]);
+
+        return response()->json(['ok' => true, 'id' => $result->uuid, 'code' => $result->transfer_code]);
     }
+
 
     public function store_disposal(Request $request)
     {

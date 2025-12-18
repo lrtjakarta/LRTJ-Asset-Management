@@ -125,6 +125,7 @@
                     </div>
                     <div class="modal-body">
                         <div class="row g-5">
+                            <input type="hidden" name="is_same" id="tf-is-same" value="0">
                             <div class="col-md-12">
                                 <label class="form-label required">Asset</label>
                                 <select id="tf-asset" class="form-select" required></select>
@@ -177,7 +178,13 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label required">Move To</label>
-                                <select id="tf-target" class="form-select" required></select>
+                                <div class="d-flex gap-2">
+                                    <select id="tf-target" class="form-select" required></select>
+                                    <button type="button" id="btn-tf-sesuai" class="btn btn-light-danger btn-sm">
+                                        Sesuai
+                                    </button>
+                                </div>
+
                                 <input type="hidden" name="after[value]" id="tf-target-hidden">
                                 <div class="form-text" id="tf-target-help">Pick the new value.</div>
                             </div>
@@ -569,6 +576,26 @@
                 }
             });
 
+            let lastSnapshot = null;
+
+            function parseKodeFromLabel(label) {
+                if (!label) return '';
+                const parts = String(label).split(' - ');
+                return (parts[0] || '').trim();
+            }
+
+            function getCurrentValueByType(type) {
+                if (!lastSnapshot) return '';
+                if (type === 'owner') return lastSnapshot.owner_code || parseKodeFromLabel(lastSnapshot.owner_label);
+                if (type === 'user') return lastSnapshot.user_code || parseKodeFromLabel(lastSnapshot.user_label);
+                if (type === 'maintenance') return lastSnapshot.maintenance_code || parseKodeFromLabel(lastSnapshot
+                    .maintenance_label);
+                if (type === 'status') return lastSnapshot.status_code || parseKodeFromLabel(lastSnapshot.status_label);
+                if (type === 'location') return lastSnapshot.location_code || parseKodeFromLabel(lastSnapshot
+                    .location_label);
+                return '';
+            }
+
             function preloadSelectValue($select, id, text) {
                 if (!id) return;
                 const opt = new Option(text ?? String(id), id, true, true);
@@ -576,6 +603,7 @@
             }
 
             function renderSnapshot(d) {
+                lastSnapshot = d;
                 const safe = (v) => v || '';
                 $('#snap-owner').text(safe(d.owner_label));
                 $('#snap-user').text(safe(d.user_label));
@@ -586,6 +614,7 @@
             }
 
             function clearSnapshot() {
+                lastSnapshot = null;
                 $('#snap-owner,#snap-user,#snap-maintenance,#snap-status,#snap-location').text('');
                 $('#tf-asset-snapshot').addClass('d-none');
             }
@@ -601,6 +630,7 @@
             }
 
             function resetTransferFormToCreate() {
+                $('#tf-is-same').val('0');
                 const $form = $('#formTransfer');
 
                 $form.removeData('edit-id');
@@ -662,6 +692,7 @@
                 }).on('select2:select', function(e) {
                     if (this.id === 'tf-target') {
                         $('#tf-target-hidden').val(e.params.data.id);
+                        $('#tf-is-same').val('0');
                     }
                     if (this.id === 'tf-asset') {
                         const assetUuid = e.params.data.id;
@@ -846,6 +877,29 @@
                         .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
                 });
             });
+            $('#btn-tf-sesuai').off('click').on('click', function() {
+                const type = $('#tf-type').val();
+                const cur = getCurrentValueByType(type);
+
+                if (!cur) {
+                    Swal.fire('Tidak bisa Sesuai',
+                        'Nilai current untuk type ini kosong / belum kebaca dari snapshot.', 'warning');
+                    return;
+                }
+
+                $('#tf-is-same').val('1');
+                $('#tf-target-hidden').val(cur);
+
+                const labelMap = {
+                    owner: lastSnapshot?.owner_label,
+                    user: lastSnapshot?.user_label,
+                    maintenance: lastSnapshot?.maintenance_label,
+                    status: lastSnapshot?.status_label,
+                    location: lastSnapshot?.location_label,
+                };
+                preloadSelectValue($('#tf-target'), cur, (labelMap[type] || cur));
+            });
+
 
         })();
     </script>
