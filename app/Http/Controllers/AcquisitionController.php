@@ -56,7 +56,7 @@ class AcquisitionController extends Controller
                 'h.pic_request_uid',
                 'h.created_at',
                 'a.asset_code',
-                'a.description as asset_name',
+                'a.description',
             )
             ->whereNull('h.deleted_at')
             ->orderByDesc('h.created_at'); // latest snapshot first
@@ -116,9 +116,8 @@ class AcquisitionController extends Controller
             ) <= ?
         ", [$capTo]);
         }
-
-        return DataTables::of($q)
-            ->addColumn('asset_label', fn($r) => "{$r->asset_code} - {$r->asset_name}")
+        $dt = DataTables::of($q)
+            ->addColumn('asset_label', fn($r) => "{$r->asset_code} - {$r->description}")
             ->addColumn('quantity', function ($r) {
                 $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
                 $before = json_decode($r->before_payload ?? '[]', true) ?: [];
@@ -127,22 +126,15 @@ class AcquisitionController extends Controller
             })
             ->addColumn('kode_uom', function ($r) {
                 static $uomMap = null;
-
                 if ($uomMap === null) {
-                    $uomMap = DB::table('master_uom')
-                        ->whereNull('deleted_at')
-                        ->pluck('name', 'kode')
-                        ->toArray();
+                    $uomMap = DB::table('master_uom')->whereNull('deleted_at')->pluck('name', 'kode')->toArray();
                 }
 
                 $after  = json_decode($r->after_payload ?? '[]', true) ?: [];
                 $before = json_decode($r->before_payload ?? '[]', true) ?: [];
                 $kode   = data_get($after, 'kode_uom', data_get($before, 'kode_uom'));
 
-                if (!$kode) {
-                    return null;
-                }
-
+                if (!$kode) return null;
                 $name = $uomMap[$kode] ?? null;
                 return $name ? "{$kode} - {$name}" : $kode;
             })
@@ -175,24 +167,82 @@ class AcquisitionController extends Controller
                 return data_get($after, 'capitalization_date', data_get($before, 'capitalization_date'));
             })
             ->addColumn('created_at_fmt', function ($r) {
-                return Carbon::parse($r->created_at)
-                    ->timezone('Asia/Jakarta')
-                    ->format('d M Y H:i');
+                return Carbon::parse($r->created_at)->timezone('Asia/Jakarta')->format('d M Y H:i');
             })
             ->addColumn('actions', function ($r) use ($canDelete) {
-                $id      = e($r->uuid);
+                $id = e($r->uuid);
                 $btns = '<div class="btn-group btn-group-sm">';
-                if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
-                }
+                if ($canDelete) $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
                 $btns .= '</div>';
                 return $btns;
             })
-            ->rawColumns(['actions'])
-            ->toJson();
+            ->rawColumns(['actions']);
+
+        $dt->filterColumn('asset_code', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->where(function ($w) use ($k) {
+                $w->where('a.asset_code', 'ilike', "%{$k}%")
+                    ->orWhere('a.description', 'ilike', "%{$k}%");
+            });
+        });
+
+        $dt->filterColumn('quantity', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereRaw(
+                "coalesce(h.after_payload::jsonb->>'quantity', h.before_payload::jsonb->>'quantity', '') ILIKE ?",
+                ["%{$k}%"]
+            );
+        });
+
+        $dt->filterColumn('kode_uom', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereRaw(
+                "coalesce(h.after_payload::jsonb->>'kode_uom', h.before_payload::jsonb->>'kode_uom', '') ILIKE ?",
+                ["%{$k}%"]
+            );
+        });
+
+        foreach (['price', 'vat_in', 'total'] as $col) {
+            $dt->filterColumn($col, function ($query, $keyword) use ($col) {
+                $k = trim((string)$keyword);
+                if ($k === '') return;
+                $query->whereRaw(
+                    "coalesce(h.after_payload::jsonb->>'{$col}', h.before_payload::jsonb->>'{$col}', '') ILIKE ?",
+                    ["%{$k}%"]
+                );
+            });
+        }
+
+        $dt->filterColumn('actual_date', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereRaw(
+                "coalesce(h.after_payload::jsonb->>'actual_date', h.before_payload::jsonb->>'actual_date', '') ILIKE ?",
+                ["%{$k}%"]
+            );
+        });
+
+        $dt->filterColumn('capitalization_date', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereRaw(
+                "coalesce(h.after_payload::jsonb->>'capitalization_date', h.before_payload::jsonb->>'capitalization_date', '') ILIKE ?",
+                ["%{$k}%"]
+            );
+        });
+
+        // optional safety (since your JS uses name:'note' right now)
+        $dt->filterColumn('note', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->where('h.note', 'ilike', "%{$k}%");
+        });
+
+        return $dt->toJson();
     }
-
-
 
     private function parseDate(?string $v): ?string
     {

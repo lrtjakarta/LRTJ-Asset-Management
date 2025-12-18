@@ -83,6 +83,7 @@
                             <tr>
                                 <th class="min-w-150px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
+                                <th class="min-w-200px">Asset Description</th>
                                 <th class="min-w-100px">Qty</th>
                                 <th class="min-w-150px">UOM</th>
                                 <th class="min-w-200px">Price</th>
@@ -272,7 +273,7 @@
                     }
                 },
                 order: [
-                    [11, 'desc']
+                    [12, 'desc']
                 ],
                 columns: [{
                         data: 'acq_code',
@@ -280,13 +281,17 @@
                     },
                     {
                         data: 'asset_code',
-                        name: 'asset_code',
+                        name: 'a.asset_code',
                         render: function(data, type, row) {
                             if (type !== 'display') return data;
                             const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row
                                 .asset_uuid));
                             return `<a href="${url}" class="text-primary fw-semibold">${data ?? ''}</a>`;
                         }
+                    },
+                    {
+                        data: 'description',
+                        name: 'a.description'
                     },
                     {
                         data: 'quantity',
@@ -319,11 +324,11 @@
                     },
                     {
                         data: 'pic_request_uid',
-                        name: 'pic_request_uid'
+                        name: 'h.pic_request_uid'
                     },
                     {
                         data: 'note',
-                        name: 'note'
+                        name: 'h.note'
                     },
                     {
                         data: 'created_at_fmt',

@@ -49,6 +49,7 @@ class StockOpnameController extends Controller
                 'data'            => [],
             ]);
         }
+
         $draw   = (int) $request->input('draw', 1);
         $start  = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 10);
@@ -59,57 +60,87 @@ class StockOpnameController extends Controller
         $dateFrom  = $request->input('date_from');
         $dateTo    = $request->input('date_to');
         $assetLike = $request->input('asset');
-        $users = $request->input('users');
+        $users     = $request->input('users');
 
+        // ===== Transfer base =====
         $t = DB::table('assets_transfers as t')
             ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
+            ->leftJoin('assets_assignment as aa', 'aa.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('master_location as ml', 'ml.kode', '=', 'a.kode_location')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 'a.kode_status')
+            ->leftJoin('master_user_code as uo', 'uo.kode', '=', 'aa.asset_owner')
+            ->leftJoin('master_user_code as uu', 'uu.kode', '=', 'aa.asset_user')
+            ->leftJoin('master_user_code as um', 'um.kode', '=', 'aa.asset_maintenance')
             ->selectRaw("
-                t.uuid,
-                t.asset_uuid,
-                a.asset_code,
-                a.description,
-                t.transfer_code       as code,
-                'transfer'            as source_type,
-                t.type                as tf_type,
-                COALESCE(t.before->>'value','') as before_val,
-                COALESCE(t.after->>'value','')  as after_val,
-                t.pic_request_uid,
-                t.pic_approve_uid,
-                t.note,
-                t.file_name,
-                t.file_path,
-                t.flow_file_name,
-                t.flow_file_path,
-                NULL::text            as ba_file_name,
-                NULL::text            as ba_file_path,
-                t.updated_at
-            ")
+            t.uuid,
+            t.asset_uuid,
+            a.asset_code,
+            a.description as asset_description,
+
+            -- location / status / assignment labels (searchable)
+            (COALESCE(a.kode_location,'') || ' - ' || COALESCE(ml.name,'')) as asset_location,
+            (COALESCE(aa.asset_owner,'') || ' - ' || COALESCE(uo.department,'')) as owner,
+            (COALESCE(aa.asset_user,'') || ' - ' || COALESCE(uu.department,'')) as \"user\",
+            (COALESCE(aa.asset_maintenance,'') || ' - ' || COALESCE(um.department,'')) as maintenance,
+            (COALESCE(a.kode_status,'') || ' - ' || COALESCE(ms.name,'')) as asset_status,
+
+            t.transfer_code       as code,
+            'transfer'            as source_type,
+            t.type                as tf_type,
+            COALESCE(t.before->>'value','') as before_val,
+            COALESCE(t.after->>'value','')  as after_val,
+            t.pic_request_uid,
+            t.pic_approve_uid,
+            t.note,
+            t.file_name,
+            t.file_path,
+            t.flow_file_name,
+            t.flow_file_path,
+            NULL::text            as ba_file_name,
+            NULL::text            as ba_file_path,
+            t.updated_at
+        ")
             ->whereNull('t.deleted_at')
             ->where('t.kode_status', 'ACC');
 
+        // ===== Disposal base =====
         $d = DB::table('assets_disposals as d')
             ->join('assets as a', 'a.uuid', '=', 'd.asset_uuid')
+            ->leftJoin('assets_assignment as aa', 'aa.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('master_location as ml', 'ml.kode', '=', 'a.kode_location')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 'a.kode_status')
+            ->leftJoin('master_user_code as uo', 'uo.kode', '=', 'aa.asset_owner')
+            ->leftJoin('master_user_code as uu', 'uu.kode', '=', 'aa.asset_user')
+            ->leftJoin('master_user_code as um', 'um.kode', '=', 'aa.asset_maintenance')
             ->selectRaw("
-                d.uuid,
-                d.asset_uuid,
-                a.asset_code,
-                a.description,
-                d.disposal_code       as code,
-                'disposal'            as source_type,
-                NULL::text            as tf_type,
-                COALESCE(d.before_status,'') as before_val,
-                COALESCE('DIS','')  as after_val,
-                d.pic_request_uid,
-                d.pic_approve_uid,
-                d.note,
-                d.file_name,
-                d.file_path,
-                d.flow_file_name,
-                d.flow_file_path,
-                d.ba_file_name,
-                d.ba_file_path,
-                d.updated_at
-            ")
+            d.uuid,
+            d.asset_uuid,
+            a.asset_code,
+            a.description as asset_description,
+
+            -- location / status / assignment labels (searchable)
+            (COALESCE(a.kode_location,'') || ' - ' || COALESCE(ml.name,'')) as asset_location,
+            (COALESCE(aa.asset_owner,'') || ' - ' || COALESCE(uo.department,'')) as owner,
+            (COALESCE(aa.asset_user,'') || ' - ' || COALESCE(uu.department,'')) as \"user\",
+            (COALESCE(aa.asset_maintenance,'') || ' - ' || COALESCE(um.department,'')) as maintenance,
+            (COALESCE(a.kode_status,'') || ' - ' || COALESCE(ms.name,'')) as asset_status,
+
+            d.disposal_code       as code,
+            'disposal'            as source_type,
+            NULL::text            as tf_type,
+            COALESCE(d.before_status,'') as before_val,
+            COALESCE('DIS','')          as after_val,
+            d.pic_request_uid,
+            d.pic_approve_uid,
+            d.note,
+            d.file_name,
+            d.file_path,
+            d.flow_file_name,
+            d.flow_file_path,
+            d.ba_file_name,
+            d.ba_file_path,
+            d.updated_at
+        ")
             ->whereNull('d.deleted_at')
             ->where('d.kode_status', 'ACC');
 
@@ -123,6 +154,7 @@ class StockOpnameController extends Controller
 
         $q = DB::query()->fromSub($union, 'u');
 
+        // ===== Filters =====
         if ($tfType) {
             $q->where('source_type', 'transfer')->where('tf_type', $tfType);
         }
@@ -132,20 +164,35 @@ class StockOpnameController extends Controller
         if ($dateTo) {
             $q->whereDate('updated_at', '<=', $dateTo);
         }
+
+        // Asset filter (code/desc + new fields)
         if ($assetLike) {
             $q->where(function ($qq) use ($assetLike) {
                 $qq->where('asset_code', 'ilike', "%{$assetLike}%")
-                    ->orWhere('description', 'ilike', "%{$assetLike}%");
+                    ->orWhere('asset_description', 'ilike', "%{$assetLike}%")
+                    ->orWhere('asset_location', 'ilike', "%{$assetLike}%")
+                    ->orWhere('owner', 'ilike', "%{$assetLike}%")
+                    ->orWhere('user', 'ilike', "%{$assetLike}%")
+                    ->orWhere('maintenance', 'ilike', "%{$assetLike}%")
+                    ->orWhere('asset_status', 'ilike', "%{$assetLike}%");
             });
         }
+
         if ($users) {
             $q->where('pic_request_uid', $users);
         }
+
+        // Global DataTables search (also includes new fields)
         if ($search !== '') {
             $q->where(function ($qq) use ($search) {
                 $qq->where('code', 'ilike', "%{$search}%")
                     ->orWhere('asset_code', 'ilike', "%{$search}%")
-                    ->orWhere('description', 'ilike', "%{$search}%")
+                    ->orWhere('asset_description', 'ilike', "%{$search}%")
+                    ->orWhere('asset_location', 'ilike', "%{$search}%")
+                    ->orWhere('owner', 'ilike', "%{$search}%")
+                    ->orWhere('user', 'ilike', "%{$search}%")
+                    ->orWhere('maintenance', 'ilike', "%{$search}%")
+                    ->orWhere('asset_status', 'ilike', "%{$search}%")
                     ->orWhere('note', 'ilike', "%{$search}%")
                     ->orWhere('pic_request_uid', 'ilike', "%{$search}%")
                     ->orWhere('pic_approve_uid', 'ilike', "%{$search}%");
@@ -154,44 +201,75 @@ class StockOpnameController extends Controller
 
         $totalFiltered = (clone $q)->count();
 
-        $orderColIdx = (int) data_get($request->input('order', []), '0.column', 9);
+        // ===== Ordering: match your NEW blade column order =====
+        // 0 asset_code
+        // 1 asset_description
+        // 2 asset_location
+        // 3 owner
+        // 4 user
+        // 5 maintenance
+        // 6 asset_status
+        // 7 code
+        // 8 source
+        // 9 type
+        // 10 detail (no)
+        // 11 note
+        // 12 requester
+        // 13 approver
+        // 14 file (no)
+        // 15 updated_at
+        // 16 actions (no)
+        $orderColIdx = (int) data_get($request->input('order', []), '0.column', 15);
         $orderDir    = data_get($request->input('order', []), '0.dir', 'desc') === 'asc' ? 'asc' : 'desc';
-        $columns     = [
-            'asset_code',
-            'code',
-            'source_type',
-            'tf_type',
-            'before_val',
-            'note',
-            'pic_request_uid',
-            'pic_approve_uid',
-            'file_path',
-            'updated_at',
-        ];
-        $orderBy = $columns[$orderColIdx] ?? 'updated_at';
 
-        $rows = $q->orderBy($orderBy, $orderDir)
-            ->skip($start)
+        $orderMap = [
+            0  => 'asset_code',
+            1  => 'asset_description',
+            2  => 'asset_location',
+            3  => 'owner',
+            4  => 'user',
+            5  => 'maintenance',
+            6  => 'asset_status',
+            7  => 'code',
+            8  => 'source_type',
+            9  => 'tf_type',
+            10 => null, // detail not orderable
+            11 => 'note',
+            12 => 'pic_request_uid',
+            13 => 'pic_approve_uid',
+            14 => null, // file not orderable
+            15 => 'updated_at',
+            16 => null, // actions not orderable
+        ];
+
+        $orderBy = $orderMap[$orderColIdx] ?? 'updated_at';
+
+        if ($orderBy) {
+            $q->orderBy($orderBy, $orderDir);
+        } else {
+            // fallback if user tries ordering a non-orderable col
+            $q->orderBy('updated_at', 'desc');
+        }
+
+        $rows = $q->skip($start)
             ->take($length)
             ->get()
             ->map(function ($r) {
-                $asset_label = ($r->asset_code ?? '') . ' — ' . ($r->description ?? '');
-                $isTransfer = $r->source_type === 'transfer';
+                $asset_label = ($r->asset_code ?? '') . ' — ' . ($r->asset_description ?? '');
+                $isTransfer  = $r->source_type === 'transfer';
 
-                // Build detailed label with full names
+                // Detail formatting (keep your old behavior)
                 $detail = '';
                 if ($isTransfer) {
                     $beforeLabel = $r->before_val;
-                    $afterLabel = $r->after_val;
+                    $afterLabel  = $r->after_val;
 
-                    // Get full usercode details for before/after values
                     if ($r->before_val) {
                         $beforeUc = MasterUserCode::with('division')->where('kode', $r->before_val)->first();
                         if ($beforeUc) {
                             $beforeLabel = $beforeUc->kode . ' - ' . $beforeUc->department;
                         }
                     }
-
                     if ($r->after_val) {
                         $afterUc = MasterUserCode::with('division')->where('kode', $r->after_val)->first();
                         if ($afterUc) {
@@ -199,61 +277,67 @@ class StockOpnameController extends Controller
                         }
                     }
 
-                    $detail = strtoupper($r->tf_type) . ' - ' . $beforeLabel . ' → ' . $afterLabel;
+                    $detail = strtoupper((string) $r->tf_type) . ' - ' . $beforeLabel . ' → ' . $afterLabel;
                 } else {
                     $detail = 'DISPOSAL';
                 }
 
-                // Build file links - show all uploaded files
+                // Files (keep your old behavior)
                 $files = [];
                 if (!empty($r->file_path)) {
-                    $url = Storage::url($r->file_path);
+                    $url  = Storage::url($r->file_path);
                     $name = $r->file_name ?: 'Attachment';
                     $files[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->flow_file_path)) {
-                    $url = Storage::url($r->flow_file_path);
+                    $url  = Storage::url($r->flow_file_path);
                     $name = $r->flow_file_name ?: 'Signed Form';
                     $files[] = '<a class="btn btn-sm btn-light-success me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->ba_file_path)) {
-                    $url = Storage::url($r->ba_file_path);
+                    $url  = Storage::url($r->ba_file_path);
                     $name = $r->ba_file_name ?: 'Berita Acara';
                     $files[] = '<a class="btn btn-sm btn-light-warning" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 $file = implode(' ', $files);
 
-                // Build actions buttons
+                // Actions (keep your old behavior)
                 $actions = '';
                 if ($isTransfer) {
-                    // Transfer: show form download for owner/user/maintenance types
                     if (in_array($r->tf_type, ['owner', 'user', 'maintenance'], true)) {
                         $formUrl = route('stockopname.transfer.download.form', $r->uuid);
                         $actions .= '<a href="' . e($formUrl) . '" class="btn btn-light-primary btn-sm me-1" target="_blank">Form</a>';
                     }
                 } else {
-                    // Disposal: show both form and BA download
                     $formUrl = route('stockopname.disposal.download.form', $r->uuid);
-                    $baUrl = route('stockopname.disposal.download.ba', $r->uuid);
+                    $baUrl   = route('stockopname.disposal.download.ba', $r->uuid);
                     $actions .= '<a href="' . e($formUrl) . '" class="btn btn-light-info btn-sm me-1" target="_blank">Form</a>';
                     $actions .= '<a href="' . e($baUrl) . '" class="btn btn-light-warning btn-sm" target="_blank">BA</a>';
                 }
 
                 return [
-                    'uuid'             => $r->uuid,
-                    'asset_uuid'       => $r->asset_uuid,
-                    'asset_code'       => $r->asset_code,
-                    'asset_label'      => $asset_label,
-                    'code'             => $r->code,
-                    'source'           => $isTransfer ? 'MOVEMENT' : 'DISPOSAL',
-                    'type'             => $isTransfer ? strtoupper($r->tf_type) : 'DISPOSAL',
-                    'detail'           => $detail,
-                    'note'             => $r->note,
-                    'pic_request_uid'  => $r->pic_request_uid,
-                    'pic_approve_uid'  => $r->pic_approve_uid,
-                    'file'             => $file,
-                    'updated_at'       => $r->updated_at,
-                    'actions'          => $actions,
+                    'uuid'              => $r->uuid,
+                    'asset_uuid'        => $r->asset_uuid,
+
+                    'asset_code'        => $r->asset_code,
+                    'asset_description' => $r->asset_description ?? '',
+                    'asset_location'    => $r->asset_location ?? '',
+                    'owner'             => $r->owner ?? '',
+                    'user'              => $r->user ?? '',
+                    'maintenance'       => $r->maintenance ?? '',
+                    'asset_status'      => $r->asset_status ?? '',
+
+                    'asset_label'       => $asset_label,
+                    'code'              => $r->code,
+                    'source'            => $isTransfer ? 'MOVEMENT' : 'DISPOSAL',
+                    'type'              => $isTransfer ? strtoupper((string) $r->tf_type) : 'DISPOSAL',
+                    'detail'            => $detail,
+                    'note'              => $r->note,
+                    'pic_request_uid'   => $r->pic_request_uid,
+                    'pic_approve_uid'   => $r->pic_approve_uid,
+                    'file'              => $file,
+                    'updated_at'        => $r->updated_at,
+                    'actions'           => $actions,
                 ];
             });
 
@@ -351,6 +435,10 @@ class StockOpnameController extends Controller
         }
 
         $q = DB::query()->fromSub($union, 'u');
+        $base = DB::query()->fromSub($union, 'u');
+        $totalAll = (clone $base)->count();
+
+        $q = DB::query()->fromSub($union, 'u');
 
         if ($tfType) {
             $q->where('source_type', 'transfer')->where('tf_type', $tfType);
@@ -488,7 +576,7 @@ class StockOpnameController extends Controller
 
         return response()->json([
             'draw'            => $draw,
-            'recordsTotal'    => $totalFiltered,
+            'recordsTotal'    => $totalAll,
             'recordsFiltered' => $totalFiltered,
             'data'            => $rows,
         ]);

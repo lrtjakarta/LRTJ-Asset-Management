@@ -313,6 +313,17 @@ class ExportController
     public function assets_export(Request $request)
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'R'), 403);
+
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            DISTINCT ON (m.asset_uuid)
+            m.asset_uuid,
+            m.period,
+            m.accumulated_depr_end,
+            m.ending_balance
+        ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
@@ -326,6 +337,11 @@ class ExportController
             ->leftJoin('master_user_code    as ou',   'ou.kode',    'g.asset_owner')
             ->leftJoin('master_user_code    as uu',   'uu.kode',    'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
+
+            ->leftJoinSub($lastDepr, 'dm', function ($j) {
+                $j->on('dm.asset_uuid', '=', 'a.uuid');
+            })
+
             ->whereNull('a.deleted_at')
             ->select(
                 'a.asset_code',
@@ -353,7 +369,11 @@ class ExportController
                 'd.no_po_perjanjian_spk',
                 'd.nota_referensi',
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber      || ' - ' || msrc.name END AS sumber_label"),
-                DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at")
+                DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at"),
+
+                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
+                DB::raw("COALESCE(dm.ending_balance, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("dm.period as last_depr_period"),
             );
 
         if ($assetClass = $request->get('asset_class')) {
@@ -418,7 +438,9 @@ class ExportController
             'W1' => 'No PO/Perjanjian/SPK',
             'X1' => 'Note Reference',
             'Y1' => 'Sumber',
-            'Z1' => 'Updated At',
+            'Z1' => 'Depreciation',
+            'AA1' => 'Net Book Value',
+            'AB1' => 'Updated At',
         ];
 
         foreach ($headers as $cell => $text) {
@@ -452,12 +474,14 @@ class ExportController
             $sheet->setCellValue("W{$rowNum}", $r->no_po_perjanjian_spk);
             $sheet->setCellValue("X{$rowNum}", $r->nota_referensi);
             $sheet->setCellValue("Y{$rowNum}", $r->sumber_label);
-            $sheet->setCellValue("Z{$rowNum}", $r->updated_at);
+            $sheet->setCellValue("Z{$rowNum}", $r->depreciation);
+            $sheet->setCellValue("AA{$rowNum}", $r->net_book_value);
+            $sheet->setCellValue("AB{$rowNum}", $r->updated_at);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'Z') as $col) {
+        foreach (range('A', 'AB') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -470,7 +494,6 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
-
     public function stock_opname_export(Request $request)
     {
         abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
@@ -482,13 +505,27 @@ class ExportController
         $assetLike = $request->input('asset');
         $users     = $request->input('users');
 
+        // ===== Transfer base =====
         $t = DB::table('assets_transfers as t')
             ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
+            ->leftJoin('assets_assignment as aa', 'aa.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('master_location as ml', 'ml.kode', '=', 'a.kode_location')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 'a.kode_status')
+            ->leftJoin('master_user_code as uo', 'uo.kode', '=', 'aa.asset_owner')
+            ->leftJoin('master_user_code as uu', 'uu.kode', '=', 'aa.asset_user')
+            ->leftJoin('master_user_code as um', 'um.kode', '=', 'aa.asset_maintenance')
             ->selectRaw("
             t.uuid,
             t.asset_uuid,
             a.asset_code,
-            a.description,
+            a.description as asset_description,
+
+            (COALESCE(a.kode_location,'') || ' - ' || COALESCE(ml.name,'')) as asset_location,
+            (COALESCE(aa.asset_owner,'') || ' - ' || COALESCE(uo.department,'')) as owner,
+            (COALESCE(aa.asset_user,'') || ' - ' || COALESCE(uu.department,'')) as asset_user_label,
+            (COALESCE(aa.asset_maintenance,'') || ' - ' || COALESCE(um.department,'')) as maintenance,
+            (COALESCE(a.kode_status,'') || ' - ' || COALESCE(ms.name,'')) as asset_status,
+
             t.transfer_code       as code,
             'transfer'            as source_type,
             t.type                as tf_type,
@@ -504,13 +541,27 @@ class ExportController
             ->whereNull('t.deleted_at')
             ->where('t.kode_status', 'ACC');
 
+        // ===== Disposal base =====
         $d = DB::table('assets_disposals as d')
             ->join('assets as a', 'a.uuid', '=', 'd.asset_uuid')
+            ->leftJoin('assets_assignment as aa', 'aa.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('master_location as ml', 'ml.kode', '=', 'a.kode_location')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 'a.kode_status')
+            ->leftJoin('master_user_code as uo', 'uo.kode', '=', 'aa.asset_owner')
+            ->leftJoin('master_user_code as uu', 'uu.kode', '=', 'aa.asset_user')
+            ->leftJoin('master_user_code as um', 'um.kode', '=', 'aa.asset_maintenance')
             ->selectRaw("
             d.uuid,
             d.asset_uuid,
             a.asset_code,
-            a.description,
+            a.description as asset_description,
+
+            (COALESCE(a.kode_location,'') || ' - ' || COALESCE(ml.name,'')) as asset_location,
+            (COALESCE(aa.asset_owner,'') || ' - ' || COALESCE(uo.department,'')) as owner,
+            (COALESCE(aa.asset_user,'') || ' - ' || COALESCE(uu.department,'')) as asset_user_label,
+            (COALESCE(aa.asset_maintenance,'') || ' - ' || COALESCE(um.department,'')) as maintenance,
+            (COALESCE(a.kode_status,'') || ' - ' || COALESCE(ms.name,'')) as asset_status,
+
             d.disposal_code       as code,
             'disposal'            as source_type,
             NULL::text            as tf_type,
@@ -536,6 +587,7 @@ class ExportController
 
         $q = DB::query()->fromSub($union, 'u');
 
+        // ===== Filters =====
         if ($tfType) {
             $q->where('source_type', 'transfer')->where('tf_type', $tfType);
         }
@@ -545,12 +597,20 @@ class ExportController
         if ($dateTo) {
             $q->whereDate('updated_at', '<=', $dateTo);
         }
+
+        // Asset filter (code/desc + new fields)
         if ($assetLike) {
             $q->where(function ($qq) use ($assetLike) {
                 $qq->where('asset_code', 'ilike', "%{$assetLike}%")
-                    ->orWhere('description', 'ilike', "%{$assetLike}%");
+                    ->orWhere('asset_description', 'ilike', "%{$assetLike}%")
+                    ->orWhere('asset_location', 'ilike', "%{$assetLike}%")
+                    ->orWhere('owner', 'ilike', "%{$assetLike}%")
+                    ->orWhere('asset_user_label', 'ilike', "%{$assetLike}%")
+                    ->orWhere('maintenance', 'ilike', "%{$assetLike}%")
+                    ->orWhere('asset_status', 'ilike', "%{$assetLike}%");
             });
         }
+
         if ($users) {
             $q->where('pic_request_uid', $users);
         }
@@ -561,51 +621,61 @@ class ExportController
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Stock Opname');
 
-        // Header row
+        // Header row (NEW columns added)
         $sheet->setCellValue('A1', 'Asset Code');
         $sheet->setCellValue('B1', 'Asset Description');
-        $sheet->setCellValue('C1', 'Transaction Number');
-        $sheet->setCellValue('D1', 'Source');
-        $sheet->setCellValue('E1', 'Type');
-        $sheet->setCellValue('F1', 'Before');
-        $sheet->setCellValue('G1', 'After');
-        $sheet->setCellValue('H1', 'Note');
-        $sheet->setCellValue('I1', 'Requester');
-        $sheet->setCellValue('J1', 'Approver');
-        $sheet->setCellValue('K1', 'Updated At');
+        $sheet->setCellValue('C1', 'Asset Location');
+        $sheet->setCellValue('D1', 'Owner');
+        $sheet->setCellValue('E1', 'User');
+        $sheet->setCellValue('F1', 'Maintenance');
+        $sheet->setCellValue('G1', 'Asset Status');
+        $sheet->setCellValue('H1', 'Transaction Number');
+        $sheet->setCellValue('I1', 'Source');
+        $sheet->setCellValue('J1', 'Type');
+        $sheet->setCellValue('K1', 'Before');
+        $sheet->setCellValue('L1', 'After');
+        $sheet->setCellValue('M1', 'Note');
+        $sheet->setCellValue('N1', 'Requester');
+        $sheet->setCellValue('O1', 'Approver');
+        $sheet->setCellValue('P1', 'Updated At');
 
-        $sheet->getStyle('A1:K1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:P1')->getFont()->setBold(true);
 
         $rowNum = 2;
         foreach ($rows as $r) {
-            $source  = strtoupper($r->source_type);
-            $type    = $r->source_type === 'transfer'
-                ? strtoupper($r->tf_type)
+            $src  = strtoupper((string) $r->source_type);
+            $type = $r->source_type === 'transfer'
+                ? strtoupper((string) $r->tf_type)
                 : 'DISPOSAL';
 
-            $before  = $r->before_val;
-            $after   = $r->after_val;
+            $before = $r->before_val;
+            $after  = $r->after_val;
 
             $updated = $r->updated_at
                 ? Carbon::parse($r->updated_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
                 : '';
 
             $sheet->setCellValue("A{$rowNum}", $r->asset_code);
-            $sheet->setCellValue("B{$rowNum}", $r->description);
-            $sheet->setCellValue("C{$rowNum}", $r->code);
-            $sheet->setCellValue("D{$rowNum}", $source);
-            $sheet->setCellValue("E{$rowNum}", $type);
-            $sheet->setCellValue("F{$rowNum}", $before);
-            $sheet->setCellValue("G{$rowNum}", $after);
-            $sheet->setCellValue("H{$rowNum}", $r->note);
-            $sheet->setCellValue("I{$rowNum}", $r->pic_request_uid);
-            $sheet->setCellValue("J{$rowNum}", $r->pic_approve_uid);
-            $sheet->setCellValue("K{$rowNum}", $updated);
+            $sheet->setCellValue("B{$rowNum}", $r->asset_description ?? '');
+            $sheet->setCellValue("C{$rowNum}", $r->asset_location ?? '');
+            $sheet->setCellValue("D{$rowNum}", $r->owner ?? '');
+            $sheet->setCellValue("E{$rowNum}", $r->asset_user_label ?? '');
+            $sheet->setCellValue("F{$rowNum}", $r->maintenance ?? '');
+            $sheet->setCellValue("G{$rowNum}", $r->asset_status ?? '');
+            $sheet->setCellValue("H{$rowNum}", $r->code);
+            $sheet->setCellValue("I{$rowNum}", $src);
+            $sheet->setCellValue("J{$rowNum}", $type);
+            $sheet->setCellValue("K{$rowNum}", $before);
+            $sheet->setCellValue("L{$rowNum}", $after);
+            $sheet->setCellValue("M{$rowNum}", $r->note);
+            $sheet->setCellValue("N{$rowNum}", $r->pic_request_uid);
+            $sheet->setCellValue("O{$rowNum}", $r->pic_approve_uid);
+            $sheet->setCellValue("P{$rowNum}", $updated);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'K') as $col) {
+        foreach (range('A', 'P') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
@@ -618,6 +688,7 @@ class ExportController
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }
+
     public function movement_export(Request $request)
     {
         abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
@@ -1309,7 +1380,7 @@ class ExportController
     }
     public function depreciation_monthly_export(Request $request)
     {
-        
+
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'R'), 403);
 
         $period = $request->period

@@ -368,7 +368,7 @@ class ReturnController extends Controller
             ->select([
                 'return_history.*',
                 'a.asset_code',
-                'a.description as asset_desc',
+                'a.description',
             ]);
 
         if ($source) {

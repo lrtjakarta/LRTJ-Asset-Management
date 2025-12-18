@@ -57,7 +57,7 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Reason</label>
-                            <select id="ds-reason" class="form-select">
+                            <select id="ds-reason-filter" class="form-select">
                                 <option value="">All</option>
                                 <option value="Sale">Sale</option>
                                 <option value="Waste">Waste</option>
@@ -106,7 +106,8 @@
                         <thead>
                             <tr class="table-light">
                                 <th class="min-w-200px">Transaction Number</th>
-                                <th class="min-w-200px">Asset</th>
+                                <th class="min-w-200px">Asset Code</th>
+                                <th class="min-w-200px">Asset Description</th>
                                 <th class="min-w-200px">Reason</th>
                                 <th class="min-w-200px">Note</th>
                                 <th class="min-w-200px">Requester</th>
@@ -522,11 +523,11 @@
                         d.created_from = $('#ds-created-from').val() || '';
                         d.created_to = $('#ds-created-to').val() || '';
                         d.asset_q = $('#ds-asset-q').val() || '';
-                        d.reason = $('#ds-reason').val() || '';
+                        d.reason = $('#ds-reason-filter').val() || '';
                     }
                 },
                 order: [
-                    [7, 'desc']
+                    [9, 'desc']
                 ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l><'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
@@ -548,6 +549,10 @@
                             const text = row.asset_code ?? data ?? '';
                             return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
                         }
+                    },
+                    {
+                        data: 'asset_description',
+                        name: 'asset_description'
                     },
                     {
                         data: 'reason',
@@ -674,7 +679,7 @@
                 $('#ds-updated-to').val('');
                 $('#ds-created-from').val('');
                 $('#ds-created-to').val('');
-                $('#ds-reason').val('');
+                $('#ds-reason-filter').val('');
                 $('#ds-asset-q').val('');
                 dt.ajax.reload();
             });
@@ -689,7 +694,7 @@
                     updated_to: $('#ds-updated-to').val() || '',
                     created_from: $('#ds-created-from').val() || '',
                     created_to: $('#ds-created-to').val() || '',
-                    reason: $('#ds-reason').val() || '',
+                    reason: $('#ds-reason-filter').val() || '',
                     asset_q: $('#ds-asset-q').val() || '',
                 });
 

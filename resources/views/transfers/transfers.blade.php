@@ -109,7 +109,8 @@
                         <thead>
                             <tr class="table-light">
                                 <th class="min-w-200px">Transaction Number</th>
-                                <th class="min-w-200px">Asset</th>
+                                <th class="min-w-200px">Asset Code</th>
+                                <th class="min-w-200px">Asset Description</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-200px">Before</th>
                                 <th class="min-w-200px">After</th>
@@ -435,7 +436,7 @@
                     }
                 },
                 order: [
-                    [11, 'desc']
+                    [12, 'desc']
                 ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
@@ -459,6 +460,10 @@
                             const text = row.asset_code ?? data ?? '';
                             return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
                         }
+                    },
+                    {
+                        data: 'description',
+                        name: 'a.description'
                     },
                     {
                         data: 'type',

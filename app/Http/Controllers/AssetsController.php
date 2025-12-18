@@ -243,7 +243,62 @@ class AssetsController extends Controller
             });
         }
 
-        return DataTables::of($q)->make(true);
+        $dt = DataTables::of($q);
+
+        $like = function ($keyword) {
+            $k = trim((string)$keyword);
+            return $k === '' ? null : "%{$k}%";
+        };
+
+        $dt->filterColumn('kode_location_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('a.kode_location', 'ilike', $pat)
+                    ->orWhere('ml.name', 'ilike', $pat);
+            });
+        });
+
+        $dt->filterColumn('asset_owner_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_owner', 'ilike', $pat)
+                    ->orWhere('ou.department', 'ilike', $pat);
+            });
+        });
+
+        $dt->filterColumn('asset_user_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_user', 'ilike', $pat)
+                    ->orWhere('uu.department', 'ilike', $pat);
+            });
+        });
+
+        $dt->filterColumn('asset_maintenance_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_maintenance', 'ilike', $pat)
+                    ->orWhere('muw.department', 'ilike', $pat);
+            });
+        });
+
+        $dt->filterColumn('kode_status_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('a.kode_status', 'ilike', $pat)
+                    ->orWhere('ms.name', 'ilike', $pat);
+            });
+        });
+
+        $dt->filterColumn('kode_asset_class_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+            $query->where(function ($w) use ($pat) {
+                $w->where('a.kode_asset_class', 'ilike', $pat)
+                    ->orWhere('mac.name', 'ilike', $pat);
+            });
+        });
+
+        return $dt->make(true);
     }
 
     private function generate_qr(string $uuid, string $asset_code)

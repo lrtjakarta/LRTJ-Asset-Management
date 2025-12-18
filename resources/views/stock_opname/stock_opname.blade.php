@@ -91,6 +91,13 @@
                         <thead>
                             <tr class="table-light">
                                 <th class="min-w-200px">Asset</th>
+                                <th class="min-w-300px">Asset Description</th>
+                                <th class="min-w-250px">Location</th>
+                                <th class="min-w-250px">Owner</th>
+                                <th class="min-w-250px">User</th>
+                                <th class="min-w-250px">Maintenance</th>
+                                <th class="min-w-250px">Status</th>
+
                                 <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Source</th>
                                 <th class="min-w-200px">Type</th>
@@ -454,15 +461,18 @@
                         d.users = $('#f-users').val();
                     }
                 },
+                // Updated column index because we added 6 new columns before "Updated"
                 order: [
-                    [9, 'desc']
+                    [15, 'desc']
                 ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
                     "<'table-responsive'tr>" +
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
-                columns: [{
+                columns: [
+                    // 0) Asset Code (link)
+                    {
                         data: 'asset_code',
                         name: 'asset_code',
                         render: function(data, type, row) {
@@ -470,40 +480,104 @@
                             const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row
                                 .asset_uuid));
                             const text = row.asset_code ?? data ?? '';
-                            return `<a href="${url}" class="text-primary fw-semibold">${text}</a>`;
+                            return `<a href="${url}" class="text-primary fw-semibold">${$('<div>').text(text).html()}</a>`;
                         }
                     },
+
+                    // 1) Asset Description
+                    {
+                        data: 'asset_description',
+                        name: 'asset_description',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 2) Location (e.g. "LOC - name")
+                    {
+                        data: 'asset_location',
+                        name: 'asset_location',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 3) Owner
+                    {
+                        data: 'owner',
+                        name: 'owner',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 4) User
+                    {
+                        data: 'user',
+                        name: 'user',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 5) Maintenance
+                    {
+                        data: 'maintenance',
+                        name: 'maintenance',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 6) Status
+                    {
+                        data: 'asset_status',
+                        name: 'asset_status',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+
+                    // 7) Transaction Number
                     {
                         data: 'code',
                         name: 'code'
                     },
+
+                    // 8) Source
                     {
                         data: 'source',
                         name: 'source'
                     },
+
+                    // 9) Type
                     {
                         data: 'type',
                         name: 'type'
                     },
+
+                    // 10) Detail
                     {
                         data: 'detail',
                         name: 'detail',
                         orderable: false,
                         searchable: true
                     },
+
+                    // 11) Note
                     {
                         data: 'note',
                         name: 'note',
                         render: d => d ? $('<div>').text(d).html() : ''
                     },
+
+                    // 12) Requester
                     {
                         data: 'pic_request_uid',
                         name: 'pic_request_uid'
                     },
+
+                    // 13) Approver
                     {
                         data: 'pic_approve_uid',
                         name: 'pic_approve_uid'
                     },
+
+                    // 14) File
                     {
                         data: 'file',
                         name: 'file',
@@ -511,6 +585,8 @@
                         searchable: false,
                         defaultContent: ''
                     },
+
+                    // 15) Updated
                     {
                         data: 'updated_at',
                         name: 'updated_at',
@@ -533,6 +609,8 @@
                             return `${dateStr} ${timeStr}`;
                         }
                     },
+
+                    // 16) Actions
                     {
                         data: 'actions',
                         name: 'actions',
@@ -541,8 +619,8 @@
                         defaultContent: ''
                     }
                 ],
-                // rely on server-provided `actions` HTML; no client-side rowCallback modifications
             });
+
 
             $('#btnFilter').on('click', () => dt.ajax.reload());
             $('#btnReset').on('click', () => {

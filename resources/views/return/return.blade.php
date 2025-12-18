@@ -90,7 +90,8 @@
                             <tr class="table-light">
                                 <th class="min-w-150px">Transaction Number</th>
                                 <th class="min-w-200px">MOV/DSP Tr. No.</th>
-                                <th class="min-w-200px">Asset</th>
+                                <th class="min-w-200px">Asset Code</th>
+                                <th class="min-w-200px">Asset Description</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-300px">Details</th>
                                 <th class="min-w-300px">Note</th>
@@ -206,7 +207,7 @@
                     }
                 },
                 order: [
-                    [7, 'desc']
+                    [8, 'desc']
                 ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
@@ -227,10 +228,13 @@
                         render: function(row, type, full) {
                             if (type !== 'display') return (row.asset_label || '');
                             const url = R.showAsset(row.asset_uuid);
-                            const label = row.asset_code ? (row.description ? (row.asset_code + ' - ' +
-                                row.description) : row.asset_code) : row.asset_uuid;
+                            const label = row.asset_code ? row.asset_code : row.asset_uuid;
                             return `<a href="${url}" class="text-primary fw-semibold">${label}</a>`;
                         }
+                    },
+                    {
+                        data: 'description',
+                        name: 'a.description'
                     },
                     {
                         data: 'source_type_label',

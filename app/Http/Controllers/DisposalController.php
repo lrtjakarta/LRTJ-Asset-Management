@@ -411,13 +411,55 @@ class DisposalController extends Controller
         $canApr    = $user && $user->hasAction('DISPOSAL', 'APR');
 
         return DataTables::of($q)
+            ->filter(function ($query) use ($request) {
+                $kw = trim((string) data_get($request->input('search'), 'value', ''));
+                if ($kw === '') return;
+
+                $query->where(function ($w) use ($kw) {
+                    $w->where('disposal_code', 'ilike', "%{$kw}%")
+                        ->orWhere('reason', 'ilike', "%{$kw}%")
+                        ->orWhere('note', 'ilike', "%{$kw}%")
+                        ->orWhere('kode_status', 'ilike', "%{$kw}%")
+                        ->orWhere('pic_request_uid', 'ilike', "%{$kw}%")
+                        ->orWhere('pic_approve_uid', 'ilike', "%{$kw}%")
+                        ->orWhereHas('asset', function ($a) use ($kw) {
+                            $a->where('asset_code', 'ilike', "%{$kw}%")
+                                ->orWhere('description', 'ilike', "%{$kw}%");
+                        })
+                        ->orWhereHas('status', function ($s) use ($kw) {
+                            $s->where('kode', 'ilike', "%{$kw}%")
+                                ->orWhere('name', 'ilike', "%{$kw}%");
+                        });
+                });
+            }, true)
+
+            ->orderColumn('workflow_label', function ($query, $order) {
+                $query->orderBy('kode_status', $order);
+            })
+            ->filterColumn('asset_label', function ($query, $keyword) {
+                $kw = trim((string) $keyword);
+                if ($kw === '') return;
+
+                $query->whereHas('asset', function ($a) use ($kw) {
+                    $a->where('asset_code', 'ilike', "%{$kw}%")
+                        ->orWhere('description', 'ilike', "%{$kw}%");
+                });
+            })
+            ->filterColumn('asset_description', function ($query, $keyword) {
+                $kw = trim((string) $keyword);
+                if ($kw === '') return;
+
+                $query->whereHas('asset', function ($a) use ($kw) {
+                    $a->where('asset_code', 'ilike', "%{$kw}%")
+                        ->orWhere('description', 'ilike', "%{$kw}%");
+                });
+            })
             ->addColumn('asset_label', fn($t) => $t->asset ? $t->asset->asset_code : $t->asset_uuid)
+            ->addColumn('asset_description', fn($t) => $t->asset ? $t->asset->description : '')
             ->addColumn('workflow_label', fn($t) => $t->status ? $t->kode_status . ' - ' . $t->status->name : $t->kode_status)
             ->addColumn('target_label',   fn($t) => $t->target ? ($t->target_status . ' - ' . $t->target->name) : $t->target_status)
             ->addColumn('file', function ($r) {
                 $btns = [];
-
-                // 1) Original attachment from create/edit
                 if ($r->file_path) {
                     $url  = url('storage/' . ltrim($r->file_path, '/'));
                     $btns[] = sprintf(
@@ -426,8 +468,6 @@ class DisposalController extends Controller
                         e($r->file_name ?: 'Attachment')
                     );
                 }
-
-                // 2) Uploaded Form Disposal (only if there is an uploaded file)
                 if (!empty($r->flow_file_path)) {
                     $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
                     $btns[] = sprintf(
@@ -436,8 +476,6 @@ class DisposalController extends Controller
                         e($r->flow_file_name ?: 'Form Disposal')
                     );
                 }
-
-                // 3) Uploaded Berita Acara (only if there is an uploaded file)
                 if (!empty($r->ba_file_path)) {
                     $url  = url('storage/' . ltrim($r->ba_file_path, '/'));
                     $btns[] = sprintf(
@@ -446,7 +484,6 @@ class DisposalController extends Controller
                         e($r->ba_file_name ?: 'Berita Acara')
                     );
                 }
-
                 return $btns ? implode(' ', $btns) : '';
             })
             ->addColumn('actions', function ($t) use ($canEdit, $canDelete, $canApr) {
@@ -454,7 +491,7 @@ class DisposalController extends Controller
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($pending) {
                     if ($canEdit) {
-                        // $btns .= '<button class="btn btn-light-primary btn-ds-edit" data-id="' . $t->uuid . '">Edit</button>';
+                        // ...
                     }
                     if ($canApr) {
                         $btns .= '<button class="btn btn-light-success btn-ds-approve" data-id="' . $t->uuid . '">Accept</button>';

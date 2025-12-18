@@ -417,7 +417,7 @@
                     },
                     {
                         data: 'cap_date',
-                        name: 'cap_date',
+                        name: 'av.capitalization_date',
                         defaultContent: '',
                         render: function(iso, type) {
                             if (!iso) return '';
@@ -448,49 +448,59 @@
                     {
                         data: 'opening_balance',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'total_value',
                         render: money2,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'useful_life_months',
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'ending_balance_prev_year',
                         render: money2,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'remaining_useful_life_months',
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'transfers_in',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'transfers_out',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'adjustment_depreciation',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'depr_expense',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: null,
                         className: 'text-end',
+                        searchable: false,
                         render: (_, __, row) => {
                             const a = Number(row.additions || 0);
                             const ti = Number(row.transfers_in || 0);
@@ -503,7 +513,8 @@
                     {
                         data: 'ending_balance',
                         render: money,
-                        className: 'text-end'
+                        className: 'text-end',
+                        searchable: false
                     },
                 ]
             });

@@ -511,7 +511,7 @@
                     }
                 },
                 order: [
-                    [4, 'desc']
+                    [5, 'desc']
                 ], // actual_date
                 columns: [{
                         data: 'transfer_code',
@@ -520,7 +520,7 @@
                     // From asset
                     {
                         data: 'from_code',
-                        name: 'from_asset',
+                        name: 'from_asset_uuid',
                         render: function(data, type, row) {
                             const code = row.from_code || '';
                             const name = row.from_name || '';
@@ -539,7 +539,7 @@
                     // To asset
                     {
                         data: 'to_code',
-                        name: 'to_asset',
+                        name: 'to_asset_uuid',
                         render: function(data, type, row) {
                             const code = row.to_code || '';
                             const name = row.to_name || '';

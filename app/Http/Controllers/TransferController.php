@@ -74,7 +74,7 @@ class TransferController extends Controller
             ->select([
                 'assets_transfers.*',
                 'a.asset_code',
-                'a.description as asset_desc',
+                'a.description',
             ])
             ->whereNull('assets_transfers.deleted_at')
             ->orderByDesc('assets_transfers.updated_at');
@@ -113,7 +113,7 @@ class TransferController extends Controller
         return DataTables::of($q)
             ->addColumn('asset_label', function ($r) {
                 $code = $r->asset_code ?? $r->asset_uuid;
-                $desc = $r->asset_desc ? (' - ' . $r->asset_desc) : '';
+                $desc = $r->description ? (' - ' . $r->description) : '';
                 return $code . $desc;
             })
             ->addColumn('workflow_label', function ($r) {

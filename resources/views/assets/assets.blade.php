@@ -237,11 +237,13 @@
                 },
                 {
                     data: 'last_accumulated_depr',
-                    name: 'last_accumulated_depr'
+                    name: 'last_accumulated_depr',
+                    searchable: false
                 },
                 {
                     data: 'last_net_book_value',
-                    name: 'last_net_book_value'
+                    name: 'last_net_book_value',
+                    searchable: false
                 },
 
                 {

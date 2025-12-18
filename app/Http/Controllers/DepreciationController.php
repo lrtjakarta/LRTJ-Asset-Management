@@ -213,6 +213,30 @@ class DepreciationController extends Controller
                 $name = $statusMap[$kode] ?? null;
                 return $name ? "{$kode} - {$name}" : $kode;
             })
+
+            ->filterColumn('asset_code', function ($query, $keyword) {
+                $keyword = trim($keyword);
+                $query->whereHas('asset', function ($qa) use ($keyword) {
+                    $qa->where('asset_code', 'ilike', "%{$keyword}%");
+                });
+            })
+            ->filterColumn('asset_name', function ($query, $keyword) {
+                $keyword = trim($keyword);
+                $query->whereHas('asset', function ($qa) use ($keyword) {
+                    $qa->where('description', 'ilike', "%{$keyword}%");
+                });
+            })
+            ->filterColumn('asset_status_label', function ($query, $keyword) {
+                $keyword = trim($keyword);
+                $query->whereHas('asset', function ($qa) use ($keyword) {
+                    $qa->where('kode_status', 'ilike', "%{$keyword}%");
+                });
+            })
+            ->filterColumn('cap_date', function ($query, $keyword) {
+                $keyword = trim($keyword);
+                $query->whereRaw("to_char(av.capitalization_date,'YYYY-MM-DD') ILIKE ?", ["%{$keyword}%"]);
+            })
+
             ->with('total_depr', (float) $totalDepr)
             ->toJson();
     }
@@ -1137,18 +1161,34 @@ class DepreciationController extends Controller
                 });
             });
         }
-
-        return DataTables::eloquent($q)
+        $dt = DataTables::eloquent($q)
             ->addColumn('from_uuid', fn($row) => $row->fromAsset?->uuid)
             ->addColumn('from_code', fn($row) => $row->fromAsset?->asset_code)
             ->addColumn('from_name', fn($row) => $row->fromAsset?->description)
             ->addColumn('to_uuid',   fn($row) => $row->toAsset?->uuid)
             ->addColumn('to_code',   fn($row) => $row->toAsset?->asset_code)
             ->addColumn('to_name',   fn($row) => $row->toAsset?->description)
-            ->addColumn('attachment_url', function ($row) {
-                return $row->attachment_path ? Storage::url($row->attachment_path) : null;
-            })
-            ->toJson();
+            ->addColumn('attachment_url', fn($row) => $row->attachment_path ? Storage::url($row->attachment_path) : null);
+
+        $dt->filterColumn('from_asset_uuid', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereHas('fromAsset', function ($qa) use ($k) {
+                $qa->where('asset_code', 'ilike', "%{$k}%")
+                    ->orWhere('description', 'ilike', "%{$k}%");
+            });
+        });
+
+        $dt->filterColumn('to_asset_uuid', function ($query, $keyword) {
+            $k = trim((string)$keyword);
+            if ($k === '') return;
+            $query->whereHas('toAsset', function ($qa) use ($k) {
+                $qa->where('asset_code', 'ilike', "%{$k}%")
+                    ->orWhere('description', 'ilike', "%{$k}%");
+            });
+        });
+
+        return $dt->toJson();
     }
 
 

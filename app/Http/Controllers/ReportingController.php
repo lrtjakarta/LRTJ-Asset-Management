@@ -32,15 +32,31 @@ class ReportingController extends Controller
      */
     protected function buildAssetDeprQuery(Request $request)
     {
-        $period = $request->input('period'); // expected 'YYYY-MM-01' or empty
+        $period = $request->input('period'); // 'YYYY-MM-01' or empty
+
+        // === Subquery: latest depreciation ledger per asset (PostgreSQL) ===
+        $ledgerLatest = DB::table('assets_depr_ledger_monthly as l1')
+            ->selectRaw('DISTINCT ON (l1.asset_uuid) l1.*')
+            ->when($period, function ($qq) use ($period) {
+                // if period filter is provided, take that exact period (still 1 row per asset)
+                $qq->whereDate('l1.period', $period);
+            })
+            ->orderBy('l1.asset_uuid')
+            ->orderBy('l1.period', 'desc')
+            ->orderBy('l1.updated_at', 'desc');
 
         $q = DB::table('assets as a')
-            // child tables
+            // child tables (make sure these are truly 1:1, otherwise still can duplicate)
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_depr_ledger_monthly as l', 'l.asset_uuid', 'a.uuid')
+
+            // ✅ join latest ledger per asset (instead of direct join to ledger table)
+            ->leftJoinSub($ledgerLatest, 'l', function ($join) {
+                $join->on('l.asset_uuid', '=', 'a.uuid');
+            })
+
             // master lookups
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',   'a.kode_asset_class')
@@ -52,8 +68,7 @@ class ReportingController extends Controller
             ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
             ->whereNull('a.deleted_at');
 
-        // === Asset-side filters (same as Assets datatable) ===
-
+        // === Asset-side filters ===
         if ($assetClass = $request->input('asset_class')) {
             $q->where('a.kode_asset_class', $assetClass);
         }
@@ -93,8 +108,7 @@ class ReportingController extends Controller
             });
         }
 
-        // === Depreciation-side filters (same as Depreciation dtMonthly) ===
-
+        // === Depreciation-side filters ===
         if ($capFrom = $request->input('cap_from')) {
             $q->whereDate('v.capitalization_date', '>=', $capFrom);
         }
@@ -103,13 +117,13 @@ class ReportingController extends Controller
             $q->whereDate('v.capitalization_date', '<=', $capTo);
         }
 
+        // IMPORTANT:
+        // when user selects a period, we should show only assets that have ledger row for that period
         if ($period) {
-            // expect 'YYYY-MM-01'
-            $q->whereDate('l.period', $period);
+            $q->whereNotNull('l.period');
         }
 
-        // === Select columns (combined) ===
-
+        // === Select columns ===
         $q->select([
             'a.uuid',
             'a.asset_code',
@@ -128,6 +142,7 @@ class ReportingController extends Controller
             'v.total',
             'v.capitalization_date as cap_date',
 
+            // from latest ledger (alias l)
             'l.period',
             'l.depr_code',
             'l.opening_balance',
@@ -144,55 +159,56 @@ class ReportingController extends Controller
             'd.nota_referensi',
 
             DB::raw("
-                CASE WHEN ml.name  IS NULL THEN a.kode_location
-                     ELSE a.kode_location    || ' - ' || ml.name
-                END AS kode_location_label
-            "),
+            CASE WHEN ml.name IS NULL THEN a.kode_location
+                 ELSE a.kode_location || ' - ' || ml.name
+            END AS kode_location_label
+        "),
             DB::raw("
-                CASE WHEN mac.name IS NULL THEN a.kode_asset_class
-                     ELSE a.kode_asset_class || ' - ' || mac.name
-                END AS kode_asset_class_label
-            "),
+            CASE WHEN mac.name IS NULL THEN a.kode_asset_class
+                 ELSE a.kode_asset_class || ' - ' || mac.name
+            END AS kode_asset_class_label
+        "),
             DB::raw("
-                CASE WHEN ms.name  IS NULL THEN a.kode_status
-                     ELSE a.kode_status      || ' - ' || ms.name
-                END AS kode_status_label
-            "),
+            CASE WHEN ms.name IS NULL THEN a.kode_status
+                 ELSE a.kode_status || ' - ' || ms.name
+            END AS kode_status_label
+        "),
             DB::raw("
-                CASE WHEN mu.name  IS NULL THEN v.kode_uom
-                     ELSE v.kode_uom         || ' - ' || mu.name
-                END AS kode_uom_label
-            "),
+            CASE WHEN mu.name IS NULL THEN v.kode_uom
+                 ELSE v.kode_uom || ' - ' || mu.name
+            END AS kode_uom_label
+        "),
             DB::raw("
-                CASE WHEN msrc.name IS NULL THEN a.kode_sumber
-                     ELSE a.kode_sumber      || ' - ' || msrc.name
-                END AS kode_sumber_label
-            "),
+            CASE WHEN msrc.name IS NULL THEN a.kode_sumber
+                 ELSE a.kode_sumber || ' - ' || msrc.name
+            END AS kode_sumber_label
+        "),
             DB::raw("
-                CASE WHEN ou.department  IS NULL THEN g.asset_owner
-                     ELSE g.asset_owner         || ' - ' || ou.department
-                END AS asset_owner_label
-            "),
+            CASE WHEN ou.department IS NULL THEN g.asset_owner
+                 ELSE g.asset_owner || ' - ' || ou.department
+            END AS asset_owner_label
+        "),
             DB::raw("
-                CASE WHEN uu.department  IS NULL THEN g.asset_user
-                     ELSE g.asset_user          || ' - ' || uu.department
-                END AS asset_user_label
-            "),
+            CASE WHEN uu.department IS NULL THEN g.asset_user
+                 ELSE g.asset_user || ' - ' || uu.department
+            END AS asset_user_label
+        "),
             DB::raw("
-                CASE WHEN muw.department IS NULL THEN g.asset_maintenance
-                     ELSE g.asset_maintenance  || ' - ' || muw.department
-                END AS asset_maintenance_label
-            "),
+            CASE WHEN muw.department IS NULL THEN g.asset_maintenance
+                 ELSE g.asset_maintenance || ' - ' || muw.department
+            END AS asset_maintenance_label
+        "),
             DB::raw("
-                  to_char(
-                    COALESCE(l.updated_at, a.updated_at) at time zone 'Asia/Jakarta',
-                    'YYYY-MM-DD\"T\"HH24:MI:SS'
-                ) as updated_at
-            "),
+            to_char(
+                COALESCE(l.updated_at, a.updated_at) at time zone 'Asia/Jakarta',
+                'YYYY-MM-DD\"T\"HH24:MI:SS'
+            ) as updated_at
+        "),
         ]);
 
         return $q;
     }
+
 
     /**
      * Datatables endpoint
@@ -205,7 +221,48 @@ class ReportingController extends Controller
 
         $q = $this->buildAssetDeprQuery($request);
 
-        return DataTables::of($q)->make(true);
+        return DataTables::of($q)
+            // Override GLOBAL search (DataTables search box) to use ILIKE (Postgres)
+            ->filter(function ($query) use ($request) {
+                $search = trim((string) data_get($request->input('search', []), 'value', ''));
+
+                if ($search === '') return;
+
+                $like = "%{$search}%";
+
+                $query->where(function ($w) use ($like) {
+                    // asset core
+                    $w->where('a.asset_code', 'ilike', $like)
+                        ->orWhere('a.description', 'ilike', $like);
+
+                    // master names (search "Jakarta", "Laptop", etc)
+                    $w->orWhere('ml.name', 'ilike', $like)
+                        ->orWhere('mac.name', 'ilike', $like)
+                        ->orWhere('ms.name', 'ilike', $like)
+                        ->orWhere('mu.name', 'ilike', $like)
+                        ->orWhere('msrc.name', 'ilike', $like);
+
+                    // assignment departments
+                    $w->orWhere('ou.department', 'ilike', $like)
+                        ->orWhere('uu.department', 'ilike', $like)
+                        ->orWhere('muw.department', 'ilike', $like);
+
+                    // depreciation / docs fields
+                    $w->orWhere('l.depr_code', 'ilike', $like)
+                        ->orWhere('d.no_po_perjanjian_spk', 'ilike', $like)
+                        ->orWhere('d.nota_referensi', 'ilike', $like);
+
+                    // also allow searching by raw codes (optional but useful)
+                    $w->orWhere('a.kode_asset_class', 'ilike', $like)
+                        ->orWhere('a.kode_location', 'ilike', $like)
+                        ->orWhere('a.kode_status', 'ilike', $like)
+                        ->orWhere('a.kode_sumber', 'ilike', $like)
+                        ->orWhere('g.asset_owner', 'ilike', $like)
+                        ->orWhere('g.asset_user', 'ilike', $like)
+                        ->orWhere('g.asset_maintenance', 'ilike', $like);
+                });
+            }, true) // <— TRUE = override default global search
+            ->make(true);
     }
 
     /**

@@ -200,7 +200,7 @@ class AssetsApi extends Controller
             // NEW: fields right below location_label
             'v.actual_date as acquisition_date',                                     // Acquisition Date (raw, frontend can format)
             DB::raw('v.total AS commercial_acq_cost'),                               // Commercial Acquisition Cost (IDR)
-            DB::raw('COALESCE(l.commercial_accum_depr, 0) AS commercial_accum_depr'),// Commercial Accumulated Depreciation (IDR)
+            DB::raw('COALESCE(l.commercial_accum_depr, 0) AS commercial_accum_depr'), // Commercial Accumulated Depreciation (IDR)
             DB::raw('COALESCE(l.commercial_nbv, 0) AS commercial_nbv'),              // Commercial Net Book Value (IDR)
 
             DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label"),
@@ -213,6 +213,8 @@ class AssetsApi extends Controller
             DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at_local"),
         )
             ->orderBy($sortBy, $sortDir);
+
+        $q->where('a.kode_status', '!=', 'DIS'); // Exclude disposed assets by default
 
         // ---- pagination wrapper ----
         $paginationRequested = $request->has('per_page') || $request->has('page');
