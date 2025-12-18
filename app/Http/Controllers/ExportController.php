@@ -622,14 +622,14 @@ class ExportController
         $sheet->setTitle('Stock Opname');
 
         // Header row (NEW columns added)
-        $sheet->setCellValue('A1', 'Asset Code');
-        $sheet->setCellValue('B1', 'Asset Description');
-        $sheet->setCellValue('C1', 'Asset Location');
-        $sheet->setCellValue('D1', 'Owner');
-        $sheet->setCellValue('E1', 'User');
+        $sheet->setCellValue('A1', 'Transaction Number');
+        $sheet->setCellValue('B1', 'Asset Code');
+        $sheet->setCellValue('C1', 'Asset Description');
+        $sheet->setCellValue('D1', 'Asset Location');
+        $sheet->setCellValue('E1', 'Owner');
+        $sheet->setCellValue('F1', 'User');
         $sheet->setCellValue('F1', 'Maintenance');
         $sheet->setCellValue('G1', 'Asset Status');
-        $sheet->setCellValue('H1', 'Transaction Number');
         $sheet->setCellValue('I1', 'Source');
         $sheet->setCellValue('J1', 'Type');
         $sheet->setCellValue('K1', 'Before');
@@ -655,14 +655,14 @@ class ExportController
                 ? Carbon::parse($r->updated_at)->timezone('Asia/Jakarta')->format('Y-m-d H:i')
                 : '';
 
-            $sheet->setCellValue("A{$rowNum}", $r->asset_code);
-            $sheet->setCellValue("B{$rowNum}", $r->asset_description ?? '');
-            $sheet->setCellValue("C{$rowNum}", $r->asset_location ?? '');
-            $sheet->setCellValue("D{$rowNum}", $r->owner ?? '');
-            $sheet->setCellValue("E{$rowNum}", $r->asset_user_label ?? '');
-            $sheet->setCellValue("F{$rowNum}", $r->maintenance ?? '');
-            $sheet->setCellValue("G{$rowNum}", $r->asset_status ?? '');
-            $sheet->setCellValue("H{$rowNum}", $r->code);
+            $sheet->setCellValue("A{$rowNum}", $r->code);
+            $sheet->setCellValue("B{$rowNum}", $r->asset_code);
+            $sheet->setCellValue("C{$rowNum}", $r->asset_description ?? '');
+            $sheet->setCellValue("D{$rowNum}", $r->asset_location ?? '');
+            $sheet->setCellValue("E{$rowNum}", $r->owner ?? '');
+            $sheet->setCellValue("F{$rowNum}", $r->asset_user_label ?? '');
+            $sheet->setCellValue("G{$rowNum}", $r->maintenance ?? '');
+            $sheet->setCellValue("H{$rowNum}", $r->asset_status ?? '');
             $sheet->setCellValue("I{$rowNum}", $src);
             $sheet->setCellValue("J{$rowNum}", $type);
             $sheet->setCellValue("K{$rowNum}", $before);

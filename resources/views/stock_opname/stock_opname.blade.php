@@ -90,6 +90,7 @@
                         id="tbl-so-global">
                         <thead>
                             <tr class="table-light">
+                                <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-300px">Asset Description</th>
                                 <th class="min-w-250px">Location</th>
@@ -98,7 +99,6 @@
                                 <th class="min-w-250px">Maintenance</th>
                                 <th class="min-w-250px">Status</th>
 
-                                <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Source</th>
                                 <th class="min-w-200px">Type</th>
                                 <th class="min-w-400px">Detail</th>
@@ -471,6 +471,11 @@
                     "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
                     "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
                 columns: [
+                    // 7) Transaction Number
+                    {
+                        data: 'code',
+                        name: 'code'
+                    },
                     // 0) Asset Code (link)
                     {
                         data: 'asset_code',
@@ -532,11 +537,6 @@
                         render: d => d ? $('<div>').text(d).html() : ''
                     },
 
-                    // 7) Transaction Number
-                    {
-                        data: 'code',
-                        name: 'code'
-                    },
 
                     // 8) Source
                     {
