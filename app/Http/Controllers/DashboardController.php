@@ -67,24 +67,28 @@ class DashboardController
         $location   = $request->input('location');
         $assetClass = $request->input('asset_class');
 
-        $q = DB::table('assets_value as v')
+        // --- base query for totals (NO year/month filter) ---
+        $base = DB::table('assets_value as v')
             ->join('assets as a', 'a.uuid', '=', 'v.asset_uuid')
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->whereNull('v.deleted_at')
-            ->whereNotNull('v.capitalization_date')
-            ->whereYear('v.capitalization_date', $year);
+            ->whereNotNull('v.capitalization_date');
+
+        if ($owner)      $base->where('g.asset_owner', $owner);
+        if ($location)   $base->where('a.kode_location', $location);
+        if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
+
+        $totals = (clone $base)
+            ->selectRaw('COUNT(*) as total_qty')
+            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
+            ->first();
+
+        // --- monthly query (WITH year/month filters) ---
+        $q = (clone $base)->whereYear('v.capitalization_date', $year);
 
         if ($month !== null && $month !== '') {
             $q->whereMonth('v.capitalization_date', (int) $month);
         }
-        if ($owner)      $q->where('g.asset_owner', $owner);
-        if ($location)   $q->where('a.kode_location', $location);
-        if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
-
-        $totals = (clone $q)
-            ->selectRaw('COUNT(*) as total_qty')
-            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
-            ->first();
 
         $rows = $q->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
             ->selectRaw("COUNT(*) as qty")
@@ -105,6 +109,7 @@ class DashboardController
             'total_amount' => (float) ($totals->total_amount ?? 0),
         ]);
     }
+
 
     public function deprMonthly(Request $request)
     {
