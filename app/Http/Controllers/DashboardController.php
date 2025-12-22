@@ -81,9 +81,14 @@ class DashboardController
         if ($location)   $q->where('a.kode_location', $location);
         if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
 
+        $totals = (clone $q)
+            ->selectRaw('COUNT(*) as total_qty')
+            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
+            ->first();
+
         $rows = $q->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
             ->selectRaw("COUNT(*) as qty")
-            ->selectRaw("SUM(v.total) as amount")
+            ->selectRaw("COALESCE(SUM(v.total), 0) as amount")
             ->groupBy('month')
             ->orderBy('month')
             ->get();
@@ -96,8 +101,8 @@ class DashboardController
 
         return response()->json([
             'months'       => $months,
-            'total_qty'    => $months->sum('qty'),
-            'total_amount' => $months->sum('amount'),
+            'total_qty'    => (int) ($totals->total_qty ?? 0),
+            'total_amount' => (float) ($totals->total_amount ?? 0),
         ]);
     }
 
