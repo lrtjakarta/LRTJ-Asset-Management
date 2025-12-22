@@ -104,7 +104,7 @@
                             <input type="date" id="f-cap-to" class="form-control">
                         </div>
                         <div class="col-md-2">
-                            <label class="form-label">Period (Depreciation)</label>
+                            <label class="form-label">Depreciation Date</label>
                             <input type="month" id="f-period" class="form-control">
                         </div>
                     </div>
@@ -160,7 +160,7 @@
                                     <th class="min-w-150px">Total</th>
 
                                     <th class="min-w-150px">Cap Date</th>
-                                    <th class="min-w-150px">Depreciation Period</th>
+                                    <th class="min-w-150px">Depreciation Date</th>
                                     <th class="min-w-150px">Depreciation Code</th>
                                     <th class="min-w-150px">Opening Balance</th>
                                     <th class="min-w-150px">Additions</th>

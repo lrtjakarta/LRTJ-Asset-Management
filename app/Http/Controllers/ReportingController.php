@@ -296,7 +296,7 @@ class ReportingController extends Controller
             'Total',
 
             'Cap Date',
-            'Period',
+            'Depr Date',
             'Depr Code',
             'Opening Balance',
             'Additions',

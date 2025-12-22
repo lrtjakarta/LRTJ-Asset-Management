@@ -47,9 +47,14 @@
                             <input type="date" id="f-cap-to" class="form-control">
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label">Period</label>
+                            <label class="form-label">Depreciation Date</label>
                             <input type="month" id="f-period" class="form-control"
                                 value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Depreciation Period</label>
+                            <input type="month" id="f-period-depr" class="form-control"
+                                value="{{ \Carbon\Carbon::parse($currentMonth)->subMonth()->format('Y-m') }}">
                         </div>
 
                         <div class="col-md-4">
@@ -121,6 +126,7 @@
                                 <th class="min-w-150px">Asset Status</th>
                                 <th class="min-w-200px">Tanggal Masuk</th>
                                 <th class="min-w-200px">Depreciation Date</th>
+                                <th class="min-w-200px">Depreciation Period</th>
                                 <th class="min-w-200px">Awal</th>
                                 <th class="min-w-200px">Total (Assets Value)</th>
                                 <th class="min-w-200px">Useful Life (Month)</th>
@@ -160,12 +166,12 @@
                 <form id="form-process-month-modal" autocomplete="off">
                     <div class="modal-body">
                         <div class="mb-3">
-                            <label class="form-label required">Period</label>
+                            <label class="form-label required">Depreciation Date</label>
                             <input type="month" id="proc-period" class="form-control"
                                 value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
                             <small class="text-muted">Pick any month to process depreciation.</small>
                             <br>
-                            <p id="notes-dpr-month">Depresiasi yang diproses adalah bulan
+                            <p id="notes-dpr-month">Depresiasi yang diproses adalah <b>PERIODE</b>
                                 {{ \Carbon\Carbon::parse($currentMonth)->subMonth()->format('F Y') }}</p>
                         </div>
                     </div>
@@ -316,6 +322,47 @@
                 else $btnYearOpen.removeAttr('data-kt-indicator').prop('disabled', false);
             };
 
+            let syncingPeriod = false;
+
+            function ymAddMonths(ym, delta) {
+                if (!ym) return '';
+                const [y, m] = ym.split('-').map(Number);
+                const d = new Date(y, m - 1, 1);
+                d.setMonth(d.getMonth() + delta);
+                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            }
+
+            function syncDeprFromPeriod() {
+                const p = $('#f-period').val();
+                if (!p) return;
+                $('#f-period-depr').val(ymAddMonths(p, -1));
+            }
+
+            function syncPeriodFromDepr() {
+                const pd = $('#f-period-depr').val();
+                if (!pd) return;
+                $('#f-period').val(ymAddMonths(pd, +1));
+            }
+
+            if (!$('#f-period-depr').val()) {
+                syncDeprFromPeriod();
+            }
+
+            $('#f-period').on('change', function() {
+                if (syncingPeriod) return;
+                syncingPeriod = true;
+                syncDeprFromPeriod();
+                syncingPeriod = false;
+            });
+
+            $('#f-period-depr').on('change', function() {
+                if (syncingPeriod) return;
+                syncingPeriod = true;
+                syncPeriodFromDepr();
+                syncingPeriod = false;
+            });
+
+
             function buildFilters() {
                 const periodMonth = $('#f-period').val();
                 const period = periodMonth ? (periodMonth + '-01') : PERIOD;
@@ -323,6 +370,7 @@
                 return {
                     period: period,
                     asset_status: $('#f-asset-status').val() || '',
+                    period_depr: $('#f-period-depr').val() || '',
                     cap_from: $('#f-cap-from').val() || '',
                     cap_to: $('#f-cap-to').val() || '',
                     asset_q: $('#f-asset').val() || '',
@@ -438,6 +486,20 @@
                     {
                         data: 'period',
                         name: 'period',
+                        render: function(iso, type) {
+                            if (!iso) return '';
+                            if (type === 'sort' || type === 'type') return iso;
+                            const d = new Date(iso);
+                            return new Intl.DateTimeFormat('en-GB', {
+                                timeZone: 'Asia/Jakarta',
+                                month: 'long',
+                                year: 'numeric'
+                            }).format(d);
+                        }
+                    },
+                    {
+                        data: 'period_depr',
+                        name: 'period_depr',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -568,14 +630,17 @@
             });
 
             $('#btnReset').on('click', function() {
+                syncingPeriod = true;
                 $('#f-period').val(DEFAULT_PERIOD_MONTH);
+                syncDeprFromPeriod(); // auto set period_depr = period - 1
+                syncingPeriod = false;
+
                 $('#f-asset-status').val('').trigger('change');
                 $('#f-cap-from').val('');
                 $('#f-cap-to').val('');
                 $('#f-asset').val('');
                 tbl.ajax.reload();
                 updatePeriodText();
-                console.log('Filters reset');
             });
 
             $('#btnExport').on('click', function(e) {
@@ -610,7 +675,8 @@
                 });
                 const yearFull = d.getFullYear();
 
-                $("#notes-dpr-month").html("Depresiasi yang diproses adalah bulan " + monthName + " " + yearFull);
+                $("#notes-dpr-month").html("Depresiasi yang diproses adalah <b>PERIODE</b> " + monthName + " " +
+                    yearFull);
                 monthModal.show();
             });
 
@@ -625,7 +691,8 @@
                 });
                 const yearFull = d.getFullYear();
 
-                $("#notes-dpr-month").html("Depresiasi yang diproses adalah bulan " + monthName + " " + yearFull);
+                $("#notes-dpr-month").html("Depresiasi yang diproses adalah <b>PERIODE</b> " + monthName + " " +
+                    yearFull);
             });
             // ===== Submit Process Month (from modal) =====
             $('#form-process-month-modal').on('submit', async function(e) {

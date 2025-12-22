@@ -1387,6 +1387,9 @@ class ExportController
             ? Carbon::parse($request->period)->startOfMonth()->toDateString()
             : now()->startOfMonth()->toDateString();
 
+        $periodDepr = $request->filled('period_depr')
+            ? Carbon::parse($request->period_depr)->startOfMonth()->toDateString()
+            : null;
         $periodYear = (int) Carbon::parse($period)->year;
         $prevYear   = $periodYear - 1;
 
@@ -1414,9 +1417,16 @@ class ExportController
                 'assets_depr_ledger_monthly.accumulated_depr_end',
                 'assets_depr_ledger_monthly.ending_balance',
                 'assets_depr_ledger_monthly.depr_code',
-                'av.capitalization_date as cap_date',                
+                'av.capitalization_date as cap_date',
                 DB::raw("COALESCE(av.total, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
                 'av.total as total_value',
+                DB::raw("
+                    CASE
+                        WHEN av.capitalization_date IS NULL THEN NULL
+                        ELSE
+                        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date
+                    END AS period_depr
+                "),
                 DB::raw("
                 COALESCE(
                     NULLIF(p.useful_life_months, 0),
@@ -1500,13 +1510,26 @@ class ExportController
             $q->whereDate('av.capitalization_date', '<=', $capTo);
         }
 
+        if ($periodDepr) {
+            $q->whereNotNull('av.capitalization_date')
+                ->whereRaw("
+        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date = ?
+      ", [$periodDepr]);
+        }
         if ($assetQ = trim((string) $request->get('asset_q', ''))) {
             $q->whereHas('asset', function ($qa) use ($assetQ) {
                 $qa->where('asset_code', 'ilike', "%{$assetQ}%")
                     ->orWhere('description', 'ilike', "%{$assetQ}%");
             });
         }
-
+        $fmtDate = function ($val, $format) {
+            if (!$val) return '';
+            try {
+                return Carbon::parse($val)->isoFormat($format); // e.g. 'D MMMM YYYY' or 'MMMM YYYY'
+            } catch (\Throwable $e) {
+                return (string) $val;
+            }
+        };
         $rows = $q->get();
 
         // status label map
@@ -1523,20 +1546,21 @@ class ExportController
         $sheet->setCellValue('D1', 'Asset Status');
         $sheet->setCellValue('E1', 'Tanggal Masuk');
         $sheet->setCellValue('F1', 'Depreciation Date');
-        $sheet->setCellValue('G1', 'Awal');
-        $sheet->setCellValue('H1', 'Total (Assets Value)');
-        $sheet->setCellValue('I1', 'Useful Life (Month)');
-        $sheet->setCellValue('J1', 'Ending Balance ' . ($periodYear - 1));
-        $sheet->setCellValue('K1', 'Remaining Useful Life');
-        $sheet->setCellValue('L1', 'Transfer In');
-        $sheet->setCellValue('M1', 'Transfer Out');
-        $sheet->setCellValue('N1', 'Adjustment Depreciation');
-        $sheet->setCellValue('O1', 'Depreciation');
-        $sheet->setCellValue('P1', 'Total Addition');
-        $sheet->setCellValue('Q1', 'Accumulated Depreciation');
-        $sheet->setCellValue('R1', 'Net Book Value');
+        $sheet->setCellValue('G1', 'Depreciation Period');
+        $sheet->setCellValue('H1', 'Awal');
+        $sheet->setCellValue('I1', 'Total (Assets Value)');
+        $sheet->setCellValue('J1', 'Useful Life (Month)');
+        $sheet->setCellValue('K1', 'Ending Balance ' . ($periodYear - 1));
+        $sheet->setCellValue('L1', 'Remaining Useful Life');
+        $sheet->setCellValue('M1', 'Transfer In');
+        $sheet->setCellValue('N1', 'Transfer Out');
+        $sheet->setCellValue('O1', 'Adjustment Depreciation');
+        $sheet->setCellValue('P1', 'Depreciation');
+        $sheet->setCellValue('Q1', 'Total Addition');
+        $sheet->setCellValue('R1', 'Accumulated Depreciation');
+        $sheet->setCellValue('S1', 'Net Book Value');
 
-        $sheet->getStyle('A1:R1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:S1')->getFont()->setBold(true);
 
         $rowNum = 2;
         foreach ($rows as $row) {
@@ -1555,25 +1579,26 @@ class ExportController
             $sheet->setCellValue("B{$rowNum}", $asset?->description ?? '');
             $sheet->setCellValue("C{$rowNum}", $row->depr_code);
             $sheet->setCellValue("D{$rowNum}", $statusLabel);
-            $sheet->setCellValue("E{$rowNum}", optional($row->cap_date)->format('Y-m-d'));
-            $sheet->setCellValue("F{$rowNum}", optional($row->period)->format('Y-m-d'));
-            $sheet->setCellValue("G{$rowNum}", $row->opening_balance);
-            $sheet->setCellValue("H{$rowNum}", $row->total_value);
-            $sheet->setCellValue("I{$rowNum}", $row->useful_life_months);
-            $sheet->setCellValue("J{$rowNum}", $row->ending_balance_prev_year);
-            $sheet->setCellValue("K{$rowNum}", $row->remaining_useful_life_months);
-            $sheet->setCellValue("L{$rowNum}", $row->transfers_in);
-            $sheet->setCellValue("M{$rowNum}", $row->transfers_out);
-            $sheet->setCellValue("N{$rowNum}", $row->adjustment_depreciation);
-            $sheet->setCellValue("O{$rowNum}", $row->depr_expense);
-            $sheet->setCellValue("P{$rowNum}", $totalAddition);
-            $sheet->setCellValue("Q{$rowNum}", $row->accumulated_depr_end);
-            $sheet->setCellValue("R{$rowNum}", $row->last_net_book_value);
+            $sheet->setCellValue("E{$rowNum}", $fmtDate($row->cap_date, 'D MMMM YYYY'));
+            $sheet->setCellValue("F{$rowNum}", $fmtDate($row->period, 'MMMM YYYY'));
+            $sheet->setCellValue("G{$rowNum}", $fmtDate($row->period_depr, 'MMMM YYYY'));
+            $sheet->setCellValue("H{$rowNum}", $row->opening_balance);
+            $sheet->setCellValue("I{$rowNum}", $row->total_value);
+            $sheet->setCellValue("J{$rowNum}", $row->useful_life_months);
+            $sheet->setCellValue("K{$rowNum}", $row->ending_balance_prev_year);
+            $sheet->setCellValue("L{$rowNum}", $row->remaining_useful_life_months);
+            $sheet->setCellValue("M{$rowNum}", $row->transfers_in);
+            $sheet->setCellValue("N{$rowNum}", $row->transfers_out);
+            $sheet->setCellValue("O{$rowNum}", $row->adjustment_depreciation);
+            $sheet->setCellValue("P{$rowNum}", $row->depr_expense);
+            $sheet->setCellValue("Q{$rowNum}", $totalAddition);
+            $sheet->setCellValue("R{$rowNum}", $row->accumulated_depr_end);
+            $sheet->setCellValue("S{$rowNum}", $row->last_net_book_value);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'R') as $col) {
+        foreach (range('A', 'S') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 

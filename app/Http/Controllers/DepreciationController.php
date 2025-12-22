@@ -73,6 +73,9 @@ class DepreciationController extends Controller
 
         $periodYear = (int)Carbon::parse($period)->year;
         $prevYear   = $periodYear - 1;
+        $periodDepr = $r->filled('period_depr')
+            ? Carbon::parse($r->period_depr)->startOfMonth()->toDateString()
+            : null;
 
         $q = AssetDeprMonthly::query()
             ->with('asset:uuid,asset_code,description,kode_status')
@@ -99,21 +102,26 @@ class DepreciationController extends Controller
                 'assets_depr_ledger_monthly.ending_balance',
                 'assets_depr_ledger_monthly.depr_code',
                 'av.capitalization_date as cap_date',
-                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
-
                 'av.total as total_value',
-
-                DB::raw("
-                COALESCE(
-                    NULLIF(p.useful_life_months, 0),
-                    NULLIF(av.useful_life_month, 0),
-                    CASE WHEN av.useful_life_year IS NOT NULL
-                         THEN (av.useful_life_year * 12)::int
-                         ELSE 0 END,
-                    0
-                ) AS useful_life_months
-            "),
                 'y.ending_balance_year as ending_balance_prev_year',
+                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("
+                    CASE
+                        WHEN av.capitalization_date IS NULL THEN NULL
+                        ELSE
+                        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date
+                    END AS period_depr
+                "),
+                DB::raw("
+                    COALESCE(
+                        NULLIF(p.useful_life_months, 0),
+                        NULLIF(av.useful_life_month, 0),
+                        CASE WHEN av.useful_life_year IS NOT NULL
+                            THEN (av.useful_life_year * 12)::int
+                            ELSE 0 END,
+                        0
+                    ) AS useful_life_months
+                "),
                 DB::raw("
                 GREATEST(
                   COALESCE(
@@ -186,6 +194,13 @@ class DepreciationController extends Controller
         }
         if ($capTo = $r->get('cap_to')) {
             $q->whereDate('av.capitalization_date', '<=', $capTo);
+        }
+
+        if ($periodDepr) {
+            $q->whereNotNull('av.capitalization_date')
+                ->whereRaw("
+        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date = ?
+      ", [$periodDepr]);
         }
 
         if ($assetQ = trim((string) $r->get('asset_q', ''))) {
