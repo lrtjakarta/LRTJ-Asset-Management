@@ -39,8 +39,8 @@ class TransferApi extends Controller
             'asset_q'        => ['nullable', 'string', 'max:200'],  // asset code/description search
 
             // date filters
-            'from'         => ['nullable', 'date'],               // legacy – created_at from
-            'to'           => ['nullable', 'date'],               // legacy – created_at to
+            'from'         => ['nullable', 'date'],               // legacy â€“ created_at from
+            'to'           => ['nullable', 'date'],               // legacy â€“ created_at to
             'created_from' => ['nullable', 'date'],
             'created_to'   => ['nullable', 'date'],
             'updated_from' => ['nullable', 'date'],
@@ -93,7 +93,7 @@ class TransferApi extends Controller
                 DB::raw('a.kode_status       as asset_kode_status'),
                 DB::raw('a.kode_sumber       as asset_kode_sumber'),
 
-                // 🔹 NEW: assignment fields from assets_assignment
+                // ðŸ”¹ NEW: assignment fields from assets_assignment
                 DB::raw('g.asset_owner       as asset_owner'),
                 DB::raw('g.asset_user        as asset_user'),
                 DB::raw('g.asset_maintenance as asset_maintenance'),
@@ -104,7 +104,7 @@ class TransferApi extends Controller
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber     || ' - ' || msrc.name END AS asset_kode_sumber_label"),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
-            // 🔹 NEW: join assignment so we can expose asset owner/user/maintenance
+            // ðŸ”¹ NEW: join assignment so we can expose asset owner/user/maintenance
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('master_location     as ml',   'ml.kode',   '=', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  '=', 'a.kode_asset_class')
@@ -458,7 +458,7 @@ class TransferApi extends Controller
                 }
             }
 
-            // 🔹 NEW: include current asset owner/user/maintenance codes into lookup pool
+            // ðŸ”¹ NEW: include current asset owner/user/maintenance codes into lookup pool
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -497,7 +497,7 @@ class TransferApi extends Controller
                 ? ($t->kode_status . ' - ' . $t->status->name)
                 : $t->kode_status;
 
-            // 🔹 Build asset owner/user/maintenance label from mapUser
+            // ðŸ”¹ Build asset owner/user/maintenance label from mapUser
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -527,7 +527,7 @@ class TransferApi extends Controller
                 'asset_kode_status_label'       => $t->getAttribute('asset_kode_status_label'),
                 'asset_kode_sumber_label'       => $t->getAttribute('asset_kode_sumber_label'),
 
-                // 🔹 NEW: current assignment info
+                // ðŸ”¹ NEW: current assignment info
                 'asset_owner'                   => $assetOwner,
                 'asset_owner_label'             => $assetOwnerLabel,
                 'asset_user'                    => $assetUser,
@@ -1213,9 +1213,9 @@ class TransferApi extends Controller
                     $afterVal = data_get($tf->after, 'value');
                     if ($afterVal) {
                         $afterUc = MasterUserCode::where('kode', $afterVal)->first();
-                        if ($afterUc && $afterUc->kode !== $userDept) {
-                            throw new \RuntimeException('This user department not matching. Expected: ' . $afterUc->kode);
-                        }
+                        // if ($afterUc && $afterUc->kode !== $userDept) {
+                        //     throw new \RuntimeException('This user department not matching. Expected: ' . $afterUc->kode);
+                        // }
                     }
                 }
             }

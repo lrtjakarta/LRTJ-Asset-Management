@@ -1017,9 +1017,9 @@ class TransferController extends Controller
                     $afterVal = data_get($tf->after, 'value');
                     if ($afterVal) {
                         $afterUc = MasterUserCode::where('kode', $afterVal)->first();
-                        if ($afterUc && $afterUc->kode !== $userDept) {
-                            abort(422, 'This user department not matching. Expected: ' . $afterUc->kode);
-                        }
+                        // if ($afterUc && $afterUc->kode !== $userDept) {
+                        //     abort(422, 'This user department not matching. Expected: ' . $afterUc->kode);
+                        // }
                     }
                 }
             }

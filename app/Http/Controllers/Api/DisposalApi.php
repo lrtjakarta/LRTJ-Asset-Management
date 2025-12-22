@@ -1334,9 +1334,9 @@ class DisposalApi extends Controller
             $ownerCode = $asset->assignment?->asset_owner;
             if ($ownerCode) {
                 $ownerUc = MasterUserCode::where('kode', $ownerCode)->first();
-                if ($ownerUc && $ownerUc->kode !== $userDept && !$isSysAdmin) {
-                    abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
-                }
+                // if ($ownerUc && $ownerUc->kode !== $userDept && !$isSysAdmin) {
+                //     abort(422, 'This user department not matching. Expected: ' . $ownerUc->kode);
+                // }
             }
         }
 
