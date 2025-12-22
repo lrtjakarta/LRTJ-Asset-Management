@@ -139,16 +139,48 @@
                                     </div>
                                 </div>
 
-                                @if (!empty($s['errors']))
-                                    <div class="alert alert-warning">
-                                        <div class="fw-semibold mb-2">Row Errors</div>
-                                        <ul class="mb-0 ps-6">
-                                            @foreach ($s['errors'] as $err)
-                                                <li>{{ $err }}</li>
-                                            @endforeach
-                                        </ul>
+                                @if (!empty($s['failed_rows']))
+                                    <div class="card mt-6">
+                                        <div class="card-header">
+                                            <h3 class="card-title fw-bold">Failed Rows Detail</h3>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="table-responsive">
+                                                <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-3">
+                                                    <thead>
+                                                        <tr class="fw-bold text-muted">
+                                                            <th class="min-w-70px">Row</th>
+                                                            <th class="min-w-200px">Asset Code</th>
+                                                            <th class="min-w-120px">Parent</th>
+                                                            <th class="min-w-120px">Child</th>
+                                                            <th class="min-w-300px">Reason</th>
+                                                            <th class="min-w-250px">Hint</th>
+                                                            <!--<th class="min-w-120px">SQLState</th>-->
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach ($s['failed_rows'] as $f)
+                                                            <tr>
+                                                                <td>{{ $f['row'] ?? '-' }}</td>
+                                                                <td class="fw-semibold">{{ $f['asset_code'] ?? '-' }}</td>
+                                                                <td>{{ $f['parent'] ?? '-' }}</td>
+                                                                <td>{{ $f['child'] ?? '-' }}</td>
+                                                                <td>{{ $f['reason'] ?? '-' }}</td>
+                                                                <td>{{ $f['hint'] ?? '-' }}</td>
+                                                                <!--<td>{{ $f['sqlstate'] ?? '-' }}</td>-->
+                                                            </tr>
+                                                        @endforeach
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                
+                                            <div class="text-muted mt-3">
+                                                Tip: baris yang gagal bisa kamu filter dari kolom <b>Asset Code</b> lalu perbaiki di Excel, upload ulang.
+                                            </div>
+                                        </div>
                                     </div>
                                 @endif
+
                             </div>
                         @endif
 
