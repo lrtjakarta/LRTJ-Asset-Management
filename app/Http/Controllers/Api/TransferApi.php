@@ -1191,9 +1191,9 @@ class TransferApi extends Controller
             if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
                 $userDept = $currentUser->kode_department;
 
-                if (!$userDept) {
-                    throw new \RuntimeException('Your department is not set. Please contact administrator.');
-                }
+                // if (!$userDept) {
+                //     throw new \RuntimeException('Your department is not set. Please contact administrator.');
+                // }
 
                 if (!isset($asset)) {
                     $asset = Assets::with(['assignment.owner', 'assignment.user', 'assignment.maintenance'])

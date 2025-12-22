@@ -1321,9 +1321,9 @@ class DisposalApi extends Controller
 
         // STEP 5: Asset Management execution (final)
         if ($stepCode === 'asset_mgt' && in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
-            if (!$userDept) {
-                abort(422, 'Your department is not set. Please contact administrator.');
-            }
+            // if (!$userDept) {
+            //     abort(422, 'Your department is not set. Please contact administrator.');
+            // }
 
             if (!isset($asset)) {
                 $asset = Assets::with(['assignment.owner'])

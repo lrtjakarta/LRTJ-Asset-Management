@@ -636,9 +636,9 @@ class DisposalController extends Controller
                 if (!in_array('AM_HEAD', $userRoles) && !in_array('AM_ADMIN', $userRoles) && !$isSysAdmin) {
                     abort(403, 'Only Asset Management can approve this step.');
                 }
-                if (!$userDept) {
-                    abort(422, 'Your department is not set. Please contact administrator.');
-                }
+                // if (!$userDept) {
+                //     abort(422, 'Your department is not set. Please contact administrator.');
+                // }
 
                 if (!isset($asset)) {
                     $asset = Assets::with(['assignment.owner'])

@@ -992,9 +992,9 @@ class TransferController extends Controller
                 }
                 $userDept = $currentUser->kode_department;
 
-                if (!$userDept) {
-                    abort(422, 'Your department is not set. Please contact administrator.');
-                }
+                // if (!$userDept) {
+                //     abort(422, 'Your department is not set. Please contact administrator.');
+                // }
 
                 // Load asset with assignment relationships if not already loaded
                 if (!isset($asset)) {
