@@ -164,6 +164,9 @@
                             <input type="month" id="proc-period" class="form-control"
                                 value="{{ \Carbon\Carbon::parse($currentMonth)->format('Y-m') }}">
                             <small class="text-muted">Pick any month to process depreciation.</small>
+                            <br>
+                            <p id="notes-dpr-month">Depresiasi yang diproses adalah bulan
+                                {{ \Carbon\Carbon::parse($currentMonth)->subMonth()->format('F Y') }}</p>
                         </div>
                     </div>
 
@@ -598,9 +601,32 @@
             $btnProcOpen.on('click', function() {
                 const period = $('#f-period').val() || DEFAULT_PERIOD_MONTH;
                 $procMonthInp.val(period);
+
+                const d = new Date(period);
+                d.setMonth(d.getMonth() - 1);
+
+                const monthName = d.toLocaleString('default', {
+                    month: 'long'
+                });
+                const yearFull = d.getFullYear();
+
+                $("#notes-dpr-month").html("Depresiasi yang diproses adalah bulan " + monthName + " " + yearFull);
                 monthModal.show();
             });
 
+            $procMonthInp.on('change', function() {
+                const period = $(this).val();
+
+                const d = new Date(period);
+                d.setMonth(d.getMonth() - 1);
+
+                const monthName = d.toLocaleString('default', {
+                    month: 'long'
+                });
+                const yearFull = d.getFullYear();
+
+                $("#notes-dpr-month").html("Depresiasi yang diproses adalah bulan " + monthName + " " + yearFull);
+            });
             // ===== Submit Process Month (from modal) =====
             $('#form-process-month-modal').on('submit', async function(e) {
                 e.preventDefault();
