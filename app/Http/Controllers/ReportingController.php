@@ -305,8 +305,8 @@ class ReportingController extends Controller
             'Disposals',
             'Adjustment Value',
             'Adjustment Depr',
-            'Depreciation',
-            'Ending Balance',
+            'Accumulated Depreciation',
+            'Net Book Value',
 
             'No PO/Perjanjian/SPK',
             'Note Reference',
@@ -347,8 +347,8 @@ class ReportingController extends Controller
             $set($col++, $rowIdx, $r->disposals);
             $set($col++, $rowIdx, $r->adjustment_value);
             $set($col++, $rowIdx, $r->adjustment_depreciation);
-            $set($col++, $rowIdx, $r->depr_expense);
-            $set($col++, $rowIdx, $r->ending_balance);
+            $set($col++, $rowIdx, $r->accumulated_depr_end);
+            $set($col++, $rowIdx, $r->last_net_book_value);
 
             $set($col++, $rowIdx, $r->no_po_perjanjian_spk);
             $set($col++, $rowIdx, $r->nota_referensi);

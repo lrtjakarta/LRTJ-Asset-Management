@@ -372,7 +372,7 @@ class ExportController
                 DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at"),
 
                 DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
-                DB::raw("COALESCE(dm.ending_balance, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
                 DB::raw("dm.period as last_depr_period"),
             );
 
@@ -438,7 +438,7 @@ class ExportController
             'W1' => 'No PO/Perjanjian/SPK',
             'X1' => 'Note Reference',
             'Y1' => 'Sumber',
-            'Z1' => 'Depreciation',
+            'Z1' => 'Accumulated Depreciation',
             'AA1' => 'Net Book Value',
             'AB1' => 'Updated At',
         ];
@@ -1414,7 +1414,8 @@ class ExportController
                 'assets_depr_ledger_monthly.accumulated_depr_end',
                 'assets_depr_ledger_monthly.ending_balance',
                 'assets_depr_ledger_monthly.depr_code',
-                'av.capitalization_date as cap_date',
+                'av.capitalization_date as cap_date',                
+                DB::raw("COALESCE(av.total, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
                 'av.total as total_value',
                 DB::raw("
                 COALESCE(
@@ -1532,9 +1533,10 @@ class ExportController
         $sheet->setCellValue('N1', 'Adjustment Depreciation');
         $sheet->setCellValue('O1', 'Depreciation');
         $sheet->setCellValue('P1', 'Total Addition');
-        $sheet->setCellValue('Q1', 'Ending Balance');
+        $sheet->setCellValue('Q1', 'Accumulated Depreciation');
+        $sheet->setCellValue('R1', 'Net Book Value');
 
-        $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:R1')->getFont()->setBold(true);
 
         $rowNum = 2;
         foreach ($rows as $row) {
@@ -1565,12 +1567,13 @@ class ExportController
             $sheet->setCellValue("N{$rowNum}", $row->adjustment_depreciation);
             $sheet->setCellValue("O{$rowNum}", $row->depr_expense);
             $sheet->setCellValue("P{$rowNum}", $totalAddition);
-            $sheet->setCellValue("Q{$rowNum}", $row->ending_balance);
+            $sheet->setCellValue("Q{$rowNum}", $row->accumulated_depr_end);
+            $sheet->setCellValue("R{$rowNum}", $row->last_net_book_value);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'Q') as $col) {
+        foreach (range('A', 'R') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
