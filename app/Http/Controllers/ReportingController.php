@@ -148,9 +148,10 @@ class ReportingController extends Controller
             'l.disposals',
             'l.adjustment_value',
             'l.adjustment_depreciation',
+            'l.accumulated_depr_end',
             'l.depr_expense',
             'l.ending_balance',
-            DB::raw("COALESCE(l.ending_balance, 0) - COALESCE(l.accumulated_depr_end, 0) as last_net_book_value"),
+            DB::raw("COALESCE(v.total, 0) - COALESCE(l.accumulated_depr_end, 0) as last_net_book_value"),
 
             'd.no_po_perjanjian_spk',
             'd.nota_referensi',

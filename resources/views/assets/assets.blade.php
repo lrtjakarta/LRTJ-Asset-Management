@@ -570,7 +570,7 @@
                                             <th>Useful Life (Year)</th>
                                             <th class="min-w-200px">No PO/Perjanjian/SPK</th>
                                             <th class="min-w-200px">Note Reference</th>
-                                            <th class="min-w-200px">Depreciation</th>
+                                            <th class="min-w-200px">Accumulated Depreciation</th>
                                             <th class="min-w-120px">Net Book Value</th>
                                             <th class="min-w-150px">Updated</th>
                                             {{-- <th class="text-center min-w-120px">Actions</th> --}}

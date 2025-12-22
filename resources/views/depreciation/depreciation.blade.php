@@ -131,7 +131,8 @@
                                 <th class="min-w-200px">Adjusment Depreciation</th>
                                 <th class="min-w-200px">Depreciation</th>
                                 <th class="min-w-200px">Total Addition</th>
-                                <th class="min-w-200px">Ending Balance</th>
+                                <th class="min-w-200px">Accumulated Depreciation</th>
+                                <th class="min-w-200px">Net Book Value</th>
                             </tr>
                         </thead>
                         <tfoot>
@@ -509,6 +510,12 @@
                             const ds = Number(row.disposals || 0);
                             return money(a + ti - to + av - ds);
                         }
+                    },
+                    {
+                        data: 'accumulated_depr_end',
+                        render: money,
+                        className: 'text-end',
+                        searchable: false
                     },
                     {
                         data: 'ending_balance',

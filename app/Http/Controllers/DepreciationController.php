@@ -99,6 +99,7 @@ class DepreciationController extends Controller
                 'assets_depr_ledger_monthly.ending_balance',
                 'assets_depr_ledger_monthly.depr_code',
                 'av.capitalization_date as cap_date',
+                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
 
                 'av.total as total_value',
 

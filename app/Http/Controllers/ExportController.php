@@ -474,16 +474,16 @@ class ExportController
             $sheet->setCellValue("W{$rowNum}", $r->no_po_perjanjian_spk);
             $sheet->setCellValue("X{$rowNum}", $r->nota_referensi);
             $sheet->setCellValue("Y{$rowNum}", $r->sumber_label);
-            $sheet->setCellValue("Z{$rowNum}", $r->depreciation);
-            $sheet->setCellValue("AA{$rowNum}", $r->net_book_value);
+            $sheet->setCellValue("Z{$rowNum}", $r->last_accumulated_depr);
+            $sheet->setCellValue("AA{$rowNum}", $r->last_net_book_value);
             $sheet->setCellValue("AB{$rowNum}", $r->updated_at);
 
             $rowNum++;
         }
 
-        foreach (range('A', 'AB') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
+        // foreach (range('A', 'AB') as $col) {
+        //     $sheet->getColumnDimension($col)->setAutoSize(true);
+        // }
 
         $fileName = 'assets-' . now()->format('Ymd-His') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);

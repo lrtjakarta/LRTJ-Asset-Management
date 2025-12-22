@@ -10,15 +10,15 @@
                 {{ is_null($asset->value?->price) ? '' : number_format($asset->value->price, 2) }}
             </dd>
             
-            <dt class="col-sm-5">Depreciation</dt>
+            <dt class="col-sm-5">Accumulated Depreciation</dt>
             <dd class="col-sm-7"> :
                 {{ is_null($depreciation) ? '' : number_format($depreciation, 2)  }}
             </dd>
 
 
-            <dt class="col-sm-5">Ending Balance</dt>
+            <dt class="col-sm-5">Net Book Value</dt>
             <dd class="col-sm-7"> :
-                {{ is_null($endingBalance) ? '' : number_format($endingBalance, 2)  }}
+                {{ is_null($nbvHasil) ? '' : number_format($nbvHasil, 2)  }}
             </dd>
 
 

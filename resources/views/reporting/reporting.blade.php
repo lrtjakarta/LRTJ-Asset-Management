@@ -169,8 +169,8 @@
                                     <th class="min-w-150px">Disposals</th>
                                     <th class="min-w-150px">Adj. Value</th>
                                     <th class="min-w-150px">Adj. Depr</th>
-                                    <th class="min-w-150px">Depreciation</th>
-                                    <th class="min-w-150px">Ending Balance</th>
+                                    <th class="min-w-150px">Accumulated Depreciation</th>
+                                    {{-- <th class="min-w-150px">Ending Balance</th> --}}
                                     <th class="min-w-150px">Net Book Value</th>
                                     <th class="min-w-200px">No PO/Perjanjian/SPK</th>
                                     <th class="min-w-200px">Note Reference</th>
@@ -463,17 +463,17 @@
                         className: 'text-end'
                     },
                     {
-                        data: 'depr_expense',
-                        name: 'l.depr_expense',
+                        data: 'accumulated_depr_end',
+                        name: 'l.accumulated_depr_end',
                         render: formatNumber,
                         className: 'text-end'
                     },
-                    {
-                        data: 'ending_balance',
-                        name: 'l.ending_balance',
-                        render: formatNumber,
-                        className: 'text-end'
-                    },
+                    // {
+                    //     data: 'ending_balance',
+                    //     name: 'l.ending_balance',
+                    //     render: formatNumber,
+                    //     className: 'text-end'
+                    // },
                     {
                         data: 'last_net_book_value',
                         name: 'last_net_book_value',
