@@ -171,7 +171,7 @@
                                     <th class="min-w-150px">Adj. Depr</th>
                                     <th class="min-w-150px">Depreciation</th>
                                     <th class="min-w-150px">Ending Balance</th>
-
+                                    <th class="min-w-150px">Net Book Value</th>
                                     <th class="min-w-200px">No PO/Perjanjian/SPK</th>
                                     <th class="min-w-200px">Note Reference</th>
                                     <th class="min-w-150px">Updated At</th>
@@ -474,7 +474,13 @@
                         render: formatNumber,
                         className: 'text-end'
                     },
-
+                    {
+                        data: 'last_net_book_value',
+                        name: 'last_net_book_value',
+                        render: formatNumber,
+                        className: 'text-end',
+                        searchable: false
+                    },
                     {
                         data: 'no_po_perjanjian_spk',
                         name: 'd.no_po_perjanjian_spk'
@@ -491,7 +497,7 @@
 
                             const d = new Date(iso);
                             if (isNaN(d.getTime()))
-                        return iso; // fallback kalau ada data lama formatnya beda
+                                return iso; // fallback kalau ada data lama formatnya beda
 
                             const dateStr = new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',

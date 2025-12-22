@@ -117,7 +117,7 @@
                             <tr>
                                 <th class="min-w-200px">Asset Code</th>
                                 <th class="min-w-200px">Asset Description</th>
-                                <th class="min-w-150px">Transaction Number</th>
+                                {{-- <th class="min-w-150px">Transaction Number</th> --}}
                                 <th class="min-w-150px">Asset Status</th>
                                 <th class="min-w-200px">Tanggal Masuk</th>
                                 <th class="min-w-200px">Depreciation Date</th>
@@ -407,10 +407,10 @@
                         data: 'asset_name',
                         name: 'asset_name'
                     },
-                    {
-                        data: 'depr_code',
-                        name: 'depr_code'
-                    },
+                    // {
+                    //     data: 'depr_code',
+                    //     name: 'depr_code'
+                    // },
                     {
                         data: 'asset_status_label',
                         name: 'asset_status_label'
@@ -616,30 +616,62 @@
                     cancelButtonColor: '#B5B5B6',
                     confirmButtonText: 'Yes',
                     cancelButtonText: 'No'
-                }).then(async result => {
+                }).then(result => {
                     if (!result.isConfirmed) return;
 
-                    try {
-                        setBusyProc(true);
-                        monthModal.hide();
-                        await $.ajax({
+                    setBusyProc(true);
+                    monthModal.hide();
+
+                    $.ajax({
                             url: $formProc.attr('action'),
                             type: 'POST',
                             data: $formProc.serialize(),
                             headers: {
-                                'X-CSRF-TOKEN': $('input[name="_token"]', $formProc)
-                                    .val()
+                                'X-CSRF-TOKEN': $('input[name="_token"]', $formProc).val()
                             }
-                        });
+                        })
+                        .done(function(resp) {
+                            // kalau backend balikin { ok:false } tapi status 200, anggap error juga
+                            if (resp && resp.ok === false) {
+                                const msg = resp.message || 'Failed to process depreciation';
+                                return Swal.fire({
+                                    icon: 'error',
+                                    title: 'Process failed',
+                                    text: msg,
+                                    confirmButtonColor: '#EA242A'
+                                });
+                            }
 
-                        toastr?.success(`Processed ${formatPeriodToText(periodMonth)}`);
-                        tbl.ajax.reload(null, false);
-                    } catch (err) {
-                        toastr?.error('Failed to process depreciation');
-                    } finally {
-                        setBusyProc(false);
-                    }
+                            function prevMonthStr(ym) {
+                                const [y, m] = ym.split('-').map(Number);
+                                const d = new Date(y, m - 1, 1);
+                                d.setMonth(d.getMonth() - 1);
+                                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}`;
+                            }
+
+                            const shownMonth = prevMonthStr(periodMonth);
+                            toastr?.success(`Processed ${formatPeriodToText(shownMonth)}`);
+                            tbl.ajax.reload(null, false);
+                        })
+                        .fail(function(xhr) {
+                            const rj = xhr.responseJSON;
+                            let msg = rj?.message || 'Failed to process depreciation';
+
+                            if (rj?.need_period_text) {
+                                msg += `\nPlease process: ${rj.need_period_text} first.`;
+                            }
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Process failed',
+                                text: msg,
+                                confirmButtonColor: '#EA242A'
+                            });
+                        })
+                        .always(function() {
+                            setBusyProc(false);
+                        });
                 });
+
             });
 
 
@@ -656,7 +688,6 @@
                 yearModal.show();
             });
 
-            // ===== Submit Build Year (from modal) =====
             // ===== Submit Build Year (from modal) =====
             $('#form-build-year-modal').on('submit', async function(e) {
                 e.preventDefault();

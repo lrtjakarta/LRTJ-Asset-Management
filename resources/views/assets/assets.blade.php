@@ -92,6 +92,12 @@
             });
         })(jQuery);
 
+
+        function formatNumber(d) {
+            if (d == null || d === '') return '';
+            return Number(d).toLocaleString('en-US');
+        }
+
         const table = $('#assetsTable').DataTable({
             serverSide: true,
             processing: true,
@@ -238,11 +244,13 @@
                 {
                     data: 'last_accumulated_depr',
                     name: 'last_accumulated_depr',
+                    render: formatNumber,
                     searchable: false
                 },
                 {
                     data: 'last_net_book_value',
                     name: 'last_net_book_value',
+                    render: formatNumber,
                     searchable: false
                 },
 

@@ -34,11 +34,9 @@ class ReportingController extends Controller
     {
         $period = $request->input('period'); // 'YYYY-MM-01' or empty
 
-        // === Subquery: latest depreciation ledger per asset (PostgreSQL) ===
         $ledgerLatest = DB::table('assets_depr_ledger_monthly as l1')
             ->selectRaw('DISTINCT ON (l1.asset_uuid) l1.*')
             ->when($period, function ($qq) use ($period) {
-                // if period filter is provided, take that exact period (still 1 row per asset)
                 $qq->whereDate('l1.period', $period);
             })
             ->orderBy('l1.asset_uuid')
@@ -46,13 +44,11 @@ class ReportingController extends Controller
             ->orderBy('l1.updated_at', 'desc');
 
         $q = DB::table('assets as a')
-            // child tables (make sure these are truly 1:1, otherwise still can duplicate)
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
 
-            // ✅ join latest ledger per asset (instead of direct join to ledger table)
             ->leftJoinSub($ledgerLatest, 'l', function ($join) {
                 $join->on('l.asset_uuid', '=', 'a.uuid');
             })
@@ -154,6 +150,7 @@ class ReportingController extends Controller
             'l.adjustment_depreciation',
             'l.depr_expense',
             'l.ending_balance',
+            DB::raw("COALESCE(l.ending_balance, 0) - COALESCE(l.accumulated_depr_end, 0) as last_net_book_value"),
 
             'd.no_po_perjanjian_spk',
             'd.nota_referensi',

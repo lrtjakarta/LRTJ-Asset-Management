@@ -1571,7 +1571,7 @@ class AssetsController extends Controller
 
                         $deprPayload['asset_uuid'] = $asset->uuid;
                         $deprPayload['period']     = $period;
-                        $deprPayload['depr_code']  = $deprPayload['depr_code'] ?? 'EXCEL';
+                        $deprPayload['depr_code']  = $deprPayload['depr_code'] ?? '';
                         $deprPayload['updated_at'] = now();
 
                         if ($existsM) {

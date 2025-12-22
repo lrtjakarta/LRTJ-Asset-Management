@@ -136,7 +136,7 @@ class DepreciationController extends Controller
                               WHEN date_trunc('month', assets_depr_ledger_monthly.period) <
                                 (
                                   CASE
-                                    WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                    WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
                                       THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
                                     ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
                                   END
@@ -148,7 +148,7 @@ class DepreciationController extends Controller
                                   (DATE_PART('year', AGE(
                                       date_trunc('month', assets_depr_ledger_monthly.period),
                                       CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
                                           THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
                                         ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
                                       END
@@ -157,7 +157,7 @@ class DepreciationController extends Controller
                                   DATE_PART('month', AGE(
                                       date_trunc('month', assets_depr_ledger_monthly.period),
                                       CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
+                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
                                           THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
                                         ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
                                       END
@@ -302,6 +302,19 @@ class DepreciationController extends Controller
     //         $from->addMonth();
     //     }
     // }
+    private function ensurePrevMonthProcessed(\Carbon\Carbon $period): void
+    {
+        $prev = $period->copy()->subMonth()->startOfMonth();
+
+        // kalau prev month belum ada record sama sekali => belum diproses
+        $exists = \App\Models\AssetDeprMonthly::query()
+            ->whereDate('period', $prev->toDateString())
+            ->exists();
+
+        if (! $exists) {
+            throw new \RuntimeException("PREV_MONTH_NOT_PROCESSED|{$prev->toDateString()}");
+        }
+    }
 
     public function runMonth(Request $request)
     {
@@ -310,16 +323,40 @@ class DepreciationController extends Controller
         $periodInput = $request->input('period');
 
         $period = $periodInput
-            ? Carbon::parse($periodInput)->startOfMonth()
+            ? \Carbon\Carbon::parse($periodInput)->startOfMonth()
             : now()->startOfMonth();
 
-        $this->processMonthlyDepr($period);
+        try {
+            // blokir jika prev month belum diproses
+            $this->ensurePrevMonthProcessed($period);
 
-        return response()->json([
-            'ok'     => true,
-            'period' => $period->toDateString(),
-        ]);
+            $this->processMonthlyDepr($period);
+
+            return response()->json([
+                'ok'     => true,
+                'period' => $period->toDateString(),
+            ]);
+        } catch (\Throwable $e) {
+            // khusus error prev-month
+            if (str_starts_with($e->getMessage(), 'PREV_MONTH_NOT_PROCESSED|')) {
+                $need = explode('|', $e->getMessage())[1] ?? null;
+
+                return response()->json([
+                    'ok'               => false,
+                    'code'             => 'PREV_MONTH_NOT_PROCESSED',
+                    'message'          => 'Previous month depreciation must be processed first.',
+                    'need_period'      => $need, // "YYYY-MM-01"
+                    'need_period_text' => $need ? \Carbon\Carbon::parse($need)->isoFormat('MMMM YYYY') : null,
+                ], 422);
+            }
+
+            return response()->json([
+                'ok'      => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
+
 
     private function processMonthlyDepr(Carbon $period): void
     {
@@ -367,7 +404,7 @@ class DepreciationController extends Controller
                         'salvage_value'      => 0,
                         'depr_start_date'    => Carbon::parse($startFromAv)->toDateString(),
                         'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                        'cutoff_day'         => 15,
+                        'cutoff_day'         => 16,
                         'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
                         'is_active'          => true,
                     ]);
@@ -453,7 +490,7 @@ class DepreciationController extends Controller
 
                 $eligibleStart = $startBase
                     ? Carbon::parse($startBase)->startOfMonth()->addMonths(
-                        (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 15)) ? 1 : 2
+                        (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 16)) ? 1 : 2
                     )
                     : $period;
 
@@ -681,7 +718,7 @@ class DepreciationController extends Controller
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
         $policy = AssetDeprPolicy::where('asset_uuid', $data['asset_uuid'])->where('is_active', true)->first();
 
-        $deprStart = $this->calcDeprStartPeriod($data['actual_date'], $policy?->cutoff_day ?? 15);
+        $deprStart = $this->calcDeprStartPeriod($data['actual_date'], $policy?->cutoff_day ?? 16);
 
         AssetDeprMovement::create([
             'asset_uuid'        => $data['asset_uuid'],
@@ -698,9 +735,9 @@ class DepreciationController extends Controller
         return response()->json(['ok' => true, 'message' => "{$category} recorded"]);
     }
 
-    private function calcDeprStartPeriod(string|\DateTimeInterface $startDate, ?int $cutoffDay = 15): string
+    private function calcDeprStartPeriod(string|\DateTimeInterface $startDate, ?int $cutoffDay = 16): string
     {
-        $cutoffDay = $cutoffDay ?: 15;
+        $cutoffDay = $cutoffDay ?: 16;
         $d = Carbon::parse($startDate);
         $addMonths = ($d->day <= $cutoffDay) ? 1 : 2;
         return $d->copy()->startOfMonth()->addMonths($addMonths)->toDateString();
@@ -844,7 +881,7 @@ class DepreciationController extends Controller
         }
 
         $startDate = Carbon::parse($policy->depr_start_date);
-        $cutoff    = $policy->cutoff_day ?? 15;
+        $cutoff    = $policy->cutoff_day ?? 16;
 
         $addMonths     = ($startDate->day <= $cutoff) ? 1 : 2;
         $eligibleStart = $startDate->copy()->startOfMonth()->addMonths($addMonths);
@@ -866,8 +903,8 @@ class DepreciationController extends Controller
 
         $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
         $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
-        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
-        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
+        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 16);
+        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 16);
 
         // === Case 2: Acquisition Fix (acq_fix) ===
         if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
