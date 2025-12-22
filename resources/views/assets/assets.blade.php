@@ -129,7 +129,7 @@
                 ">",
             searching: true,
             order: [
-                [24, 'desc']
+                [0, 'desc']
             ],
             columns: [{
                     data: 'asset_code',
