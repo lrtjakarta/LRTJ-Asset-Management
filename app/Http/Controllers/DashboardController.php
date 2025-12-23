@@ -83,7 +83,12 @@ class DashboardController
             ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
             ->first();
 
-        // --- monthly query (WITH year/month filters) ---
+        $totals_per_yeaer = (clone $base)
+            ->selectRaw('COUNT(*) as total_qty')
+            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
+            ->whereYear('v.capitalization_date', $year)
+            ->first();
+
         $q = (clone $base)->whereYear('v.capitalization_date', $year);
 
         if ($month !== null && $month !== '') {
@@ -107,9 +112,10 @@ class DashboardController
             'months'       => $months,
             'total_qty'    => (int) ($totals->total_qty ?? 0),
             'total_amount' => (float) ($totals->total_amount ?? 0),
+            'total_qty_per_year'    => (int) ($totals_per_year->total_qty ?? 0),
+            'total_amount_per_year' => (float) ($totals_per_year->total_amount ?? 0),
         ]);
     }
-
 
     public function deprMonthly(Request $request)
     {
@@ -119,29 +125,43 @@ class DashboardController
         $location   = $request->input('location');
         $assetClass = $request->input('asset_class');
 
-        $q = DB::table('assets_depr_ledger_monthly as l')
+        $base = DB::table('assets_depr_ledger_monthly as l')
             ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->whereYear('l.period', $year);
 
+        if ($owner)      $base->where('g.asset_owner', $owner);
+        if ($location)   $base->where('a.kode_location', $location);
+        if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
+
+        $lastMonth = (clone $base)
+            ->selectRaw("MAX(date_trunc('month', l.period)) AS last_month")
+            ->value('last_month');
+
+        $totalDepr = 0.0;
+        if ($lastMonth) {
+            $totalDepr = (float) ((clone $base)
+                ->whereRaw("date_trunc('month', l.period) = ?", [$lastMonth])
+                ->selectRaw("COALESCE(SUM(l.accumulated_depr_end), 0) AS total_depr")
+                ->value('total_depr') ?? 0);
+        }
+
+        $q = clone $base;
         if ($month !== null && $month !== '') {
             $q->whereMonth('l.period', (int) $month);
         }
-        if ($owner)      $q->where('g.asset_owner', $owner);
-        if ($location)   $q->where('a.kode_location', $location);
-        if ($assetClass) $q->where('a.kode_asset_class', $assetClass);
 
         $rows = $q->selectRaw("date_trunc('month', l.period)::date AS month")
-            ->selectRaw("SUM(l.depr_expense + l.adjustment_depreciation) AS depr")
+            ->selectRaw("SUM(l.accumulated_depr_end) AS depr")
             ->selectRaw("SUM(l.ending_balance) AS nbv")
             ->groupByRaw("date_trunc('month', l.period)")
             ->orderByRaw("date_trunc('month', l.period)")
             ->get();
 
         return response()->json([
-            'months'      => $rows,
-            'total_depr'  => (float) $rows->sum('depr'),
-            'total_nbv'   => (float) (optional($rows->last())->nbv ?? 0),
+            'months'     => $rows,
+            'total_depr' => $totalDepr,
+            'total_nbv'  => (float) (optional($rows->last())->nbv ?? 0),
         ]);
     }
     public function ownerStatus(Request $request)

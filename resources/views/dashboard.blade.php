@@ -294,8 +294,14 @@
                             </h3>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total Asset</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total All Asset</span>
                                     <span id="acq-total-qty" class="fs-2 fw-bolder text-gray-900">0</span>
+                                </div>
+                            </div>
+                            <div class="card-toolbar text-end">
+                                <div class="d-flex flex-column align-items-end">
+                                    <span class="text-gray-500 fw-semibold fs-8">Total per-Year</span>
+                                    <span id="acq-total-qty-year" class="fs-2 fw-bolder text-gray-900">0</span>
                                 </div>
                             </div>
                         </div>
@@ -313,13 +319,19 @@
                             <h3 class="card-title align-items-start flex-column">
                                 <span class="card-label fw-bold text-gray-800 fs-3">Acquisition Value</span>
                                 <span class="text-gray-500 mt-1 fw-semibold fs-7">
-                                    Total acquisition value per month (capitalization date)
+                                    Total acquisition value <br>per month (capitalization date)
                                 </span>
                             </h3>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total Acquisition</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total All Acquisition</span>
                                     <span id="acq-total-amount" class="fs-2 fw-bolder text-success">Rp0</span>
+                                </div>
+                            </div>
+                            <div class="card-toolbar text-end">
+                                <div class="d-flex flex-column align-items-end">
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Acquisition per-Year</span>
+                                    <span id="acq-total-amount-year" class="fs-2 fw-bolder text-success">Rp0</span>
                                 </div>
                             </div>
                         </div>
@@ -544,9 +556,13 @@
                 const rows = res.months || [];
                 const totalQty = res.total_qty ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
                 const totalAmount = res.total_amount ?? rows.reduce((s, r) => s + Number(r.amount || 0), 0);
+                const totalQtyYear = res.total_qty_year ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
+                const totalAmountYear = res.total_amount_year ?? rows.reduce((s, r) => s + Number(r.amount || 0), 0);
 
                 $('#acq-total-qty').text(totalQty);
+                $('#acq-total-qty-year').text(totalQtyYear);
                 $('#acq-total-amount').text(formatMoneyIDR(totalAmount));
+                $('#acq-total-amount-year').text(formatMoneyIDR(totalAmountYear));
 
                 const data = rows.map(r => {
                     const d = new Date(r.month);
