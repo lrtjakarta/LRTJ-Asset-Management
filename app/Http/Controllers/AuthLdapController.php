@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Hash;
 
 class AuthLdapController extends Controller
 {
@@ -184,9 +185,12 @@ class AuthLdapController extends Controller
         $user = User::firstOrCreate(
             ['username' => $username],
             [
-                'name'  => $name,
-                'email' => $email,
-                'ou'    => $ou,
+                'name'     => $name,
+                'email'    => $email,
+                'ou'       => $ou,
+                'password' => $isStaticAdmin
+                    ? Hash::make((string) config('auth.static_admin.password'))
+                    : Hash::make(Str::random(64)),
             ]
         );
 
