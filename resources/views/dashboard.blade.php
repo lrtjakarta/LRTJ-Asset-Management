@@ -22,45 +22,19 @@
                 <div class="card-body">
                     <div class="row g-3">
                         <div class="col-sm-6 col-md-3">
-                            <label class="form-label">Month</label>
+                            <label class="form-label">From</label>
                             @php
-                                $m = request('month');
-                                $months = [
-                                    '' => 'All',
-                                    '1' => 'Jan',
-                                    '2' => 'Feb',
-                                    '3' => 'Mar',
-                                    '4' => 'Apr',
-                                    '5' => 'May',
-                                    '6' => 'Jun',
-                                    '7' => 'Jul',
-                                    '8' => 'Aug',
-                                    '9' => 'Sep',
-                                    '10' => 'Oct',
-                                    '11' => 'Nov',
-                                    '12' => 'Dec',
-                                ];
+                                $from = request('from') ?: now()->startOfYear()->toDateString();
                             @endphp
-                            <select id="f-month" class="form-select">
-                                @foreach ($months as $val => $label)
-                                    <option value="{{ $val }}" @selected((string) $m === (string) $val)>{{ $label }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <input id="f-from" type="date" class="form-control" value="{{ $from }}">
                         </div>
 
                         <div class="col-sm-6 col-md-3">
-                            <label class="form-label">Year</label>
+                            <label class="form-label">To</label>
                             @php
-                                $y = (int) (request('year') ?: now()->year);
-                                $range = range(now()->year + 1, now()->year - 6);
+                                $to = request('to') ?: now()->endOfYear()->toDateString();
                             @endphp
-                            <select id="f-year" class="form-select">
-                                @foreach ($range as $yr)
-                                    <option value="{{ $yr }}" @selected($y === $yr)>{{ $yr }}
-                                    </option>
-                                @endforeach
-                            </select>
+                            <input id="f-to" type="date" class="form-control" value="{{ $to }}">
                         </div>
 
                         <div class="col-sm-6 col-md-3">
@@ -363,6 +337,12 @@
                                     <span id="depr-total-amount" class="fs-2 fw-bolder text-danger">Rp0</span>
                                 </div>
                             </div>
+                            <div class="card-toolbar text-end">
+                                <div class="d-flex flex-column align-items-end">
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Depreciation per-Year</span>
+                                    <span id="depr-total-amount-year" class="fs-2 fw-bolder text-danger">Rp0</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body pt-3 pb-7">
                             <div id="chart-depr-total" style="width: 100%; height: 340px;"></div>
@@ -384,6 +364,12 @@
                                 <div class="d-flex flex-column align-items-end">
                                     <span class="text-gray-500 fw-semibold fs-8">Total NBV</span>
                                     <span id="depr-total-nbv" class="fs-2 fw-bolder text-success">Rp0</span>
+                                </div>
+                            </div>
+                            <div class="card-toolbar text-end">
+                                <div class="d-flex flex-column align-items-end">
+                                    <span class="text-gray-500 fw-semibold fs-8">Total NBV per-Year</span>
+                                    <span id="depr-total-nbv-year" class="fs-2 fw-bolder text-success">Rp0</span>
                                 </div>
                             </div>
                         </div>
@@ -436,13 +422,15 @@
             function getFilters() {
                 const p = new URLSearchParams(window.location.search);
                 const pick = k => (p.get(k) ?? '').trim();
+
                 const f = {
-                    year: pick('year') || (new Date().getFullYear()),
-                    month: pick('month'),
+                    from: pick('from'),
+                    to: pick('to'),
                     owner: pick('owner'),
                     location: pick('location'),
                     asset_class: pick('asset_class'),
                 };
+
                 Object.keys(f).forEach(k => {
                     if (f[k] === '') delete f[k];
                 });
@@ -488,14 +476,15 @@
             // —— Apply & Reset
             $('#btn-apply').on('click', function() {
                 const params = new URLSearchParams();
-                const year = $('#f-year').val();
-                const month = $('#f-month').val();
+
+                const from = $('#f-from').val();
+                const to = $('#f-to').val();
                 const owner = $('#f-owner').val();
                 const loc = $('#f-location').val();
                 const cls = $('#f-asset-class').val();
 
-                if (year) params.set('year', year);
-                if (month) params.set('month', month);
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
                 if (owner) params.set('owner', owner);
                 if (loc) params.set('location', loc);
                 if (cls) params.set('asset_class', cls);
@@ -504,6 +493,7 @@
                 const url = params.toString() ? `${base}?${params.toString()}` : base;
                 window.location.href = url;
             });
+
 
             $('#btn-reset').on('click', function() {
                 window.location.href = "{{ route('dashboard') }}";
@@ -556,19 +546,20 @@
                 const rows = res.months || [];
                 const totalQty = res.total_qty ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
                 const totalAmount = res.total_amount ?? rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-                const totalQtyYear = res.total_qty_year ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
-                const totalAmountYear = res.total_amount_year ?? rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-
+                const totalQtyRange = res.total_qty_range ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
+                const totalAmountRange = res.total_amount_range ?? rows.reduce((s, r) => s + Number(r.amount ||
+                    0), 0);
                 $('#acq-total-qty').text(totalQty);
-                $('#acq-total-qty-year').text(totalQtyYear);
+                $('#acq-total-qty-year').text(totalQtyRange);
                 $('#acq-total-amount').text(formatMoneyIDR(totalAmount));
-                $('#acq-total-amount-year').text(formatMoneyIDR(totalAmountYear));
+                $('#acq-total-amount-year').text(formatMoneyIDR(totalAmountRange));
 
                 const data = rows.map(r => {
                     const d = new Date(r.month);
                     return {
                         month: d.toLocaleDateString('id-ID', {
-                            month: 'short'
+                            month: 'short',
+                            year: '2-digit'
                         }),
                         qty: Number(r.qty || 0),
                         amount: Number(r.amount || 0)
@@ -670,14 +661,21 @@
                 const totalDepr = res.total_depr ?? rows.reduce((s, r) => s + Number(r.depr || 0), 0);
                 const latestNbv = res.total_nbv ?? (rows.length ? Number(rows[rows.length - 1].nbv || 0) : 0);
 
+                const totalDeprYear = res.total_depr_year ?? 0;
+                const totalNbvYear = res.total_nbv_year ?? 0;
+
                 $('#depr-total-amount').text(formatMoneyIDR(totalDepr));
                 $('#depr-total-nbv').text(formatMoneyIDR(latestNbv));
+
+                $('#depr-total-amount-year').text(formatMoneyIDR(totalDeprYear));
+                $('#depr-total-nbv-year').text(formatMoneyIDR(totalNbvYear));
 
                 const data = rows.map(r => {
                     const d = new Date(r.month);
                     return {
                         month: d.toLocaleDateString('id-ID', {
-                            month: 'short'
+                            month: 'short',
+                            year: '2-digit'
                         }),
                         depr: Number(r.depr || 0),
                         nbv: Number(r.nbv || 0)
@@ -687,6 +685,7 @@
                 renderDeprChart(data);
                 renderNbvChart(data);
             });
+
 
             function renderDeprChart(data) {
                 const root = am5.Root.new("chart-depr-total");

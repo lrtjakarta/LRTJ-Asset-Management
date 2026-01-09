@@ -339,7 +339,7 @@ class DisposalController extends Controller
                     }
                 }
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
                 }
                 $btns .= '</div>';
                 return $btns;
@@ -499,7 +499,7 @@ class DisposalController extends Controller
                     }
                 }
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-ds-delete" data-id="' . $t->uuid . '">Delete</button>';
                 }
                 $btns .= '</div>';
                 return $btns;

@@ -175,7 +175,7 @@ class AcquisitionController extends Controller
             ->addColumn('actions', function ($r) use ($canDelete) {
                 $id = e($r->uuid);
                 $btns = '<div class="btn-group btn-group-sm">';
-                if ($canDelete) $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
+                // if ($canDelete) $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
                 $btns .= '</div>';
                 return $btns;
             })
@@ -688,7 +688,7 @@ class AcquisitionController extends Controller
                 $id   = e($r->uuid);
                 $btns = '<div class="btn-group btn-group-sm">';
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-delete" data-id="' . $id . '">Delete</button>';
                 }
                 $btns .= '</div>';
                 return $btns;

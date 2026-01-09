@@ -97,7 +97,7 @@
                                 <th class="min-w-300px">Note</th>
                                 <th class="min-w-200px">Requester</th>
                                 <th class="min-w-200px">Created</th>
-                                <th class="min-w-150px">Actions</th>
+                                {{-- <th class="min-w-150px">Actions</th> --}}
                             </tr>
                         </thead>
                     </table>
@@ -277,13 +277,13 @@
                             return `${dateStr} ${timeStr}`;
                         }
                     },
-                    {
-                        data: 'actions',
-                        name: 'actions',
-                        orderable: false,
-                        searchable: false,
-                        defaultContent: ''
-                    },
+                    // {
+                    //     data: 'actions',
+                    //     name: 'actions',
+                    //     orderable: false,
+                    //     searchable: false,
+                    //     defaultContent: ''
+                    // },
                 ]
             });
             $('#btnFilter').on('click', function(e) {

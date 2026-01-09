@@ -285,17 +285,17 @@ class StockOpnameController extends Controller
                 // Files (keep your old behavior)
                 $files = [];
                 if (!empty($r->file_path)) {
-                    $url  = Storage::url($r->file_path);
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
                     $name = $r->file_name ?: 'Attachment';
                     $files[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->flow_file_path)) {
-                    $url  = Storage::url($r->flow_file_path);
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
                     $name = $r->flow_file_name ?: 'Signed Form';
                     $files[] = '<a class="btn btn-sm btn-light-success me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->ba_file_path)) {
-                    $url  = Storage::url($r->ba_file_path);
+                    $url  = url('storage/' . ltrim($r->ba_file_path, '/'));
                     $name = $r->ba_file_name ?: 'Berita Acara';
                     $files[] = '<a class="btn btn-sm btn-light-warning" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
@@ -524,17 +524,17 @@ class StockOpnameController extends Controller
                 // Build file links - show all uploaded files
                 $files = [];
                 if (!empty($r->file_path)) {
-                    $url = Storage::url($r->file_path);
+                    $url  = url('storage/' . ltrim($r->file_path, '/'));
                     $name = $r->file_name ?: 'Attachment';
                     $files[] = '<a class="btn btn-sm btn-light-primary me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->flow_file_path)) {
-                    $url = Storage::url($r->flow_file_path);
+                    $url  = url('storage/' . ltrim($r->flow_file_path, '/'));
                     $name = $r->flow_file_name ?: 'Signed Form';
                     $files[] = '<a class="btn btn-sm btn-light-success me-1" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }
                 if (!empty($r->ba_file_path)) {
-                    $url = Storage::url($r->ba_file_path);
+                    $url  = url('storage/' . ltrim($r->ba_file_path, '/'));
                     $name = $r->ba_file_name ?: 'Berita Acara';
                     $files[] = '<a class="btn btn-sm btn-light-warning" target="_blank" href="' . e($url) . '">' . e($name) . '</a>';
                 }

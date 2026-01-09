@@ -192,7 +192,7 @@ class TransferController extends Controller
                 }
 
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
                 }
 
                 $btns .= '</div>';
@@ -619,7 +619,7 @@ class TransferController extends Controller
                 }
 
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
                 }
 
                 $btns .= '</div>';

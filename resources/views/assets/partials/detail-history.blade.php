@@ -97,7 +97,7 @@
                             <th class="min-w-220px">Note</th>
                             <th class="min-w-140px">Requester</th>
                             <th class="min-w-180px">Created</th>
-                            <th class="min-w-140px">Actions</th>
+                            {{-- <th class="min-w-140px">Actions</th> --}}
                         </tr>
                     </thead>
                 </table>

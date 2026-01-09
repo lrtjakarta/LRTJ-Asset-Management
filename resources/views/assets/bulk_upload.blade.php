@@ -85,6 +85,7 @@
                                         <li>Accepted files: <strong>.xlsx, .xls, .csv</strong> (max 20 MB)</li>
                                         <li>Codes must exist in master tables (Status, Location, User Code, etc.)</li>
                                         <li>Dates use <em>YYYY-MM-DD</em></li>
+                                        <li><strong>Important! MAX ROW FOR UPLOAD IS ONLY 200! More than that will have risk of being RTO</strong></li>
                                     </ul>
                                 </div>
 

@@ -670,8 +670,8 @@
                                 `<button type="button" class="btn btn-light-success btn-approve" data-id="${id}">Approve</button>`;
                             const btnReject =
                                 `<button type="button" class="btn btn-light-warning btn-reject" data-id="${id}">Reject</button>`;
-                            const btnDelete =
-                                `<button type="button" class="btn btn-light-danger btn-delete" data-id="${id}">Delete</button>`;
+                            // const btnDelete = `<button type="button" class="btn btn-light-danger btn-delete" data-id="${id}">Delete</button>`;
+                            const btnDelete = '';
 
                             if (status === 'APR') {
                                 if (TR_PERMS.edit) {
