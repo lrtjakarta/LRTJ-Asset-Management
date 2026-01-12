@@ -24,15 +24,22 @@ Route::post('/ldap-login', [AuthLdapController::class, 'login'])->name('ldap.log
 
 Route::middleware('ldap.session')->group(function () {
     // DASHBOARD ROUTE
-    Route::get('/dashboard', [DashboardController::class, 'dashboard'])->name('dashboard');
-    Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
+    Route::get('/dashboard/monthly', [DashboardController::class, 'dashboard_monthly'])->name('dashboard.monthly');
+    Route::get('/dashboard/data/monthly', [DashboardController::class, 'data_monthly'])->name('dashboard.data.monthly');
     Route::get('/dashboard/acquisition-monthly', [DashboardController::class, 'acquisitionMonthly'])
         ->name('dashboard.acquisition.monthly');
     Route::get('/dashboard/depr-monthly', [DashboardController::class, 'deprMonthly'])
         ->name('dashboard.depr.monthly');
-    // routes/web.php
+
     Route::get('/dashboard/owner-status', [DashboardController::class, 'ownerStatus'])
         ->name('dashboard.owner.status');
+
+    Route::get('/dashboard/yearly', [DashboardController::class, 'dashboard_yearly'])->name('dashboard.yearly');
+    Route::get('/dashboard/data/yearly', [DashboardController::class, 'data_yearly'])->name('dashboard.data.yearly');
+    Route::get('/dashboard/acquisition/yearly', [DashboardController::class, 'acquisitionYearly'])
+        ->name('dashboard.acquisition.yearly');
+    Route::get('/dashboard/depr/yearly', [DashboardController::class, 'deprYearly'])
+        ->name('dashboard.depr.yearly');
 
 
     // MASTER DATA ROUTE

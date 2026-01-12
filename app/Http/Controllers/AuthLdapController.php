@@ -60,7 +60,7 @@ class AuthLdapController extends Controller
 
             RateLimiter::clear($key);
 
-            return redirect()->intended(route('dashboard'))
+            return redirect()->intended(route('dashboard.monthly'))
                 ->with('success', 'Welcome, admin!');
         }
 
@@ -74,7 +74,7 @@ class AuthLdapController extends Controller
             $request->session()->regenerate();
             RateLimiter::clear($key);
 
-            return redirect()->intended(route('dashboard'));
+            return redirect()->intended(route('dashboard.monthly'));
         }
 
         // --- 2) LDAP CONFIG --------------------------------------------------
@@ -116,7 +116,7 @@ class AuthLdapController extends Controller
 
             RateLimiter::clear($key);
 
-            return redirect()->intended(route('dashboard'));
+            return redirect()->intended(route('dashboard.monthly'));
         }
 
         // --- 4) Fallback: search DN then bind -------------------------------
@@ -149,7 +149,7 @@ class AuthLdapController extends Controller
 
             RateLimiter::clear($key);
 
-            return redirect()->route('dashboard');
+            return redirect()->route('dashboard.monthly');
         }
 
         // --- 5) Failed -------------------------------------------------------

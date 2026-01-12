@@ -17,24 +17,18 @@
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-fluid">
 
-            {{-- Filters --}}
+            {{-- Filters (YEARLY) --}}
             <div class="card mb-6">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-sm-6 col-md-3">
-                            <label class="form-label">From</label>
-                            @php
-                                $from = request('from') ?: now()->startOfYear()->toDateString();
-                            @endphp
-                            <input id="f-from" type="date" class="form-control" value="{{ $from }}">
-                        </div>
 
                         <div class="col-sm-6 col-md-3">
-                            <label class="form-label">To</label>
+                            <label class="form-label">Year</label>
                             @php
-                                $to = request('to') ?: now()->endOfYear()->toDateString();
+                                $year = (int) (request('year') ?: now()->year);
                             @endphp
-                            <input id="f-to" type="date" class="form-control" value="{{ $to }}">
+                            <input id="f-year" type="number" class="form-control" min="2000" max="2100"
+                                value="{{ $year }}">
                         </div>
 
                         <div class="col-sm-6 col-md-3">
@@ -53,6 +47,7 @@
                             <select id="f-asset-class" class="form-select"
                                 data-init="{{ request('asset_class') ?? '' }}"></select>
                         </div>
+
                     </div>
                 </div>
                 <div class="card-footer d-flex gap-2">
@@ -77,7 +72,6 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
-                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="movement" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -92,7 +86,6 @@
                                     <div class="fs-1 fw-bolder text-primary" id="mov-waiting">0</div>
                                 </div>
 
-                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="movement" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -107,7 +100,6 @@
                                     <div class="fs-1 fw-bolder text-danger" id="mov-rejected">0</div>
                                 </div>
 
-                                {{-- Total --}}
                                 <div class="d-flex align-items-center mt-2">
                                     <div class="symbol symbol-50px me-5">
                                         <span class="symbol-label bg-light-success">
@@ -122,7 +114,6 @@
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
 
@@ -140,7 +131,6 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
-                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="transfer-value" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -155,7 +145,6 @@
                                     <div class="fs-1 fw-bolder text-primary" id="trv-waiting">0</div>
                                 </div>
 
-                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="transfer-value" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -170,7 +159,6 @@
                                     <div class="fs-1 fw-bolder text-danger" id="trv-rejected">0</div>
                                 </div>
 
-                                {{-- Total --}}
                                 <div class="d-flex align-items-center dash-link">
                                     <div class="symbol symbol-50px me-5">
                                         <span class="symbol-label bg-light-success">
@@ -185,7 +173,6 @@
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
 
@@ -203,7 +190,6 @@
                         </div>
                         <div class="card-body pt-5">
                             <div class="d-flex flex-column gap-7">
-                                {{-- Waiting --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="disposal" data-status="APR">
                                     <div class="symbol symbol-50px me-5">
@@ -218,7 +204,6 @@
                                     <div class="fs-1 fw-bolder text-primary" id="dsp-waiting">0</div>
                                 </div>
 
-                                {{-- Rejected --}}
                                 <div class="d-flex align-items-center dash-link" style="cursor:pointer"
                                     data-target="disposal" data-status="REJ">
                                     <div class="symbol symbol-50px me-5">
@@ -233,7 +218,6 @@
                                     <div class="fs-1 fw-bolder text-danger" id="dsp-rejected">0</div>
                                 </div>
 
-                                {{-- Total --}}
                                 <div class="d-flex align-items-center dash-link">
                                     <div class="symbol symbol-50px me-5">
                                         <span class="symbol-label bg-light-success">
@@ -248,22 +232,21 @@
                                 </div>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
 
+
             {{-- Acquisition overview --}}
             <div class="row g-5 g-xl-8 mb-5 mb-xl-8">
 
-                {{-- Quantity (chart + total in header) --}}
                 <div class="col-xl-6">
                     <div class="card card-flush h-xl-100 shadow-sm">
                         <div class="card-header pt-7 pb-3 border-0">
                             <h3 class="card-title align-items-start flex-column">
                                 <span class="card-label fw-bold text-gray-800 fs-3">Asset Quantity</span>
                                 <span class="text-gray-500 mt-1 fw-semibold fs-7">
-                                    Total asset count per month (capitalization date)
+                                    Total asset <br>count per year <br>(capitalization date)
                                 </span>
                             </h3>
                             <div class="card-toolbar text-end">
@@ -274,7 +257,7 @@
                             </div>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total per-Year</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Selected Year</span>
                                     <span id="acq-total-qty-year" class="fs-2 fw-bolder text-gray-900">0</span>
                                 </div>
                             </div>
@@ -286,14 +269,13 @@
                     </div>
                 </div>
 
-                {{-- Acquisition value (chart + total in header) --}}
                 <div class="col-xl-6">
                     <div class="card card-flush h-xl-100 shadow-sm">
                         <div class="card-header pt-7 pb-3 border-0">
                             <h3 class="card-title align-items-start flex-column">
                                 <span class="card-label fw-bold text-gray-800 fs-3">Acquisition Value</span>
                                 <span class="text-gray-500 mt-1 fw-semibold fs-7">
-                                    Total acquisition value <br>per month (capitalization date)
+                                    Total acquisition <br>value per year <br>(capitalization date)
                                 </span>
                             </h3>
                             <div class="card-toolbar text-end">
@@ -304,7 +286,7 @@
                             </div>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total Acquisition per-Year</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Selected Year</span>
                                     <span id="acq-total-amount-year" class="fs-2 fw-bolder text-success">Rp0</span>
                                 </div>
                             </div>
@@ -321,26 +303,25 @@
             {{-- Depreciation & NBV overview --}}
             <div class="row g-5 g-xl-8 mb-5 mb-xl-8">
 
-                {{-- Total Depreciation (card + chart) --}}
                 <div class="col-xl-6">
                     <div class="card card-flush h-xl-100 shadow-sm">
                         <div class="card-header pt-7 pb-3 border-0">
                             <h3 class="card-title align-items-start flex-column">
                                 <span class="card-label fw-bold text-gray-800 fs-3">Accumulated Depreciation</span>
                                 <span class="text-gray-500 mt-1 fw-semibold fs-7">
-                                    Total depreciation per month
+                                    Total depreciation <br> per year (snapshot end of year)
                                 </span>
                             </h3>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total Depreciation</span>
-                                    <span id="depr-total-amount" class="fs-2 fw-bolder text-danger">Rp0</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Depreciation <br>(All)</span>
+                                    <span id="depr-total-amount-all" class="fs-2 fw-bolder text-danger">Rp0</span>
                                 </div>
                             </div>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total Depreciation per-Year</span>
-                                    <span id="depr-total-amount-year" class="fs-2 fw-bolder text-danger">Rp0</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total Depreciation <br>(Selected Year)</span>
+                                    <span id="depr-total-amount" class="fs-2 fw-bolder text-danger">Rp0</span>
                                 </div>
                             </div>
                         </div>
@@ -350,26 +331,26 @@
                     </div>
                 </div>
 
-                {{-- Total Net Book Value (card + chart) --}}
                 <div class="col-xl-6">
                     <div class="card card-flush h-xl-100 shadow-sm">
                         <div class="card-header pt-7 pb-3 border-0">
                             <h3 class="card-title align-items-start flex-column">
                                 <span class="card-label fw-bold text-gray-800 fs-3">Asset Net Book Value</span>
                                 <span class="text-gray-500 mt-1 fw-semibold fs-7">
-                                    Total NBV per month
+                                    Total NBV <br>per year (snapshot end of year)
                                 </span>
                             </h3>
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total NBV</span>
-                                    <span id="depr-total-nbv" class="fs-2 fw-bolder text-success">Rp0</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total NBV <br>(All)</span>
+                                    <span id="depr-total-nbv-all" class="fs-2 fw-bolder text-success">Rp0</span>
                                 </div>
                             </div>
+
                             <div class="card-toolbar text-end">
                                 <div class="d-flex flex-column align-items-end">
-                                    <span class="text-gray-500 fw-semibold fs-8">Total NBV per-Year</span>
-                                    <span id="depr-total-nbv-year" class="fs-2 fw-bolder text-success">Rp0</span>
+                                    <span class="text-gray-500 fw-semibold fs-8">Total NBV <br>(Selected Year)</span>
+                                    <span id="depr-total-nbv" class="fs-2 fw-bolder text-success">Rp0</span>
                                 </div>
                             </div>
                         </div>
@@ -406,26 +387,25 @@
     <script>
         (function() {
             const R = {
-                data: "{{ route('dashboard.data.monthly') }}",
+                data: "{{ route('dashboard.data.yearly') }}",
                 movementIndex: "{{ route('transaction.transfer.index') }}",
                 transferValueIndex: "{{ route('depreciation.transfer-requests.index') }}",
                 disposalIndex: "{{ route('transaction.disposal.index') }}",
-                acqMonthly: "{{ route('dashboard.acquisition.monthly') }}",
-                deprMonthly: "{{ route('dashboard.depr.monthly') }}",
+                acqYearly: "{{ route('dashboard.acquisition.yearly') }}", // now returns YEARLY
+                deprYearly: "{{ route('dashboard.depr.yearly') }}", // now returns YEARLY
                 ownerStatus: "{{ route('dashboard.owner.status') }}",
                 usercodeOptions: "{{ route('master.user_code.options') }}",
                 locationOptions: "{{ route('master.location.options') }}",
-                assetClassOptions: "{{ route('master.asset_class.options') }}", // make sure this route exists
+                assetClassOptions: "{{ route('master.asset_class.options') }}",
             };
 
-            // —— URL filters
+            // —— URL filters (NO from/to)
             function getFilters() {
                 const p = new URLSearchParams(window.location.search);
                 const pick = k => (p.get(k) ?? '').trim();
 
                 const f = {
-                    from: pick('from'),
-                    to: pick('to'),
+                    year: pick('year'),
                     owner: pick('owner'),
                     location: pick('location'),
                     asset_class: pick('asset_class'),
@@ -468,38 +448,34 @@
             initAjaxSelect($('#f-location'), R.locationOptions, 'All Location');
             initAjaxSelect($('#f-asset-class'), R.assetClassOptions, 'All Asset Class');
 
-            // Preload selected codes from URL (label = code; avoids extra lookup)
             preloadSelectValue($('#f-owner'), F.owner || '');
             preloadSelectValue($('#f-location'), F.location || '');
             preloadSelectValue($('#f-asset-class'), F.asset_class || '');
 
-            // —— Apply & Reset
+            // —— Apply & Reset (NO from/to)
             $('#btn-apply').on('click', function() {
                 const params = new URLSearchParams();
 
-                const from = $('#f-from').val();
-                const to = $('#f-to').val();
+                const year = $('#f-year').val();
                 const owner = $('#f-owner').val();
                 const loc = $('#f-location').val();
                 const cls = $('#f-asset-class').val();
 
-                if (from) params.set('from', from);
-                if (to) params.set('to', to);
+                if (year) params.set('year', year);
                 if (owner) params.set('owner', owner);
                 if (loc) params.set('location', loc);
                 if (cls) params.set('asset_class', cls);
 
-                const base = "{{ route('dashboard.monthly') }}";
+                const base = "{{ route('dashboard.yearly') }}";
                 const url = params.toString() ? `${base}?${params.toString()}` : base;
                 window.location.href = url;
             });
 
-
             $('#btn-reset').on('click', function() {
-                window.location.href = "{{ route('dashboard.monthly') }}";
+                window.location.href = "{{ route('dashboard.yearly') }}";
             });
 
-            // —— Top cards
+            // —— Top cards (filtered by YEAR)
             $.getJSON(R.data, F).done(function(res) {
                 const mv = res.movement || {};
                 const trv = res.transfer_value || {};
@@ -512,9 +488,9 @@
                 $('#dsp-waiting').text(dsp.waiting ?? 0);
                 $('#dsp-rejected').text(dsp.rejected ?? 0);
 
-                $('#mov-total').text(mv.total ?? ((mv.waiting || 0) + (mv.rejected || 0)));
-                $('#trv-total').text(trv.total ?? ((trv.waiting || 0) + (trv.rejected || 0)));
-                $('#dsp-total').text(dsp.total ?? ((dsp.waiting || 0) + (dsp.rejected || 0)));
+                $('#mov-total').text(mv.total ?? 0);
+                $('#trv-total').text(trv.total ?? 0);
+                $('#dsp-total').text(dsp.total ?? 0);
             });
 
             // —— Card links keep status but preserve current filters
@@ -541,30 +517,19 @@
                 }).format(Number(v || 0));
             }
 
-            // —— Acquisition charts
-            $.getJSON(R.acqMonthly, F).done(function(res) {
-                const rows = res.months || [];
-                const totalQty = res.total_qty ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
-                const totalAmount = res.total_amount ?? rows.reduce((s, r) => s + Number(r.amount || 0), 0);
-                const totalQtyRange = res.total_qty_range ?? rows.reduce((s, r) => s + Number(r.qty || 0), 0);
-                const totalAmountRange = res.total_amount_range ?? rows.reduce((s, r) => s + Number(r.amount ||
-                    0), 0);
-                $('#acq-total-qty').text(totalQty);
-                $('#acq-total-qty-year').text(totalQtyRange);
-                $('#acq-total-amount').text(formatMoneyIDR(totalAmount));
-                $('#acq-total-amount-year').text(formatMoneyIDR(totalAmountRange));
+            // —— Acquisition charts (YEARLY)
+            $.getJSON(R.acqYearly, F).done(function(res) {
+                const rows = res.years || [];
+                $('#acq-total-qty').text(res.total_qty ?? 0);
+                $('#acq-total-qty-year').text(res.total_qty_year ?? 0);
+                $('#acq-total-amount').text(formatMoneyIDR(res.total_amount ?? 0));
+                $('#acq-total-amount-year').text(formatMoneyIDR(res.total_amount_year ?? 0));
 
-                const data = rows.map(r => {
-                    const d = new Date(r.month);
-                    return {
-                        month: d.toLocaleDateString('id-ID', {
-                            month: 'short',
-                            year: '2-digit'
-                        }),
-                        qty: Number(r.qty || 0),
-                        amount: Number(r.amount || 0)
-                    };
-                });
+                const data = rows.map(r => ({
+                    year: String(r.year),
+                    qty: Number(r.qty || 0),
+                    amount: Number(r.amount || 0)
+                }));
 
                 renderQtyChart(data);
                 renderAmountChart(data);
@@ -576,9 +541,10 @@
                 const chart = root.container.children.push(am5xy.XYChart.new(root, {
                     layout: root.verticalLayout
                 }));
+
                 const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root, {
                     maxDeviation: 0.3,
-                    categoryField: "month",
+                    categoryField: "year",
                     renderer: am5xy.AxisRendererX.new(root, {
                         minGridDistance: 30
                     })
@@ -586,18 +552,21 @@
                 const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
                     renderer: am5xy.AxisRendererY.new(root, {})
                 }));
+
                 const series = chart.series.push(am5xy.ColumnSeries.new(root, {
                     name: "Quantity",
                     xAxis,
                     yAxis,
                     valueYField: "qty",
-                    categoryXField: "month",
+                    categoryXField: "year",
                     tooltip: am5.Tooltip.new(root, {
                         labelText: "{categoryX}: {valueY}"
                     })
                 }));
+
                 xAxis.data.setAll(data);
                 series.data.setAll(data);
+
                 series.columns.template.setAll({
                     cornerRadiusTL: 4,
                     cornerRadiusTR: 4
@@ -605,6 +574,7 @@
                 chart.set("cursor", am5xy.XYCursor.new(root, {}));
                 series.appear(800);
                 chart.appear(800, 80);
+
                 am5plugins_exporting.Exporting.new(root, {
                     menu: am5plugins_exporting.ExportingMenu.new(root, {}),
                     dataSource: data
@@ -617,8 +587,9 @@
                 const chart = root.container.children.push(am5xy.XYChart.new(root, {
                     layout: root.verticalLayout
                 }));
+
                 const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root, {
-                    categoryField: "month",
+                    categoryField: "year",
                     renderer: am5xy.AxisRendererX.new(root, {
                         minGridDistance: 30
                     })
@@ -626,16 +597,18 @@
                 const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
                     renderer: am5xy.AxisRendererY.new(root, {})
                 }));
+
                 const series = chart.series.push(am5xy.LineSeries.new(root, {
                     name: "Acquisition Value",
                     xAxis,
                     yAxis,
                     valueYField: "amount",
-                    categoryXField: "month",
+                    categoryXField: "year",
                     tooltip: am5.Tooltip.new(root, {
                         labelText: "{categoryX}: {valueY.formatNumber('#,###.')}"
                     })
                 }));
+
                 series.strokes.template.setAll({
                     strokeWidth: 2
                 });
@@ -644,48 +617,41 @@
                         radius: 4
                     })
                 }));
+
                 xAxis.data.setAll(data);
                 series.data.setAll(data);
+
                 chart.set("cursor", am5xy.XYCursor.new(root, {}));
                 series.appear(800);
                 chart.appear(800, 80);
+
                 am5plugins_exporting.Exporting.new(root, {
                     menu: am5plugins_exporting.ExportingMenu.new(root, {}),
                     dataSource: data
                 });
             }
 
-            // —— Depreciation & NBV charts
-            $.getJSON(R.deprMonthly, F).done(function(res) {
-                const rows = res.months || [];
-                const totalDepr = res.total_depr ?? rows.reduce((s, r) => s + Number(r.depr || 0), 0);
-                const latestNbv = res.total_nbv ?? (rows.length ? Number(rows[rows.length - 1].nbv || 0) : 0);
+            // —— Depreciation & NBV charts (YEARLY)
+            $.getJSON(R.deprYearly, F).done(function(res) {
+                const rows = res.years || [];
 
-                const totalDeprYear = res.total_depr_year ?? 0;
-                const totalNbvYear = res.total_nbv_year ?? 0;
+                $('#depr-total-amount-all').text(formatMoneyIDR(res.total_depr_all ?? 0));
+                $('#depr-total-nbv-all').text(formatMoneyIDR(res.total_nbv_all ?? 0));
+                $('#depr-total-amount').text(formatMoneyIDR(res.total_depr_year ?? 0));
+                $('#depr-total-nbv').text(formatMoneyIDR(res.total_nbv_year ?? 0));
 
-                $('#depr-total-amount').text(formatMoneyIDR(totalDepr));
-                $('#depr-total-nbv').text(formatMoneyIDR(latestNbv));
+                const dataDepr = rows.map(r => ({
+                    year: String(r.year),
+                    depr: Number(r.depr || 0)
+                }));
+                const dataNbv = rows.map(r => ({
+                    year: String(r.year),
+                    nbv: Number(r.nbv || 0)
+                }));
 
-                $('#depr-total-amount-year').text(formatMoneyIDR(totalDeprYear));
-                $('#depr-total-nbv-year').text(formatMoneyIDR(totalNbvYear));
-
-                const data = rows.map(r => {
-                    const d = new Date(r.month);
-                    return {
-                        month: d.toLocaleDateString('id-ID', {
-                            month: 'short',
-                            year: '2-digit'
-                        }),
-                        depr: Number(r.depr || 0),
-                        nbv: Number(r.nbv || 0)
-                    };
-                });
-
-                renderDeprChart(data);
-                renderNbvChart(data);
+                renderDeprChart(dataDepr);
+                renderNbvChart(dataNbv);
             });
-
 
             function renderDeprChart(data) {
                 const root = am5.Root.new("chart-depr-total");
@@ -693,8 +659,9 @@
                 const chart = root.container.children.push(am5xy.XYChart.new(root, {
                     layout: root.verticalLayout
                 }));
+
                 const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root, {
-                    categoryField: "month",
+                    categoryField: "year",
                     renderer: am5xy.AxisRendererX.new(root, {
                         minGridDistance: 30
                     })
@@ -702,16 +669,18 @@
                 const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
                     renderer: am5xy.AxisRendererY.new(root, {})
                 }));
+
                 const series = chart.series.push(am5xy.LineSeries.new(root, {
                     name: "Depreciation",
                     xAxis,
                     yAxis,
                     valueYField: "depr",
-                    categoryXField: "month",
+                    categoryXField: "year",
                     tooltip: am5.Tooltip.new(root, {
                         labelText: "{categoryX}: {valueY.formatNumber('#,###.')}"
                     })
                 }));
+
                 series.strokes.template.setAll({
                     strokeWidth: 2
                 });
@@ -720,11 +689,14 @@
                         radius: 4
                     })
                 }));
+
                 xAxis.data.setAll(data);
                 series.data.setAll(data);
+
                 chart.set("cursor", am5xy.XYCursor.new(root, {}));
                 series.appear(800);
                 chart.appear(800, 80);
+
                 am5plugins_exporting.Exporting.new(root, {
                     menu: am5plugins_exporting.ExportingMenu.new(root, {}),
                     dataSource: data
@@ -737,8 +709,9 @@
                 const chart = root.container.children.push(am5xy.XYChart.new(root, {
                     layout: root.verticalLayout
                 }));
+
                 const xAxis = chart.xAxes.push(am5xy.CategoryAxis.new(root, {
-                    categoryField: "month",
+                    categoryField: "year",
                     renderer: am5xy.AxisRendererX.new(root, {
                         minGridDistance: 30
                     })
@@ -746,16 +719,18 @@
                 const yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
                     renderer: am5xy.AxisRendererY.new(root, {})
                 }));
+
                 const series = chart.series.push(am5xy.LineSeries.new(root, {
                     name: "Net Book Value",
                     xAxis,
                     yAxis,
                     valueYField: "nbv",
-                    categoryXField: "month",
+                    categoryXField: "year",
                     tooltip: am5.Tooltip.new(root, {
                         labelText: "{categoryX}: {valueY.formatNumber('#,###.')}"
                     })
                 }));
+
                 series.strokes.template.setAll({
                     strokeWidth: 2
                 });
@@ -764,18 +739,21 @@
                         radius: 4
                     })
                 }));
+
                 xAxis.data.setAll(data);
                 series.data.setAll(data);
+
                 chart.set("cursor", am5xy.XYCursor.new(root, {}));
                 series.appear(800);
                 chart.appear(800, 80);
+
                 am5plugins_exporting.Exporting.new(root, {
                     menu: am5plugins_exporting.ExportingMenu.new(root, {}),
                     dataSource: data
                 });
             }
 
-            // —— Owner × Status stacked (counts)
+            // —— Owner × Status stacked (unchanged)
             $.getJSON(R.ownerStatus, F).done(res => {
                 renderOwnerStatus(res.data || []);
             });
@@ -813,10 +791,10 @@
                 const seriesList = [];
 
                 const STATUS_COLORS = {
-                    ope: am5.color(0x50CD89), // green
-                    idl: am5.color(0xFFC700), // yellow
-                    rpr: am5.color(0xF88645), // orange
-                    dis: am5.color(0xF1416C), // red
+                    ope: am5.color(0x50CD89),
+                    idl: am5.color(0xFFC700),
+                    rpr: am5.color(0xF88645),
+                    dis: am5.color(0xF1416C),
                 };
                 const STATUS_SERIES = [{
                         key: 'ope',
