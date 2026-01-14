@@ -72,7 +72,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/files/{uuid}/download', [StorageApi::class, 'downloadLegacy'])
             ->name('files.download');
 
-        Route::get('/rfid/lookup', [RfidApiController::class, 'lookupByEpc']);
+        Route::post('/rfid/lookup', [RfidApiController::class, 'lookupByEpc']);
 
         // LOGOUT
         Route::post('logout', [AuthController::class, 'logout']);
