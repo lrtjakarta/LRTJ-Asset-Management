@@ -11,11 +11,7 @@ class SatoRfidPrinter
     public function printByAssetUuids(array $assetUuids): void
     {
         $assets = Assets::query()
-            ->with([
-                'rfids',
-                'location',
-                'assignment.owner',
-            ])
+            ->with(['rfids', 'assignment'])
             ->whereIn('uuid', $assetUuids)
             ->get();
         if ($assets->isEmpty()) throw new \RuntimeException('No assets found.');
@@ -73,7 +69,6 @@ class SatoRfidPrinter
         $assetCode = (string) ($asset->asset_code ?? '');
         $desc      = mb_substr((string) ($asset->description ?? ''), 0, 40);
 
-        // ✅ hanya kode (aman)
         $ownerCode    = (string) ($asset->assignment?->asset_owner ?? ''); // contoh: AKP
         $locationCode = (string) ($asset->kode_location ?? '');           // contoh: L001
 
