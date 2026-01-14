@@ -26,6 +26,7 @@ class SatoRfidPrinter
                 ? $asset->rfids->first()
                 : $asset->rfids;
 
+            // kalau belum punya tag, generate dari UUID (32 hex)
             if (! $rfid) {
                 $epc = strtoupper(str_replace('-', '', (string) $asset->uuid));
                 $epc = preg_replace('/[^0-9A-F]/', '', $epc);
@@ -47,58 +48,78 @@ class SatoRfidPrinter
 
     protected function buildLabelCommand(Assets $asset, AssetsRfid $rfid): string
     {
-        $esc  = "\x1B";
-        $crlf = "\r\n";
+        $esc = "\x1B";
+        $stx = "\x02";
+        $etx = "\x03";
 
-        // EPC 32 HEX
+        // ===== ambil EPC 32 HEX =====
         $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $rfid->epc));
         $epc = substr(str_pad($epc, 32, '0', STR_PAD_LEFT), -32);
 
+        // ===== data =====
+        $uuid      = strtolower((string) $asset->uuid);
         $assetCode = (string) ($asset->asset_code ?? '');
         $desc      = mb_substr((string) ($asset->description ?? ''), 0, 40);
-        $location  = mb_substr((string) ($asset->location_name ?? ''), 0, 40); // sesuaikan field kamu
+        $location  = mb_substr((string) ($asset->location_name ?? ''), 0, 40);
 
-        // ===== START JOB =====
-        $cmd  = $esc . "A";
+        // ===== font settings (ikut NiceLabel) =====
+        $ttf = 'SATO0.ttf';
+        $smallH = '024'; // tinggi font
+        $smallW = '028'; // lebar font
 
-        // (Optional) set print mode / charset (kalau mau persis nice label)
-        // $cmd .= $esc . "CS6"; // kadang dipakai untuk charset
+        // kalau mau sebagian dibuat lebih gede, kamu bisa ganti misal:
+        // $bigH = '038'; $bigW = '042';
 
-        // ===== RFID WRITE =====
-        // CL4NX style: IP0e:h,epc:<HEX>,fsw:1;
-        // fsw:1 -> force single write (umum dipakai)
-        $cmd .= $esc . "IP0e:h,epc:" . $epc . ",fsw:1;" . $crlf;
+        // helper: TTF text (sesuai PRN: %0 + H + V + P02 + RH0,ttf,0,h,w,text)
+        $ttfText = function (string $H, string $V, string $text, string $h = null, string $w = null) use ($esc, $ttf, $smallH, $smallW) {
+            $h = $h ?? $smallH;
+            $w = $w ?? $smallW;
 
-        // ===== QR (optional) =====
-        // Kalau mau QR UUID seperti nice label (DN0036,<uuid> + 2D30...)
-        // NOTE: Ini contoh; posisi & ukuran silakan tweak.
-        $uuid = strtolower((string) $asset->uuid);
-        $cmd .= $esc . "H0036" . $esc . "V00026";
+            // urutan mengikuti PRN:
+            // ESC %0
+            // ESC Hxxxx
+            // ESC Vyyyyy
+            // ESC P02
+            // ESC RH0,SATO0.ttf,0,hhh,www,<text>
+            return
+                $esc . "%0" .
+                $esc . "H{$H}" .
+                $esc . "V{$V}" .
+                $esc . "P02" .
+                $esc . "RH0,{$ttf},0,{$h},{$w}," . $text;
+        };
+
+        // ===== START LABEL (ikut header PRN) =====
+        $cmd = '';
+        $cmd .= $stx;
+        $cmd .= $esc . "A";
+        $cmd .= $esc . "A3V+00000H+0000"; // <<< ORIENTASI (yang “hijau”)
+        $cmd .= $esc . "CS6";
+        $cmd .= $esc . "#F5";
+        $cmd .= $esc . "PS";              // opsional, NiceLabel pakai
+        $cmd .= $esc . "WKLabel";          // opsional, NiceLabel pakai
+
+        // ===== QR (ikut PRN: H0599 V00026) =====
+        $cmd .= $esc . "%0";
+        $cmd .= $esc . "H0599" . $esc . "V00026";
         $cmd .= $esc . "2D30,L,06,1,0";
-        $cmd .= $esc . "DN0036," . $uuid . $crlf;
+        $cmd .= $esc . "DN0036," . $uuid;
 
-        // ===== TEXT PRINT =====
-        // Asset code (lebih besar)
-        $cmd .= $esc . "H0036" . $esc . "V00144" . $esc . "L0202";
-        $cmd .= $esc . "X" . $assetCode . $crlf;
+        // ===== TEXT (ikut PRN positions) =====
+        $cmd .= $ttfText('0036', '00113', $assetCode);
+        $cmd .= $ttfText('0036', '00144', $desc);
+        // kalau kamu punya owner, tinggal ganti sumber datanya
+        $cmd .= $ttfText('0036', '00177', 'Owner Asset: ' . (($asset->owner_name ?? '') ?: ''));
+        $cmd .= $ttfText('0036', '00206', 'Lokasi: ' . $location);
+        $cmd .= $ttfText('0036', '00237', 'RFID: ' . $epc);
 
-        // Desc
-        $cmd .= $esc . "H0036" . $esc . "V00175" . $esc . "L0101";
-        $cmd .= $esc . "X" . $desc . $crlf;
-
-        // Location
-        $cmd .= $esc . "H0036" . $esc . "V00206" . $esc . "L0101";
-        $cmd .= $esc . "X" . "Lokasi: " . $location . $crlf;
-
-        // RFID text (buat verifikasi visual)
-        $cmd .= $esc . "H0036" . $esc . "V00237" . $esc . "L0101";
-        $cmd .= $esc . "X" . "RFID: " . $epc . $crlf;
-
-        // Qty
+        // ===== QTY + END =====
         $cmd .= $esc . "Q1";
-
-        // END JOB
         $cmd .= $esc . "Z";
+        $cmd .= $etx;
+
+        // (opsional) debug ke log biar gampang compare dgn NiceLabel
+        // Log::info('SBPL bytes len=' . strlen($cmd));
 
         return $cmd;
     }
@@ -121,7 +142,6 @@ class SatoRfidPrinter
 
         stream_set_timeout($fp, $timeout);
 
-        // write all bytes (anti kepotong)
         $len = strlen($data);
         $off = 0;
         while ($off < $len) {
