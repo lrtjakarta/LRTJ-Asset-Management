@@ -47,7 +47,7 @@
                     @endphp
 
                     <div class="d-flex gap-2">
-                        <button id="btnApply" class="btn btn-danger btn-sm">Apply</button>
+                        <button id="btnApply" class="btn btn-danger btn-sm d-none">Apply</button>
                         <a href="{{ route('depreciation.period.index') }}" class="btn btn-light-danger btn-sm">Reset</a>
                         @if (!empty($isLedgerEmpty) && $isLedgerEmpty)
                             @canAction('DEPRECIATION','C')
