@@ -306,12 +306,19 @@ Route::middleware('ldap.session')->group(function () {
             Route::get('/policies',  [DepreciationController::class, 'dtPolicies'])->name('dt.policies');
             // AJAX SELECT 2
             Route::get('/assets/search', [DepreciationController::class, 'assetSearch'])->name('assets.search');
+            Route::get('/period',    [DepreciationController::class, 'periodIndex'])->name('period.index');
+            Route::get('/period/dt', [DepreciationController::class, 'dtPeriod'])->name('dt.period');
         });
 
         Route::middleware('role.action:DEPRECIATION,C,U')->group(function () {
             // PROCESSING
             Route::post('/run-month', [DepreciationController::class, 'runMonth'])->name('run.month');
+            
             Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
+            Route::post('/init-first-run', [DepreciationController::class, 'initFirstRun'])->name('init.first-run');
+            Route::post('/rollback-year', [DepreciationController::class, 'rollbackYear'])->name('rollback.year');
+            Route::get('/year/status', [DepreciationController::class, 'yearStatus'])->name('year.status');
+
             Route::post('/transfer/adjustment-value',         [DepreciationController::class, 'recordAdjustmentValue'])->name('mv.adj.value');
             Route::post('/transfer/adjustment-depreciation',  [DepreciationController::class, 'recordAdjustmentDepreciation'])->name('mv.adj.depr');
         });
