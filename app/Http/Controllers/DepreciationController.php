@@ -352,7 +352,6 @@ class DepreciationController extends Controller
             'nowYear' => now()->year,
         ]);
     }
-
     public function dtPeriod(Request $r)
     {
         if (! $this->canReadDepr()) {
@@ -366,7 +365,6 @@ class DepreciationController extends Controller
 
         $currentMonth = now()->startOfMonth()->toDateString(); // YYYY-MM-01
 
-        // Aggregation from ledger
         $agg = DB::table('assets_depr_ledger_monthly as m')
             ->selectRaw("
             date_trunc('month', m.period)::date as period,
@@ -377,19 +375,13 @@ class DepreciationController extends Controller
             ->whereBetween('m.period', [$start, $end])
             ->groupByRaw("date_trunc('month', m.period)::date");
 
-        // Month series
         $monthsSql = "(select generate_series(?::date, ?::date, interval '1 month')::date as period) as gs";
 
         $q = DB::query()
             ->fromRaw($monthsSql, [$start, $end])
-            ->leftJoinSub($agg, 'a', function ($j) {
-                $j->on('a.period', '=', 'gs.period');
-            })
-            // current month closing (processed or not)
+            ->leftJoinSub($agg, 'a', fn($j) => $j->on('a.period', '=', 'gs.period'))
             ->leftJoin('assets_depr_month_closings as c', 'c.period', '=', 'gs.period')
-            // previous month closing (for gating)
             ->leftJoin('assets_depr_month_closings as pc', function ($j) {
-                // pc.period = (gs.period - 1 month)
                 $j->on('pc.period', '=', DB::raw("(gs.period - interval '1 month')::date"));
             })
             ->selectRaw("
@@ -400,30 +392,31 @@ class DepreciationController extends Controller
 
             (c.period IS NOT NULL) as is_processed,
             (pc.period IS NOT NULL) as prev_processed,
-            (gs.period = ?::date) as is_current
-        ", [$currentMonth])
+
+            (gs.period = ?::date) as is_current,
+            (gs.period <= ?::date) as is_past_or_current
+        ", [$currentMonth, $currentMonth])
             ->orderBy('gs.period', 'asc');
 
         return DataTables::of($q)
             ->addColumn('period_ym', fn($row) => Carbon::parse($row->period)->format('Y-m'))
             ->addColumn('depr_code_display', function ($row) {
-                // Always show deterministic code per month, suffix always 0001
                 $d = Carbon::parse($row->period);
                 $generated = 'DEP' . $d->format('ym') . '0001';
                 return $row->depr_code ?: $generated;
             })
             ->addColumn('can_click', function ($row) {
-                // RULE: $isProcessed || ($isCurrent && $prevProcessed)
-                $isProcessed    = (bool) $row->is_processed;
-                $isCurrent      = (bool) $row->is_current;
-                $prevProcessed  = (bool) $row->prev_processed;
+                $isProcessed      = (bool) $row->is_processed;
+                $prevProcessed    = (bool) $row->prev_processed;
+                $pastOrCurrent    = (bool) $row->is_past_or_current;
 
-                return $isProcessed || ($isCurrent && $prevProcessed);
+                // ✅ boleh click kalau:
+                // - sudah processed, atau
+                // - bulan itu tidak future (<= current month) DAN prev month sudah processed
+                return $isProcessed || ($pastOrCurrent && $prevProcessed);
             })
             ->toJson();
     }
-
-
 
     public function initFirstRun(Request $request)
     {
