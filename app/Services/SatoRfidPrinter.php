@@ -89,6 +89,14 @@ class SatoRfidPrinter
             . $esc . "PS"
             . $esc . "WKLabel";
 
+        // LRT JAKARTA
+        $header = "LRT JAKARTA";
+
+        $cmd .= $esc . "%0"
+            .  $esc . "H0036"
+            .  $esc . "V00060"
+            .  $esc . "P02"
+            .  $esc . "RH0,SATO0.ttf,0,040,040," . $header;
         // QR
         $cmd .= $esc . "%0"
             . $esc . "H0599"
