@@ -341,8 +341,15 @@ class DepreciationController extends Controller
             ->selectRaw('MAX(EXTRACT(YEAR FROM av.capitalization_date))::int as max_year')
             ->first();
 
-        $minYear = (int)($range->min_year ?? now()->year);
-        $maxYear = (int)($range->max_year ?? now()->year);
+        $nowYear = (int) now()->year;
+
+        // range from data (cap_date)
+        $dataMin = $range->min_year !== null ? (int) $range->min_year : $nowYear;
+        $dataMax = $range->max_year !== null ? (int) $range->max_year : $nowYear;
+
+        // always include current year in dropdown
+        $minYear = min($dataMin, $nowYear);
+        $maxYear = max($dataMax, $nowYear);
 
         // year yang dipilih user, fallback ke year terbaru yang ada data (atau current year)
         $year = (int) ($r->input('year') ?: $maxYear);
