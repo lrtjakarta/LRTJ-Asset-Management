@@ -417,7 +417,8 @@
                     delay: 150,
                     data: params => ({
                         q: params.term || '',
-                        page: params.page || 1
+                        page: params.page || 1,
+                        flag: 1,
                     }),
                     processResults: function(data) {
                         const items = (data.results || []).map(x => ({
