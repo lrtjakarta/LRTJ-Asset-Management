@@ -494,7 +494,7 @@
                                     <span class="path2"></span>
                                 </i>
                             </span>
-                            <span class="menu-title">Dashboard</span>
+                            <span class="menu-title">Stock Opname</span>
                             <span class="menu-arrow"></span>
                         </span>
                         <!--end:Menu link-->

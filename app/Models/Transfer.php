@@ -36,6 +36,7 @@ class Transfer extends Model
         'flow_file_name',
         'flow_file_mime',
         'flow_file_size',
+        'project_uuid'
     ];
 
     protected $casts = [
