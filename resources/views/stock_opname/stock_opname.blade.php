@@ -1295,6 +1295,7 @@
                 const hasAnyFile = hasFile || hasFlowFile || hasBaFile;
 
                 const base = {
+                    project_uuid: $('#ds-project').val() || null,
                     asset_uuid: $('#ds-asset-uuid').val() || null,
                     note: $('#ds-note').val() || '',
                     remove_file: $('#ds-remove-file').val() || 0,
