@@ -278,6 +278,7 @@ class DisposalController extends Controller
         }
         $q = Disposal::query()
             ->where('asset_uuid', $assetUuid)
+            ->whereNull('project_uuid')
             ->with(['status', 'target'])
             ->orderByDesc('created_at');
         $user = $r->user();
@@ -365,6 +366,7 @@ class DisposalController extends Controller
 
         $q = Disposal::query()
             ->with(['status', 'target', 'asset'])
+            ->whereNull('project_uuid')
             ->orderByDesc('created_at');
 
         // old workflow param (keep for safety, but status takes priority)
