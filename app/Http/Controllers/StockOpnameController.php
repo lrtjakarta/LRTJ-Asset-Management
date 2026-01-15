@@ -1910,13 +1910,14 @@ class StockOpnameController extends Controller
 
         $q = trim((string)$request->get('q', ''));
         $page = max(1, (int)$request->get('page', 1));
+        $flag = $request->get('flag') ?? 0;
         $perPage = 20;
 
         $builder = DB::table('asset_projects')
             ->whereNull('deleted_at')
-            ->where('status', 'OPEN')
             ->orderBy('name');
 
+        if ($flag != 1) $builder->where('status', 'OPEN');
         if ($q !== '') $builder->where('name', 'ilike', "%{$q}%");
 
         $total = (clone $builder)->count();
