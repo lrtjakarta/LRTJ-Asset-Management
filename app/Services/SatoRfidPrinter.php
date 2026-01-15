@@ -88,9 +88,9 @@ class SatoRfidPrinter
             . $esc . "A"
             . $esc . "PS"
             . $esc . "WKLabel";
-
+        $cmd .= $esc . "IP0" . "e:h,epc:" . $epc . ";";
         // LRT JAKARTA
-        $header = "LRT JAKARTA";
+        $header = "PT. LRT JAKARTA";
 
         $cmd .= $esc . "%0"
             .  $esc . "H0036"
