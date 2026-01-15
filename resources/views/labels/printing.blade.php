@@ -115,6 +115,7 @@
             <form id="print-rfid-form" method="POST" action="{{ route('label.print-rfid-lan') }}" style="display:none;">
                 @csrf
                 <input type="hidden" name="asset_uuids" id="input-asset-uuids-rfid">
+                <input type="hidden" name="label_size" id="input-label-size-rfid" value="100x40">
             </form>
 
         </div>
@@ -261,7 +262,8 @@
             });
 
             // Tombol Print RFID (LAN)
-            $('#btn-print-selected-rfid').on('click', function() {
+            // Tombol Print RFID (LAN) + pilih ukuran
+            $('#btn-print-selected-rfid').on('click', async function() {
                 const ids = collectSelectedIds();
 
                 if (!ids.length) {
@@ -269,7 +271,27 @@
                     return;
                 }
 
+                const {
+                    value: size
+                } = await Swal.fire({
+                    title: 'Pilih ukuran label RFID',
+                    input: 'radio',
+                    inputOptions: {
+                        '100x40': '100 x 40 mm (default)',
+                        '60x40': '60 x 40 mm'
+                    },
+                    inputValue: '100x40',
+                    showCancelButton: true,
+                    confirmButtonText: 'Print',
+                    cancelButtonText: 'Batal',
+                    reverseButtons: true,
+                    inputValidator: (v) => !v ? 'Pilih salah satu ukuran dulu.' : undefined
+                });
+
+                if (!size) return;
+
                 $('#input-asset-uuids-rfid').val(JSON.stringify(ids));
+                $('#input-label-size-rfid').val(size);
                 $('#print-rfid-form').submit();
             });
 

@@ -27,10 +27,13 @@
                 </form>
 
                 {{-- Print RFID via Sato LAN --}}
-                <form action="{{ route('label.print-rfid-lan') }}" method="POST" class="mt-2 d-inline">
+                <form id="print-rfid-single-form" action="{{ route('label.print-rfid-lan') }}" method="POST"
+                    class="mt-2 d-inline">
                     @csrf
                     <input type="hidden" name="asset_uuids" value='["{{ $asset->uuid }}"]'>
-                    <button type="submit" class="btn btn-sm btn-danger mt-2">
+                    <input type="hidden" name="label_size" id="input-label-size-rfid-single" value="100x40">
+
+                    <button type="submit" id="btnPrintRfidSingle" class="btn btn-sm btn-danger mt-2">
                         Print RFID (LAN)
                     </button>
                 </form>

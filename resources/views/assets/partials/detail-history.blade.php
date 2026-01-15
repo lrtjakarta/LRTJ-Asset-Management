@@ -129,20 +129,31 @@
                     id="tbl-so">
                     <thead>
                         <tr class="table-light">
-                            <th class="min-w-170px">Transaction Number</th>
-                            <th class="min-w-120px">Source</th>
-                            <th class="min-w-140px">Type</th>
-                            <th class="min-w-300px">Detail</th>
-                            <th class="min-w-220px">Note</th>
-                            <th class="min-w-140px">Requester</th>
-                            <th class="min-w-140px">Approver</th>
-                            <th class="min-w-160px">File</th>
-                            <th class="min-w-180px">Updated</th>
-                            <th class="min-w-160px">Actions</th>
+                            <th class="min-w-200px">Transaction Number</th>
+                            <th class="min-w-200px">Asset</th>
+                            <th class="min-w-300px">Asset Description</th>
+                            <th class="min-w-250px">Project</th>
+                            <th class="min-w-250px">Location</th>
+                            <th class="min-w-250px">Owner</th>
+                            <th class="min-w-250px">User</th>
+                            <th class="min-w-250px">Maintenance</th>
+                            <th class="min-w-250px">Status</th>
+
+                            <th class="min-w-200px">Source</th>
+                            <th class="min-w-200px">Type</th>
+                            <th class="min-w-400px">Detail</th>
+                            <th class="min-w-300px">Note</th>
+                            <th class="min-w-200px">Requester</th>
+                            <th class="min-w-200px">Approver</th>
+                            <th class="min-w-200px">File</th>
+                            <th class="min-w-200px">Updated</th>
+                            <th class="min-w-200px">Actions</th>
                         </tr>
                     </thead>
+                    <tbody></tbody>
                 </table>
             </div>
+
             @endcanAction
         </div>
     </div>
