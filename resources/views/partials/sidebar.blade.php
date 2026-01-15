@@ -484,20 +484,63 @@
                     @endif
 
                     @canAction('STOCK_OPN','R')
-                    <!--begin:Menu item-->
-                    <div class="menu-item">
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'stock-opname' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
-                        <a class="menu-link  {{ request()->segment(1) == 'stock-opname' ? 'active' : '' }}"
-                            href="{{ route('stockopname.index') }}">
+                        <span class="menu-link">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-notepad-edit fs-2">
                                     <span class="path1"></span>
                                     <span class="path2"></span>
                                 </i>
                             </span>
-                            <span class="menu-title">Stock Opname</span>
-                        </a>
+                            <span class="menu-title">Dashboard</span>
+                            <span class="menu-arrow"></span>
+                        </span>
                         <!--end:Menu link-->
+                        <!--begin:Menu sub-->
+                        <div class="menu-sub menu-sub-accordion">
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'create-projects' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.assets.select.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Create Projects</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'projects' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.asset_projects.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">List Projects</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'correction' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Correction</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                        </div>
+                        <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
                     @endcanAction

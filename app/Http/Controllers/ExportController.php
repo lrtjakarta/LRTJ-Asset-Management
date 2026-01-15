@@ -628,8 +628,8 @@ class ExportController
         $sheet->setCellValue('D1', 'Asset Location');
         $sheet->setCellValue('E1', 'Owner');
         $sheet->setCellValue('F1', 'User');
-        $sheet->setCellValue('F1', 'Maintenance');
-        $sheet->setCellValue('G1', 'Asset Status');
+        $sheet->setCellValue('G1', 'Maintenance');
+        $sheet->setCellValue('H1', 'Asset Status');
         $sheet->setCellValue('I1', 'Source');
         $sheet->setCellValue('J1', 'Type');
         $sheet->setCellValue('K1', 'Before');
@@ -638,8 +638,9 @@ class ExportController
         $sheet->setCellValue('N1', 'Requester');
         $sheet->setCellValue('O1', 'Approver');
         $sheet->setCellValue('P1', 'Updated At');
+        $sheet->setCellValue('Q1', 'Checklist');
 
-        $sheet->getStyle('A1:P1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:Q1')->getFont()->setBold(true);
 
         $rowNum = 2;
         foreach ($rows as $r) {

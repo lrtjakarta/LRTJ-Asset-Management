@@ -275,7 +275,7 @@ Route::middleware('ldap.session')->group(function () {
 
     // STOCK OPNAME ROUTE
     Route::prefix('stock-opname')->name('stockopname.')->group(function () {
-        Route::get('/', [StockOpnameController::class, 'index'])->name('index');
+        Route::get('/correction', [StockOpnameController::class, 'index'])->name('index');
         Route::get('{asset}/data',   [StockOpnameController::class, 'dataByAsset'])->name('data');
         Route::get('/data',   [StockOpnameController::class, 'datatable'])->name('data.all');
         Route::post('/create/transfer', [StockOpnameController::class, 'store_transfer'])->name('transfer.store');
@@ -294,6 +294,39 @@ Route::middleware('ldap.session')->group(function () {
             ->name('disposal.download.form');
         Route::get('/disposal/{uuid}/ba', [StockOpnameController::class, 'downloadDisposalBa'])
             ->name('disposal.download.ba');
+        // create projects for selected assets in stock opname
+        Route::get('/create-projects', [StockOpnameController::class, 'selectIndex'])
+            ->name('assets.select.index');
+        Route::get('/assets/select/datatable', [StockOpnameController::class, 'selectDatatable'])
+            ->name('assets.select.datatable');
+        Route::post('/assets/select/submit', [StockOpnameController::class, 'selectSubmit'])
+            ->name('assets.select.submit');
+        Route::post('/assets/select/assign-project', [StockOpnameController::class, 'assignProject'])
+            ->name('assets.select.assign_project');
+        Route::get('/assets/select/export', [StockOpnameController::class, 'selectExportExcel'])
+            ->name('assets.select.export');
+
+        // manage of projects in stock opname
+        Route::get('/projects', [StockOpnameController::class, 'projectIndex'])
+            ->name('asset_projects.index');
+        Route::get('/projects/datatable', [StockOpnameController::class, 'projectDatatable'])
+            ->name('asset_projects.datatable');
+        Route::get('/projects/{project:uuid}', [StockOpnameController::class, 'projectShow'])
+            ->name('asset_projects.show');
+        Route::get('/asset-projects/{project:uuid}/assets/datatable', [StockOpnameController::class, 'assetsProjectDatatable'])
+            ->name('asset_projects.assets.datatable');
+        // remove asset from project (ajax)
+        Route::delete('/asset-projects/{project:uuid}/assets/{assetUuid}', [StockOpnameController::class, 'removeAssetProject'])
+            ->name('asset_projects.assets.remove');
+        // select2 project options
+        Route::get('/asset-projects/options', [StockOpnameController::class, 'projectOptions'])
+            ->name('asset_projects.options');
+        Route::patch('/asset-projects/{project:uuid}/close', [StockOpnameController::class, 'projectClose'])
+            ->name('asset_projects.close');
+
+
+        Route::get('/asset-projects/assets/options', [StockOpnameController::class, 'projectAssetOptions'])
+            ->name('asset_projects.assets.options');
     });
 
     // DEPRECIATION ROUTE
@@ -313,7 +346,7 @@ Route::middleware('ldap.session')->group(function () {
         Route::middleware('role.action:DEPRECIATION,C,U')->group(function () {
             // PROCESSING
             Route::post('/run-month', [DepreciationController::class, 'runMonth'])->name('run.month');
-            
+
             Route::post('/build-year', [DepreciationController::class, 'buildYear'])->name('build.year');
             Route::post('/init-first-run', [DepreciationController::class, 'initFirstRun'])->name('init.first-run');
             Route::post('/rollback-year', [DepreciationController::class, 'rollbackYear'])->name('rollback.year');

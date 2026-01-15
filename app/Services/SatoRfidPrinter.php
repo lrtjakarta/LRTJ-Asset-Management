@@ -8,19 +8,42 @@ use Illuminate\Support\Facades\Log;
 
 class SatoRfidPrinter
 {
-    public function printByAssetUuids(array $assetUuids): void
+    /**
+     * DPI printer.
+     * Template kamu sebelumnya: 100mm => H0799 (800 dots) sangat cocok 203dpi.
+     * Kalau printer kamu 305dpi, ganti ke 305.
+     */
+    private int $dpi = 203;
+
+    /**
+     * Print RFID label via LAN (raw SBPL) untuk daftar UUID asset.
+     * $size: '100x40' (default) atau '60x40'
+     */
+    public function printByAssetUuids(array $assetUuids, string $size = '100x40'): void
     {
         $assets = Assets::query()
             ->with(['rfids', 'assignment'])
             ->whereIn('uuid', $assetUuids)
             ->get();
-        if ($assets->isEmpty()) throw new \RuntimeException('No assets found.');
 
-        $sbplAll = $this->buildInitBlock();
+        if ($assets->isEmpty()) {
+            throw new \RuntimeException('No assets found.');
+        }
+
+        // ukuran label dalam dots
+        [$wDots, $hDots] = match ($size) {
+            '60x40' => [$this->mmToDots(60), $this->mmToDots(40)],
+            default => [$this->mmToDots(100), $this->mmToDots(40)],
+        };
+
+        $sbplAll = $this->buildInitBlock($wDots, $hDots);
 
         foreach ($assets as $asset) {
-            $rfid = $asset->rfids instanceof \Illuminate\Support\Collection ? $asset->rfids->first() : $asset->rfids;
+            $rfid = $asset->rfids instanceof \Illuminate\Support\Collection
+                ? $asset->rfids->first()
+                : $asset->rfids;
 
+            // auto-create EPC jika belum ada
             if (! $rfid) {
                 $epc = strtoupper(str_replace('-', '', (string) $asset->uuid));
                 $epc = preg_replace('/[^0-9A-F]/', '', $epc);
@@ -34,34 +57,46 @@ class SatoRfidPrinter
                 ]);
             }
 
-            $sbplAll .= $this->buildPrintBlock($asset, $rfid);
+            $sbplAll .= $this->buildPrintBlock($asset, $rfid, $wDots, $hDots, $size);
         }
 
         $this->sendToPrinter($sbplAll);
     }
-    protected function buildInitBlock(): string
+
+    private function mmToDots(float $mm): int
+    {
+        return (int) round($mm * $this->dpi / 25.4);
+    }
+
+    protected function buildInitBlock(int $wDots, int $hDots): string
     {
         $esc = "\x1B";
         $stx = "\x02";
         $etx = "\x03";
 
-        // persis seperti Label.prn block pertama
+        // SBPL pakai max coordinate (0..max)
+        // width 800 => H0799, height 320 => V00320 (template kamu)
+        $maxH = max(0, $wDots - 1);
+        $maxV = max(0, $hDots); // ikut gaya template awal kamu (V00320)
+
         return $stx
             . $esc . "A"
             . $esc . "A3V+00000H+0000"
             . $esc . "CS6"
             . $esc . "#F5"
-            . $esc . "A1V00320H0799"
+            . $esc . "A1V" . str_pad((string) $maxV, 5, '0', STR_PAD_LEFT)
+            . "H" . str_pad((string) $maxH, 4, '0', STR_PAD_LEFT)
             . $esc . "Z"
             . $etx;
     }
 
-    protected function buildPrintBlock(Assets $asset, AssetsRfid $rfid): string
+    protected function buildPrintBlock(Assets $asset, AssetsRfid $rfid, int $wDots, int $hDots, string $size): string
     {
         $esc = "\x1B";
         $stx = "\x02";
         $etx = "\x03";
 
+        // EPC harus 32 hex chars
         $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $rfid->epc));
         $epc = substr(str_pad($epc, 32, '0', STR_PAD_LEFT), -32);
 
@@ -69,14 +104,13 @@ class SatoRfidPrinter
         $assetCode = (string) ($asset->asset_code ?? '');
         $desc      = mb_substr((string) ($asset->description ?? ''), 0, 40);
 
-        $ownerCode    = (string) ($asset->assignment?->asset_owner ?? ''); // contoh: AKP
-        $locationCode = (string) ($asset->kode_location ?? '');           // contoh: L001
+        $ownerCode    = (string) ($asset->assignment?->asset_owner ?? '');
+        $locationCode = (string) ($asset->kode_location ?? '');
 
         $ttf = 'SATO0.ttf';
-        $h = '024';
-        $w = '028';
 
-        $ttfText = function (string $H, string $V, string $text) use ($esc, $ttf, $h, $w) {
+        // helper text (TTF)
+        $makeTtfText = function (string $H, string $V, string $text, string $h = '024', string $w = '028') use ($esc, $ttf) {
             return $esc . "%0"
                 . $esc . "H{$H}"
                 . $esc . "V{$V}"
@@ -88,28 +122,75 @@ class SatoRfidPrinter
             . $esc . "A"
             . $esc . "PS"
             . $esc . "WKLabel";
+
+        // RFID encode (UHF)
         $cmd .= $esc . "IP0" . "e:h,epc:" . $epc . ";";
-        // LRT JAKARTA
+
         $header = "PT. LRT JAKARTA";
 
-        $cmd .= $esc . "%0"
-            .  $esc . "H0036"
-            .  $esc . "V00060"
-            .  $esc . "P02"
-            .  $esc . "RH0,SATO0.ttf,0,040,040," . $header;
-        // QR
-        $cmd .= $esc . "%0"
-            . $esc . "H0599"
-            . $esc . "V00026"
-            . $esc . "2D30,L,06,1,0"
-            . $esc . "DN0036," . $uuid;
+        if ($size !== '60x40') {
+            // =========================
+            // TEMPLATE 100 x 40 (AS-IS)
+            // =========================
 
-        // TEXT
-        $cmd .= $ttfText('0036', '00113', $assetCode);
-        $cmd .= $ttfText('0036', '00144', $desc);
-        $cmd .= $ttfText('0036', '00177', 'Owner Asset: ' . $ownerCode);
-        $cmd .= $ttfText('0036', '00206', 'Lokasi: ' . $locationCode);
-        $cmd .= $ttfText('0036', '00237', 'RFID: ' . $epc);
+            // Header
+            $cmd .= $esc . "%0"
+                .  $esc . "H0036"
+                .  $esc . "V00060"
+                .  $esc . "P02"
+                .  $esc . "RH0,SATO0.ttf,0,040,040," . $header;
+
+            // QR kanan (pakai layout lama kamu)
+            $cmd .= $esc . "%0"
+                . $esc . "H0599"
+                . $esc . "V00026"
+                . $esc . "2D30,L,06,1,0"
+                . $esc . "DN0036," . $uuid;
+
+            // Text
+            $cmd .= $makeTtfText('0036', '00113', $assetCode);
+            $cmd .= $makeTtfText('0036', '00144', $desc);
+            $cmd .= $makeTtfText('0036', '00177', 'Owner Asset: ' . $ownerCode);
+            $cmd .= $makeTtfText('0036', '00206', 'Lokasi: ' . $locationCode);
+            $cmd .= $makeTtfText('0036', '00237', 'RFID: ' . $epc);
+        } else {
+            // =========================
+            // TEMPLATE 60 x 40
+            // - QR diperkecil & diposisikan kanan
+            // - Text diperkecil supaya muat
+            // =========================
+
+            // Header kecil
+            $cmd .= $esc . "%0"
+                .  $esc . "H0020"
+                .  $esc . "V00045"
+                .  $esc . "P02"
+                .  $esc . "RH0,SATO0.ttf,0,032,032," . $header;
+
+            // QR kanan (lebih kecil)
+            $qrModule = 4;
+
+            // posisi QR: kira-kira butuh area ~170 dots
+            $qrEstimateSize = 170;
+            $qrH = max(20, $wDots - $qrEstimateSize);
+            $qrV = 20;
+
+            $cmd .= $esc . "%0"
+                . $esc . "H" . str_pad((string) $qrH, 4, '0', STR_PAD_LEFT)
+                . $esc . "V" . str_pad((string) $qrV, 5, '0', STR_PAD_LEFT)
+                . $esc . "2D30,L," . str_pad((string) $qrModule, 2, '0', STR_PAD_LEFT) . ",1,0"
+                . $esc . "DN0036," . $uuid;
+
+            // Text area kiri (lebih kecil)
+            $cmd .= $makeTtfText('0020', '00105', $assetCode, '022', '024');
+            $cmd .= $makeTtfText('0020', '00135', $desc, '022', '024');
+            $cmd .= $makeTtfText('0020', '00168', 'Owner: ' . $ownerCode, '022', '024');
+            $cmd .= $makeTtfText('0020', '00196', 'Lokasi: ' . $locationCode, '022', '024');
+
+            // EPC dipendekin biar gak kepanjangan
+            $shortEpc = substr($epc, 0, 8) . '...' . substr($epc, -8);
+            $cmd .= $makeTtfText('0020', '00228', 'RFID: ' . $shortEpc, '022', '024');
+        }
 
         $cmd .= $esc . "Q1"
             . $esc . "Z"
@@ -117,7 +198,6 @@ class SatoRfidPrinter
 
         return $cmd;
     }
-
 
     protected function sendToPrinter(string $data): void
     {
@@ -137,15 +217,19 @@ class SatoRfidPrinter
 
         stream_set_timeout($fp, $timeout);
 
-        // write all bytes (anti kepotong)
+        // write semua bytes (biar gak kepotong)
         $len = strlen($data);
         $off = 0;
+
         while ($off < $len) {
-            $w = fwrite($fp, substr($data, $off));
+            $chunk = substr($data, $off);
+            $w = fwrite($fp, $chunk);
+
             if ($w === false) {
                 fclose($fp);
                 throw new \RuntimeException("Failed writing to printer socket.");
             }
+
             $off += $w;
         }
 
