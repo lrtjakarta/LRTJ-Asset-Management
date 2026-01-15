@@ -210,7 +210,11 @@ class DepreciationController extends Controller
 
     private function assertDecemberProcessed(int $year): void
     {
-        // Pastikan Desember tahun itu sudah diproses (biar build year valid)
+        // If the year has no eligible periods at all, allow build-year (it will lock empty yearly summary)
+        if (! $this->yearHasEligiblePeriods($year)) {
+            return;
+        }
+
         $dec = Carbon::create($year, 12, 1)->startOfMonth()->toDateString();
 
         $ok = AssetDeprMonthClosing::query()
@@ -284,7 +288,14 @@ class DepreciationController extends Controller
 
     private function assertBuildYearAllowedForTarget(int $targetYear): void
     {
-        if (! $this->canBuildYearNowForTarget($targetYear)) {
+        $now = now();
+        $nowYear  = (int) $now->year;
+        $nowMonth = (int) $now->month;
+
+        $allowed = ($nowMonth === 12 && $nowYear === $targetYear)
+            || ($nowMonth === 1 && $nowYear === ($targetYear + 1));
+
+        if (! $allowed) {
             throw new \RuntimeException("BUILD_YEAR_WINDOW_CLOSED|{$targetYear}");
         }
     }
@@ -1033,7 +1044,11 @@ class DepreciationController extends Controller
             );
         });
     }
-
+    private function canForceBuildYear(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('DEPRECIATION', 'FORCE_BUILD_YEAR');
+    }
     public function buildYear(Request $request)
     {
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
@@ -1043,18 +1058,47 @@ class DepreciationController extends Controller
         ]);
 
         $year = (int) $data['year'];
+        $nowYear = (int) now()->year;
+        $nowMonth = (int) now()->month;
 
         try {
-            $this->assertBuildYearAllowedNow();
+            // 1) year must be open
             $this->assertYearOpen($year, 'buildYear');
-            $this->assertDecemberProcessed($year); // wajib Dec sudah diproses
+
+            // 2) chain gate: prev year must be built unless empty eligible
+            $this->assertPrevYearBuiltUnlessEmpty($year, 'buildYear');
+
+            // 3) must have Dec processed (or skip if year has no eligible assets per your helper)
+            $this->assertDecemberProcessed($year);
+
+            // 4) time rule: only applies when building CURRENT year
+            if ($year === $nowYear && $nowMonth !== 12) {
+                throw new \RuntimeException("BUILD_YEAR_ONLY_DECEMBER_CURRENT|{$year}");
+            }
+
+            // (optional) block future year
+            if ($year > $nowYear) {
+                throw new \RuntimeException("BUILD_YEAR_FUTURE_NOT_ALLOWED|{$year}");
+            }
         } catch (\Throwable $e) {
 
-            if ($e->getMessage() === 'BUILD_YEAR_ONLY_DECEMBER') {
+            if (str_starts_with($e->getMessage(), 'BUILD_YEAR_ONLY_DECEMBER_CURRENT|')) {
                 return response()->json([
                     'ok' => false,
-                    'code' => 'BUILD_YEAR_ONLY_DECEMBER',
-                    'message' => 'Build Year hanya boleh dilakukan di bulan Desember.',
+                    'code' => 'BUILD_YEAR_ONLY_DECEMBER_CURRENT',
+                    'message' => "Build Year {$year} hanya boleh dilakukan di bulan Desember untuk tahun berjalan.",
+                    'year' => $year,
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'PREV_YEAR_NOT_BUILT|')) {
+                [$_, $needPrev, $targetYear] = array_pad(explode('|', $e->getMessage()), 4, null);
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'PREV_YEAR_NOT_BUILT',
+                    'message' => "Year {$targetYear} tidak bisa dibuild sebelum Build Year {$needPrev}.",
+                    'need_build_year' => (int) $needPrev,
+                    'target_year' => (int) $targetYear,
                 ], 422);
             }
 
@@ -1078,7 +1122,21 @@ class DepreciationController extends Controller
                 ], 422);
             }
 
-            throw $e;
+            if (str_starts_with($e->getMessage(), 'BUILD_YEAR_FUTURE_NOT_ALLOWED|')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'BUILD_YEAR_FUTURE_NOT_ALLOWED',
+                    'message' => "Tidak bisa Build Year untuk tahun masa depan.",
+                    'year' => $year,
+                ], 422);
+            }
+
+            report($e);
+            return response()->json([
+                'ok' => false,
+                'code' => 'SERVER_ERROR',
+                'message' => $e->getMessage() ?: 'Build year failed.',
+            ], 500);
         }
 
         DB::transaction(function () use ($year) {
@@ -1116,7 +1174,6 @@ class DepreciationController extends Controller
                 );
             }
 
-            // lock year setelah build
             AssetDeprYearClosing::updateOrCreate(
                 ['fiscal_year' => $year],
                 [
@@ -1133,25 +1190,54 @@ class DepreciationController extends Controller
             'year'    => $year,
         ]);
     }
-
     public function yearStatus(Request $r)
     {
         abort_unless($this->canReadDepr(), 403);
 
         $year = (int) ($r->input('year') ?: now()->year);
+        $nowYear = (int) now()->year;
+        $nowMonth = (int) now()->month;
 
         $locked = AssetDeprYearClosing::query()
             ->where('fiscal_year', $year)
             ->where('is_locked', true)
             ->exists();
 
+        // Dec processed? (or year has no eligible assets -> treat as OK)
+        $dec = Carbon::create($year, 12, 1)->startOfMonth()->toDateString();
+        $hasEligible = $this->yearHasEligiblePeriods($year);
+        $decProcessed = !$hasEligible ? true : AssetDeprMonthClosing::query()->whereDate('period', $dec)->exists();
+
+        // Chain gate ok?
+        $prevOk = true;
+        try {
+            $this->assertPrevYearBuiltUnlessEmpty($year, 'yearStatus');
+        } catch (\Throwable $e) {
+            $prevOk = false;
+        }
+
+        // Time rule: only for current year
+        $timeOk = true;
+        if ($year === $nowYear) {
+            $timeOk = ($nowMonth === 12);
+        }
+        if ($year > $nowYear) {
+            $timeOk = false;
+        }
+
+        $canBuildNow = (!$locked) && $decProcessed && $prevOk && $timeOk;
+
         return response()->json([
             'ok' => true,
             'year' => $year,
             'locked' => $locked,
-            'can_build_now' => $this->canBuildYearNowForTarget($year),
-            'now_year' => (int) now()->year,
-            'now_month' => (int) now()->month,
+            'december_processed' => $decProcessed,
+            'need_dec_period' => $dec,
+            'prev_year_ok' => $prevOk,
+            'time_ok' => $timeOk,
+            'can_build_now' => $canBuildNow,
+            'now_year' => $nowYear,
+            'now_month' => $nowMonth,
         ]);
     }
 
