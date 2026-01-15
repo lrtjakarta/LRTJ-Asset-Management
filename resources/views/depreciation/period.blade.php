@@ -30,8 +30,7 @@
                             <label class="form-label">Year</label>
                             <select id="f-year" class="form-select">
                                 @for ($y = $minYear; $y <= $maxYear; $y++)
-                                    <option value="{{ $y }}" @selected($y == $year)>{{ $y }}
-                                    </option>
+                                    <option value="{{ $y }}" @selected($y == $year)>{{ $y }}</option>
                                 @endfor
                             </select>
                             @if ($minYear === $maxYear)
@@ -40,35 +39,37 @@
                         </div>
                     </div>
                 </div>
-                <div class="card-footer">
-                    @php
-                        $isDecember = $isDecember ?? now()->month === 12;
-                        $nowYear = $nowYear ?? now()->year;
-                    @endphp
 
-                    <div class="d-flex gap-2">
+                <div class="card-footer">
+                    <div class="d-flex gap-2 align-items-center">
                         <button id="btnApply" class="btn btn-danger btn-sm d-none">Apply</button>
                         <a href="{{ route('depreciation.period.index') }}" class="btn btn-light-danger btn-sm">Reset</a>
+
                         @if (!empty($isLedgerEmpty) && $isLedgerEmpty)
-                            @canAction('DEPRECIATION','C')
-                            <button type="button" id="btn-init-first-run" class="btn btn-danger btn-sm me-2">
-                                Initialize / First Run
-                            </button>
+                            @canAction('DEPRECIATION', 'C')
+                                <button type="button" id="btn-init-first-run" class="btn btn-danger btn-sm me-2">
+                                    Initialize / First Run
+                                </button>
                             @endcanAction
                         @endif
-                        <button type="button" id="btn-open-build-year" class="btn btn-danger btn-sm"
-                            @disabled(!$isDecember)
-                            title="{{ $isDecember ? '' : 'Build Year hanya bisa dilakukan di bulan Desember' }}">
-                            Build Year
-                        </button>
 
-                        <button type="button" id="btn-open-rollback-year" class="btn btn-light-danger btn-sm d-none">
-                            Rollback Build Year
-                        </button>
+                        {{-- IMPORTANT:
+                             Do NOT hard-disable with $isDecember here.
+                             Enable/disable comes from backend yearStatus (dec processed + time rule + chain gate + lock).
+                        --}}
+                        @canAction('DEPRECIATION', 'C')
+                            <button type="button" id="btn-open-build-year" class="btn btn-danger btn-sm" disabled>
+                                Build Year
+                            </button>
+
+                            <button type="button" id="btn-open-rollback-year" class="btn btn-light-danger btn-sm d-none">
+                                Rollback Build Year
+                            </button>
+                        @endcanAction
 
                         <span id="year-lock-badge" class="d-none badge badge-light">-</span>
+                        <span id="year-build-hint" class="d-none text-muted fs-8"></span>
                     </div>
-
                 </div>
             </div>
 
@@ -97,6 +98,7 @@
         </div>
     </div>
 @endsection
+
 @push('scripts')
     <script>
         (function() {
@@ -110,11 +112,7 @@
                 rollbackYear: @json(route('depreciation.rollback.year')),
             };
 
-            const IS_DECEMBER = Boolean(@json($isDecember ?? now()->month === 12));
-
-            // CSRF token
             const csrf = () => $('meta[name="csrf-token"]').attr('content') || @json(csrf_token());
-
             const money2 = v => new Intl.NumberFormat(undefined, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
@@ -124,7 +122,7 @@
                 return Number($('#f-year').val() || 0);
             }
 
-            // biar kalau ada error langsung keliatan
+            // show DT errors
             $.fn.dataTable.ext.errMode = 'none';
 
             // ===== DataTable =====
@@ -144,8 +142,7 @@
                     },
                     error: function(xhr) {
                         console.error('DT period error:', xhr);
-                        const msg = xhr?.responseJSON?.message || xhr?.responseText ||
-                            'Failed to load period data';
+                        const msg = xhr?.responseJSON?.message || xhr?.responseText || 'Failed to load period data';
                         toastr?.error(msg);
                     }
                 },
@@ -204,10 +201,33 @@
                 $('#year-total').text(money2(sum));
             });
 
-            // ===== Year lock UI =====
+            // ===== Year lock/build UI (the IMPORTANT part) =====
+            function buildHint(resp) {
+                // resp from yearStatus:
+                // locked, december_processed, prev_year_ok, time_ok, can_build_now, need_dec_period
+                const y = currentYear();
+                if (!resp) return '';
+
+                if (resp.locked) return `Year ${y} is locked (already built).`;
+                if (!resp.prev_year_ok) return `Previous year must be built first.`;
+                if (!resp.december_processed) return `December (${resp.need_dec_period}) is not processed yet.`;
+                if (!resp.time_ok) {
+                    // time_ok false usually: current year but not December, or future year
+                    if (resp.year === resp.now_year) return `Current year can be built only in December.`;
+                    if (resp.year > resp.now_year) return `Future year cannot be built.`;
+                    return `Build window closed.`;
+                }
+                return `Ready to build year ${y}.`;
+            }
+
             function refreshYearLockUI() {
                 const y = currentYear();
                 if (!y) return;
+
+                // default safe state
+                $('#btn-open-build-year').prop('disabled', true).attr('title', '');
+                $('#btn-open-rollback-year').addClass('d-none');
+                $('#year-build-hint').addClass('d-none').text('');
 
                 $.get(ROUTES.yearStatus, {
                         year: y
@@ -220,16 +240,27 @@
                             .toggleClass('badge-light-danger', locked)
                             .text(locked ? `LOCKED ${y}` : `UNLOCKED ${y}`);
 
-                        // build: hanya desember dan year belum locked
-                        $('#btn-open-build-year').prop('disabled', !IS_DECEMBER || locked);
+                        const canBuild = !!resp.can_build_now;
 
-                        // rollback: hanya tampil kalau locked
+                        // ✅ Enable/disable button strictly from backend truth
+                        $('#btn-open-build-year')
+                            .prop('disabled', !canBuild)
+                            .attr('title', buildHint(resp));
+
+                        // rollback visible only when locked
                         $('#btn-open-rollback-year').toggleClass('d-none', !locked);
+
+                        $('#year-build-hint')
+                            .removeClass('d-none')
+                            .text(buildHint(resp));
                     })
-                    .fail(() => {
+                    .fail((xhr) => {
+                        console.error('yearStatus failed:', xhr);
                         $('#year-lock-badge').addClass('d-none');
+                        $('#year-build-hint').addClass('d-none');
+                        // keep button disabled if status fails
+                        $('#btn-open-build-year').prop('disabled', true);
                         $('#btn-open-rollback-year').addClass('d-none');
-                        $('#btn-open-build-year').prop('disabled', !IS_DECEMBER);
                     });
             }
 
@@ -247,10 +278,11 @@
             // ===== Build Year =====
             $('#btn-open-build-year').on('click', function() {
                 const y = currentYear();
+                if (!y) return;
 
                 Swal.fire({
                     title: `Build Year ${y}?`,
-                    text: 'Syarat: hanya boleh bulan Desember dan periode Desember tahun tsb harus sudah diproses. Setelah build, year akan LOCKED.',
+                    text: 'Syarat: (1) Depreciation sudah diproses sampai Desember tahun tsb, (2) chain gate prev-year OK, (3) jika ini tahun berjalan maka hanya boleh di bulan Desember. Setelah build, year akan LOCKED.',
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonColor: '#EA242A',
@@ -278,27 +310,35 @@
                         refreshYearLockUI();
                     }).fail((xhr) => {
                         const resp = xhr.responseJSON || {};
-                        if (resp.code === 'BUILD_YEAR_ONLY_DECEMBER') {
-                            Swal.fire('Tidak bisa', resp.message ||
-                                'Build Year hanya boleh dilakukan di bulan Desember.',
-                                'warning');
+
+                        // your backend codes
+                        if (resp.code === 'BUILD_YEAR_ONLY_DECEMBER_CURRENT') {
+                            Swal.fire('Tidak bisa', resp.message || 'Build Year hanya boleh di bulan Desember untuk tahun berjalan.', 'warning');
                             return;
                         }
                         if (resp.code === 'DECEMBER_NOT_PROCESSED') {
-                            const extra = resp.need_period_text ?
-                                `\nNeed: ${resp.need_period_text}` : '';
-                            Swal.fire('Tidak bisa', (resp.message ||
-                                'Desember harus diproses dulu.') + extra, 'warning');
+                            const extra = resp.need_period_text ? `\nNeed: ${resp.need_period_text}` : '';
+                            Swal.fire('Tidak bisa', (resp.message || 'Desember harus diproses dulu.') + extra, 'warning');
+                            return;
+                        }
+                        if (resp.code === 'PREV_YEAR_NOT_BUILT') {
+                            Swal.fire('Tidak bisa', resp.message || 'Previous year must be built first.', 'warning');
                             return;
                         }
                         if (resp.code === 'YEAR_LOCKED') {
-                            Swal.fire('Terkunci', resp.message || 'Year sudah locked.',
-                                'warning');
+                            Swal.fire('Terkunci', resp.message || 'Year sudah locked.', 'warning');
                             return;
                         }
+                        if (resp.code === 'BUILD_YEAR_FUTURE_NOT_ALLOWED') {
+                            Swal.fire('Tidak bisa', resp.message || 'Future year cannot be built.', 'warning');
+                            return;
+                        }
+
                         Swal.fire('Failed', resp.message || 'Build year failed', 'error');
                     }).always(() => {
                         $btn.prop('disabled', false).removeAttr('data-kt-indicator');
+                        // re-check truth after request
+                        refreshYearLockUI();
                     });
                 });
             });
@@ -332,8 +372,7 @@
                         tbl.ajax.reload(null, false);
                         refreshYearLockUI();
                     }).fail((xhr) => {
-                        Swal.fire('Failed', xhr.responseJSON?.message || 'Rollback failed',
-                            'error');
+                        Swal.fire('Failed', xhr.responseJSON?.message || 'Rollback failed', 'error');
                     });
                 });
             });
