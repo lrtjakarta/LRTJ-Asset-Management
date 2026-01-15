@@ -114,6 +114,7 @@ class StockOpnameController extends Controller
             t.updated_at
         ")
             ->whereNull('t.deleted_at')
+            ->whereNotNull('t.project_uuid')
             ->where('t.kode_status', 'ACC');
 
         // ===== Disposal base =====
@@ -160,6 +161,7 @@ class StockOpnameController extends Controller
             d.updated_at
         ")
             ->whereNull('d.deleted_at')
+            ->whereNotNull('d.project_uuid')
             ->where('d.kode_status', 'ACC');
 
         // union source
@@ -434,6 +436,7 @@ class StockOpnameController extends Controller
         ")
             ->whereNull('t.deleted_at')
             ->where('t.kode_status', 'ACC')
+            ->whereNotNull('t.project_uuid')
             ->where('t.asset_uuid', $uuid);
 
         // ===== Disposal base =====
@@ -481,6 +484,7 @@ class StockOpnameController extends Controller
         ")
             ->whereNull('d.deleted_at')
             ->where('d.kode_status', 'ACC')
+            ->whereNotNull('d.project_uuid')
             ->where('d.asset_uuid', $uuid);
 
         if ($source === 'transfer') $union = $t;
