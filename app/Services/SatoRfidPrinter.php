@@ -68,6 +68,30 @@ class SatoRfidPrinter
         return (int) round($mm * $this->dpi / 25.4);
     }
 
+    /**
+     * Buat asset description:
+     * - tanpa special karakter/simbol (sisakan huruf, angka, spasi)
+     * - rapihin spasi
+     * - max karakter = $maxLen (default 20)
+     */
+    private function sanitizeDescForLabel(?string $text, int $maxLen = 20): string
+    {
+        $text = (string) ($text ?? '');
+
+        // Buang karakter non-printable (biar aman ke printer)
+        $text = preg_replace('/[^\P{C}\n]+/u', '', $text) ?? '';
+
+        // Hapus semua special char/simbol: sisakan huruf, angka, spasi saja
+        $text = preg_replace('/[^\p{L}\p{N}\s]/u', '', $text) ?? '';
+
+        // Rapihin spasi (tab/newline jadi spasi, spasi dobel diringkas)
+        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+        $text = trim($text);
+
+        // Max 20 karakter (multibyte-safe)
+        return mb_substr($text, 0, $maxLen);
+    }
+
     protected function buildInitBlock(int $wDots, int $hDots): string
     {
         $esc = "\x1B";
@@ -102,7 +126,9 @@ class SatoRfidPrinter
 
         $uuid      = strtolower((string) $asset->uuid);
         $assetCode = (string) ($asset->asset_code ?? '');
-        $desc      = mb_substr((string) ($asset->description ?? ''), 0, 40);
+
+        // ✅ DESC: tanpa simbol + max 20 char
+        $desc = $this->sanitizeDescForLabel($asset->description, 20);
 
         $ownerCode    = (string) ($asset->assignment?->asset_owner ?? '');
         $locationCode = (string) ($asset->kode_location ?? '');
