@@ -47,12 +47,17 @@ class RfidApiController extends Controller
                 'status:uuid,kode,name',
             ])
             ->whereIn('uuid', $assetUuids->all())
+            ->where('kode_status', '!=', 'DIS')        // <--- exclude disposed
             ->get(['uuid', 'asset_code', 'description', 'kode_status', 'kode_location']);
 
         $assetByUuid = $assets->keyBy('uuid');
-
+        $disposedUuids = Assets::query()
+            ->whereIn('uuid', $assetUuids->all())
+            ->where('kode_status', 'DIS')
+            ->pluck('uuid')
+            ->flip();
         // Build results per EPC (preserve input order)
-        $results = $epcs->map(function (string $epc) use ($tagByEpc, $assetByUuid) {
+        $results = $epcs->map(function (string $epc) use ($tagByEpc, $assetByUuid, $disposedUuids) {
             $tag = $tagByEpc->get($epc);
             if (! $tag) {
                 return [
@@ -63,6 +68,20 @@ class RfidApiController extends Controller
 
             $asset = $assetByUuid->get($tag->asset_uuid);
             if (! $asset) {
+                if (isset($disposedUuids[$tag->asset_uuid])) {
+                    return [
+                        'epc' => $epc,
+                        'status' => 'disposed',
+                        'tag' => [
+                            'uuid' => $tag->uuid,
+                            'epc' => $tag->epc,
+                            'tag_type' => $tag->tag_type,
+                            'encoded_at' => optional($tag->encoded_at)->toIso8601String(),
+                        ],
+                        'message' => 'Asset sudah di-dispose (DIS)',
+                    ];
+                }
+
                 return [
                     'epc' => $epc,
                     'status' => 'asset_missing',
