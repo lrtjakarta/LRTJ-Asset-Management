@@ -43,8 +43,8 @@ class RfidApiController extends Controller
 
         $assets = Assets::query()
             ->with([
-                'location:id,code,name',   // sesuaikan kolommu
-                'status:id,code,name',
+                'location:uuid,kode,name',
+                'status:uuid,kode,name',
             ])
             ->whereIn('uuid', $assetUuids->all())
             ->get(['uuid', 'asset_code', 'description', 'kode_status', 'kode_location']);
