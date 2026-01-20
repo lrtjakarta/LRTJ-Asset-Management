@@ -23,7 +23,7 @@
                 });
             });
 
-            // ✅ Print RFID single asset - pilih ukuran dulu
+            // Print RFID single asset - pilih ukuran dulu
             $('#btnPrintRfidSingle').on('click', async function(e) {
                 e.preventDefault();
 
@@ -36,7 +36,7 @@
                     input: 'radio',
                     inputOptions: {
                         '100x40': '100 x 40 mm',
-                        '60x40': '60 x 40 mm'
+                        '60x25': '60 x 25 mm'
                     },
                     inputValue: last,
                     showCancelButton: true,
