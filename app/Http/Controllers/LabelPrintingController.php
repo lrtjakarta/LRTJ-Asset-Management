@@ -98,7 +98,7 @@ class LabelPrintingController extends Controller
         }
 
         $size = $request->input('label_size', '100x40');
-        if (!in_array($size, ['100x40', '60x40'], true)) {
+        if (!in_array($size, ['100x40', '60x25'], true)) {
             $size = '100x40';
         }
 

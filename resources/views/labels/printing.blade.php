@@ -278,7 +278,7 @@
                     input: 'radio',
                     inputOptions: {
                         '100x40': '100 x 40 mm (default)',
-                        '60x40': '60 x 40 mm'
+                        '60x25': '60 x 25 mm'
                     },
                     inputValue: '100x40',
                     showCancelButton: true,
