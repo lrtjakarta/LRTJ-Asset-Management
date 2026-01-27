@@ -1383,15 +1383,28 @@ class ExportController
     {
 
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'R'), 403);
+        $periodFromMonth = trim((string) $request->input('period_from', '')); // ex: 2026-01
+        $periodToMonth   = trim((string) $request->input('period_to', ''));   // ex: 2026-03
 
-        $period = $request->period
-            ? Carbon::parse($request->period)->startOfMonth()->toDateString()
-            : now()->startOfMonth()->toDateString();
+        // Default: current month only
+        $from = $periodFromMonth !== ''
+            ? Carbon::createFromFormat('Y-m', $periodFromMonth)->startOfMonth()
+            : now()->startOfMonth();
 
-        $periodDepr = $request->filled('period_depr')
-            ? Carbon::parse($request->period_depr)->startOfMonth()->toDateString()
-            : null;
-        $periodYear = (int) Carbon::parse($period)->year;
+        $to = $periodToMonth !== ''
+            ? Carbon::createFromFormat('Y-m', $periodToMonth)->startOfMonth()
+            : $from->copy();
+
+        // Normalize if reversed
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $fromDate = $from->toDateString(); // YYYY-MM-01
+        $toDate   = $to->toDateString();   // YYYY-MM-01
+
+        // For "Ending Balance prev year" join (single year reference)
+        $periodYear = (int) $to->year;
         $prevYear   = $periodYear - 1;
 
         $q = AssetDeprMonthly::query()
@@ -1402,7 +1415,8 @@ class ExportController
                 $j->on('y.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
                     ->where('y.fiscal_year', '=', $prevYear);
             })
-            ->whereDate('assets_depr_ledger_monthly.period', $period)
+            // RANGE FILTER
+            ->whereBetween('assets_depr_ledger_monthly.period', [$fromDate, $toDate])
             ->select([
                 'assets_depr_ledger_monthly.uuid',
                 'assets_depr_ledger_monthly.asset_uuid',
@@ -1419,85 +1433,89 @@ class ExportController
                 'assets_depr_ledger_monthly.ending_balance',
                 'assets_depr_ledger_monthly.depr_code',
                 'av.capitalization_date as cap_date',
-                DB::raw("COALESCE(av.total, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
                 'av.total as total_value',
+                'y.ending_balance_year as ending_balance_prev_year',
+                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
                 DB::raw("
-                    CASE
-                        WHEN av.capitalization_date IS NULL THEN NULL
-                        ELSE
-                        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date
-                    END AS period_depr
-                "),
+                CASE
+                    WHEN av.capitalization_date IS NULL THEN NULL
+                    ELSE
+                    (date_trunc('month', assets_depr_ledger_monthly.period))::date
+                END AS period_depr
+            "),
                 DB::raw("
                 COALESCE(
                     NULLIF(p.useful_life_months, 0),
                     NULLIF(av.useful_life_month, 0),
                     CASE WHEN av.useful_life_year IS NOT NULL
-                         THEN (av.useful_life_year * 12)::int
-                         ELSE 0 END,
+                        THEN (av.useful_life_year * 12)::int
+                        ELSE 0 END,
                     0
                 ) AS useful_life_months
             "),
-                'y.ending_balance_year as ending_balance_prev_year',
-                DB::raw("
+                DB::raw("(
+            WITH base AS (
+                SELECT
+                COALESCE(
+                    NULLIF(p.useful_life_months, 0),
+                    NULLIF(av.useful_life_month, 0),
+                    CASE WHEN av.useful_life_year IS NOT NULL
+                    THEN (av.useful_life_year * 12)::int
+                    ELSE 0 END,
+                    60
+                ) AS life_months,
+
+                COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at) AS start_date,
+
+                COALESCE(p.cutoff_day, 15) AS cutoff_day,
+
+                date_trunc('month', assets_depr_ledger_monthly.period)::date AS period_m,
+
+                COALESCE(assets_depr_ledger_monthly.depr_expense, 0) AS depr_expense,
+                COALESCE(assets_depr_ledger_monthly.adjustment_depreciation, 0) AS adj_depr,
+                COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) AS acc_end
+            ),
+            calc AS (
+                SELECT
+                life_months,
+                start_date,
+                cutoff_day,
+                period_m,
+                depr_expense,
+                adj_depr,
+                acc_end,
+                CASE
+                    WHEN start_date IS NULL THEN NULL
+                    WHEN EXTRACT(DAY FROM start_date) <= cutoff_day
+                    THEN date_trunc('month', start_date)::date
+                    ELSE (date_trunc('month', start_date) + INTERVAL '1 month')::date
+                END AS eligible_start
+                FROM base
+            )
+            SELECT
                 GREATEST(
-                  COALESCE(
-                    (
-                      COALESCE(
-                        NULLIF(p.useful_life_months, 0),
-                        NULLIF(av.useful_life_month, 0),
-                        CASE WHEN av.useful_life_year IS NOT NULL
-                             THEN (av.useful_life_year * 12)::int
-                             ELSE 0 END,
-                        0
-                      )
-                      -
-                      (
-                        CASE
-                          WHEN p.depr_start_date IS NULL THEN 0
-                          ELSE
-                            CASE
-                              WHEN date_trunc('month', assets_depr_ledger_monthly.period) <
-                                (
-                                  CASE
-                                    WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
-                                      THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                    ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                  END
-                                )
-                              THEN 0
-                              ELSE
-                                (
-                                  (DATE_PART('year', AGE(
-                                      date_trunc('month', assets_depr_ledger_monthly.period),
-                                      CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
-                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                      END
-                                  ))::int * 12)
-                                  +
-                                  DATE_PART('month', AGE(
-                                      date_trunc('month', assets_depr_ledger_monthly.period),
-                                      CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,15)
-                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                      END
-                                  ))::int
-                                  + 1
-                                )
-                            END
-                        END
-                      )
-                    ),
-                    0
-                  ),
-                0) AS remaining_useful_life_months
-            "),
+                calc.life_months
+                -
+                CASE
+                    -- belum eligible -> jangan berkurang
+                    WHEN calc.eligible_start IS NULL OR calc.period_m < calc.eligible_start THEN 0
+
+                    -- eligible tapi bulan ini tidak ada depresiasi sama sekali -> jangan berkurang
+                    WHEN (calc.acc_end = 0 AND calc.depr_expense = 0 AND calc.adj_depr = 0) THEN 0
+
+                    -- sudah mulai depresiasi -> bulan berjalan ikut dihitung
+                    ELSE LEAST(
+                    calc.life_months,
+                    (DATE_PART('year', AGE(calc.period_m, calc.eligible_start))::int * 12)
+                    + DATE_PART('month', AGE(calc.period_m, calc.eligible_start))::int
+                    + 1
+                    )
+                END
+                , 0)
+            FROM calc
+            ) AS remaining_useful_life_months")
             ]);
 
-        // same filters as dtMonthly
         if ($status = $request->get('asset_status')) {
             $q->whereHas('asset', function ($qa) use ($status) {
                 $qa->where('kode_status', $status);
@@ -1511,12 +1529,6 @@ class ExportController
             $q->whereDate('av.capitalization_date', '<=', $capTo);
         }
 
-        if ($periodDepr) {
-            $q->whereNotNull('av.capitalization_date')
-                ->whereRaw("
-        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date = ?
-      ", [$periodDepr]);
-        }
         if ($assetQ = trim((string) $request->get('asset_q', ''))) {
             $q->whereHas('asset', function ($qa) use ($assetQ) {
                 $qa->where('asset_code', 'ilike', "%{$assetQ}%")
@@ -1603,7 +1615,7 @@ class ExportController
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
-        $fileName = 'depreciation_' . str_replace('-', '', $period) . '.xlsx';
+        $fileName = 'depreciation_' . $from->format('Ym') . '_' . $to->format('Ym') . '.xlsx';
         $writer   = new Xlsx($spreadsheet);
 
         return response()->streamDownload(function () use ($writer) {

@@ -662,10 +662,7 @@ class DepreciationController extends Controller
             FROM calc
             ) AS remaining_useful_life_months")
             ]);
-
-        // =========================
-        // FILTERS (UNCHANGED)
-        // =========================
+            
         if ($status = $r->get('asset_status')) {
             $q->whereHas('asset', function ($qa) use ($status) {
                 $qa->where('kode_status', $status);

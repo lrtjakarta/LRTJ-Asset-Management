@@ -325,7 +325,7 @@
                 "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
             searching: true,
             order: [
-                [0, 'asc']
+                [4, 'asc']
             ],
             ajax: {
                 url: ROUTES.dtMonthly,
@@ -382,6 +382,7 @@
                 {
                     data: 'period_depr',
                     name: 'period_depr',
+                    searchable: false,
                     render: function(iso, type) {
                         if (!iso) return '';
                         if (type === 'sort' || type === 'type') return iso;
