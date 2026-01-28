@@ -4,6 +4,44 @@
         const PROJECT_UUID = @json($project->uuid);
         const SHOW_ASSET_URL_TPL = @json(route('assets.detail', '__UUID__'));
         const REMOVE_URL_TPL = @json(route('stockopname.asset_projects.assets.remove', ['project' => '__P__', 'assetUuid' => '__A__']));
+        const PROJECT_STATUS = @json($project->status);
+        const DONE_URL_TPL = @json(route('stockopname.asset_projects.assets.stockopname_done', ['project' => '__P__', 'assetUuid' => '__A__']));
+        const BULK_URL = @json(route('stockopname.asset_projects.assets.stockopname_bulk', $project->uuid));
+        const REOPEN_URL = @json(route('stockopname.asset_projects.reopen', $project->uuid));
+
+        function getVisibleAssetUuids(table) {
+            const rows = table.rows({
+                page: 'current'
+            }).data().toArray();
+            return rows.map(r => r.uuid);
+        }
+
+        function syncHeaderCheckbox(table) {
+            const $all = $('#cb-stockopname-all');
+            if (PROJECT_STATUS === 'CLOSED') {
+                $all.prop('checked', false).prop('indeterminate', false).prop('disabled', true);
+                return;
+            }
+
+            const nodes = table.rows({
+                page: 'current'
+            }).nodes();
+            const cbs = $(nodes).find('.cb-stockopname');
+            if (cbs.length === 0) {
+                $all.prop('checked', false).prop('indeterminate', false);
+                return;
+            }
+
+            const checkedCount = cbs.filter(':checked').length;
+
+            if (checkedCount === 0) {
+                $all.prop('checked', false).prop('indeterminate', false);
+            } else if (checkedCount === cbs.length) {
+                $all.prop('checked', true).prop('indeterminate', false);
+            } else {
+                $all.prop('checked', false).prop('indeterminate', true);
+            }
+        }
 
         const table = $('#projectAssetsTable').DataTable({
             serverSide: true,
@@ -62,6 +100,25 @@
                             hour12: false
                         }).format(d);
                     }
+                }, {
+                    data: 'stock_opname_done',
+                    name: 'pa.stock_opname_done',
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center',
+                    render: function(v, type, row) {
+                        if (type !== 'display') return v;
+                        const checked = (Number(v) === 1 || v === true) ? 'checked' : '';
+                        const disabled = (PROJECT_STATUS === 'CLOSED') ? 'disabled' : '';
+                        return `
+                        <div class="form-check form-check-sm form-check-custom form-check-solid d-inline-flex justify-content-center">
+                            <input class="form-check-input cb-stockopname"
+                                type="checkbox"
+                                data-uuid="${row.uuid}"
+                                ${checked} ${disabled}/>
+                        </div>
+                        `;
+                    }
                 },
                 {
                     data: 'actions',
@@ -70,6 +127,28 @@
                     searchable: false
                 }
             ]
+        });
+
+        table.on('draw', function() {
+            syncHeaderCheckbox(table);
+        });
+
+        $(document).on('click', '#btnReopenProject', function(e) {
+            e.preventDefault();
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Re-open project?',
+                text: 'Project will be opened again and stock opname checklist can be edited.',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, re-open',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#EA242A',
+            }).then((r) => {
+                if (r.isConfirmed) {
+                    $('#formReopenProject').trigger('submit');
+                }
+            });
         });
 
         $(document).on('click', '.btn-remove-asset', function() {
@@ -116,6 +195,164 @@
                 }
             });
         });
+        $(document).on('change', '.cb-stockopname', async function() {
+            const assetUuid = $(this).data('uuid');
+            const done = this.checked;
+
+            // optimasi UX: disable dulu biar ga double click
+            $(this).prop('disabled', true);
+
+            const url = DONE_URL_TPL
+                .replace('__P__', encodeURIComponent(PROJECT_UUID))
+                .replace('__A__', encodeURIComponent(assetUuid));
+
+            try {
+                const res = await fetch(url, {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        done
+                    })
+                });
+
+                if (!res.ok) {
+                    // revert kalau gagal
+                    this.checked = !done;
+
+                    let msg = 'Update failed';
+                    try {
+                        const j = await res.json();
+                        msg = j.message || msg;
+                    } catch (e) {}
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: msg
+                    });
+                } else {
+                    // optional toast kecil
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Updated',
+                        timer: 900,
+                        showConfirmButton: false
+                    });
+                    syncHeaderCheckbox(table);
+                }
+            } catch (e) {
+                this.checked = !done;
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed',
+                    text: 'Network error'
+                });
+            } finally {
+                // enable lagi (kecuali CLOSED)
+                $(this).prop('disabled', PROJECT_STATUS === 'CLOSED');
+            }
+        });
+        $(document).on('change', '#cb-stockopname-all', async function() {
+            if (PROJECT_STATUS === 'CLOSED') return;
+
+            const done = this.checked;
+            const assetUuids = getVisibleAssetUuids(table); // table harus scope global / outer
+
+            if (!assetUuids.length) {
+                this.checked = !done;
+                return;
+            }
+
+            const actionText = done ? 'Check ALL assets on this page?' : 'Uncheck ALL assets on this page?';
+
+            const ok = await Swal.fire({
+                icon: 'question',
+                title: 'Confirm',
+                text: actionText,
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'Cancel',
+            });
+
+            if (!ok.isConfirmed) {
+                this.checked = !done;
+                syncHeaderCheckbox(table);
+                return;
+            }
+
+            // disable all checkboxes sementara
+            $('#cb-stockopname-all').prop('disabled', true);
+            table.rows({
+                page: 'current'
+            }).nodes().to$().find('.cb-stockopname').prop('disabled', true);
+
+            try {
+                const res = await fetch(BULK_URL, {
+                    method: 'PATCH',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        done,
+                        asset_uuids: assetUuids
+                    })
+                });
+
+                if (!res.ok) {
+                    let msg = 'Bulk update failed';
+                    try {
+                        msg = (await res.json()).message || msg;
+                    } catch (e) {}
+                    // revert header state
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: msg
+                    });
+                    syncHeaderCheckbox(table);
+                    return;
+                }
+
+                // update UI checkboxes current page tanpa reload
+                table.rows({
+                    page: 'current'
+                }).nodes().to$().find('.cb-stockopname').prop('checked', done);
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Updated',
+                    timer: 900,
+                    showConfirmButton: false
+                });
+
+            } catch (e) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Failed',
+                    text: 'Network error'
+                });
+                syncHeaderCheckbox(table);
+            } finally {
+                // enable back (kecuali CLOSED)
+                $('#cb-stockopname-all').prop('disabled', PROJECT_STATUS === 'CLOSED');
+                table.rows({
+                        page: 'current'
+                    }).nodes().to$().find('.cb-stockopname')
+                    .prop('disabled', PROJECT_STATUS === 'CLOSED');
+
+                syncHeaderCheckbox(table);
+            }
+        });
     </script>
 @endpush
 
@@ -143,12 +380,33 @@
             <div class="card mb-5">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h2 class="fw-bold mb-1">{{ $project->name }}</h2>
-                            <div class="text-muted">Assigned Assets: <span class="fw-semibold">{{ $assetCount }}</span>
+                        <div class="row w-100">
+                            <div class="col-md-9">
+                                <h2 class="fw-bold mb-1">{{ $project->name }}</h2>
+                                <div class="text-muted">Assigned Assets: <span
+                                        class="fw-semibold">{{ $assetCount }}</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                @if ($project->status === 'CLOSED')
+                                    <form id="formReopenProject" method="POST"
+                                        action="{{ route('stockopname.asset_projects.reopen', $project->uuid) }}"
+                                        class="d-inline">
+                                        @csrf
+                                        @method('PATCH')
+                                        <button type="button" class="btn btn-sm btn-warning me-2" id="btnReopenProject">
+                                            Re-open
+                                        </button>
+                                    </form>
+                                @endif
+                                <a href="{{ route('stockopname.asset_projects.assets.export_excel', $project->uuid) }}"
+                                    class="btn btn-sm btn-success me-2">
+                                    Export Excel
+                                </a>
+                                <a href="{{ route('stockopname.asset_projects.index') }}"
+                                    class="btn btn-sm btn-light me-2">Back</a>
                             </div>
                         </div>
-                        <a href="{{ route('stockopname.asset_projects.index') }}" class="btn btn-sm btn-light">Back</a>
                     </div>
                 </div>
             </div>
@@ -167,8 +425,17 @@
                                 <th class="min-w-150px">Location</th>
                                 <th class="min-w-150px">Status</th>
                                 <th class="min-w-150px">Total</th>
-                                <th class="min-w-220px">Assigned At</th>
-                                <th class="min-w-120px">Action</th>
+                                <th class="min-w-250px">Assigned At</th>
+                                <th class="min-w-200px text-center align-middle">
+                                    <div class="d-flex flex-column align-items-center justify-content-center">
+                                        <span>Stock Opname</span>
+                                        <div class="form-check form-check-sm form-check-custom form-check-solid mt-2">
+                                            <input class="form-check-input" style="margin-left:-15%;" type="checkbox"
+                                                id="cb-stockopname-all" />
+                                        </div>
+                                    </div>
+                                </th>
+                                <th class="min-w-200px">Action</th>
                             </tr>
                         </thead>
                     </table>
