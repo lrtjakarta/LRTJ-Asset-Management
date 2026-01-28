@@ -1789,12 +1789,17 @@ class StockOpnameController extends Controller
             ->addColumn('actions', function ($row) {
                 $uuid = e($row->uuid);
                 $disabled = ($row->status === 'CLOSED') ? 'disabled' : '';
+                $disabled_c = ($row->status !== 'CLOSED') ? 'disabled' : '';
                 return '
-        <button class="btn btn-sm btn-light-danger btn-close-project"
-          data-uuid="' . $uuid . '" ' . $disabled . '>
-          Close
-        </button>
-      ';
+                    <button class="btn btn-sm btn-light-danger btn-close-project"
+                    data-uuid="' . $uuid . '" ' . $disabled . '>
+                    Close
+                    </button>
+                    <button class="btn btn-sm btn-light-success btn-re-open-project"
+                    data-uuid="' . $uuid . '" ' . $disabled_c . '>
+                    Re-open
+                    </button>
+                ';
             })
             ->rawColumns(['actions'])
             ->make(true);
@@ -2011,21 +2016,14 @@ class StockOpnameController extends Controller
     }
     public function reopenProject(Request $request, AssetProject $project)
     {
-        // abort_unless($request->user()?->hasAction('STOCK_OPN', 'U'), 403);
-        // abort_if($project->deleted_at, 404);
+        abort_unless($request->user()?->hasAction('STOCK_OPN', 'C'), 403);
 
         if ($project->status !== 'CLOSED') {
-            return back()->with('success', 'Project already OPEN.');
+            return response()->json(['ok' => true, 'status' => 'CLOSED']);
         }
 
-        DB::table('asset_projects')
-            ->where('uuid', $project->uuid)
-            ->update([
-                'status'     => 'OPEN',
-                'updated_at' => now(),
-            ]);
-
-        return back()->with('success', 'Project reopened.');
+        $project->update(['status' => 'OPEN']);
+        return response()->json(['ok' => true, 'status' => 'OPEN']);
     }
 
     public function selectExportExcel(Request $request)

@@ -107,6 +107,49 @@
                 }
             });
         });
+        
+        $(document).on('click', '.btn-re-open-project', function() {
+            const uuid = $(this).data('uuid');
+
+            Swal.fire({
+                title: 'Re-open this project?',
+                text: 'After re-opening, you can assign more assets to it.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, re-open',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#EA242A'
+            }).then(async r => {
+                if (!r.isConfirmed) return;
+
+                const REOPEN_PROJECT_URL_TPL = @json(route('stockopname.asset_projects.reopen', '__UUID__'));
+                const url = REOPEN_PROJECT_URL_TPL.replace('__UUID__', uuid);
+
+                const res = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Re-opened',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+                    table.ajax.reload(null, false);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: 'Could not re-open project.'
+                    });
+                }
+            });
+        });
     </script>
 @endpush
 
