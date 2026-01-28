@@ -1,13 +1,17 @@
 @extends('layouts.app')
+
 @push('scripts')
     <script>
         const PROJECT_UUID = @json($project->uuid);
         const SHOW_ASSET_URL_TPL = @json(route('assets.detail', '__UUID__'));
         const REMOVE_URL_TPL = @json(route('stockopname.asset_projects.assets.remove', ['project' => '__P__', 'assetUuid' => '__A__']));
-        const PROJECT_STATUS = @json($project->status);
+        let PROJECT_STATUS = @json($project->status); // IMPORTANT: must be let (dynamic)
         const DONE_URL_TPL = @json(route('stockopname.asset_projects.assets.stockopname_done', ['project' => '__P__', 'assetUuid' => '__A__']));
         const BULK_URL = @json(route('stockopname.asset_projects.assets.stockopname_bulk', $project->uuid));
-        const REOPEN_URL = @json(route('stockopname.asset_projects.reopen', $project->uuid));
+
+        // urls used for re-rendering action buttons
+        const EXPORT_URL = @json(route('stockopname.asset_projects.assets.export_excel', $project->uuid));
+        const BACK_URL = @json(route('stockopname.asset_projects.index'));
 
         function getVisibleAssetUuids(table) {
             const rows = table.rows({
@@ -18,6 +22,7 @@
 
         function syncHeaderCheckbox(table) {
             const $all = $('#cb-stockopname-all');
+
             if (PROJECT_STATUS === 'CLOSED') {
                 $all.prop('checked', false).prop('indeterminate', false).prop('disabled', true);
                 return;
@@ -27,6 +32,7 @@
                 page: 'current'
             }).nodes();
             const cbs = $(nodes).find('.cb-stockopname');
+
             if (cbs.length === 0) {
                 $all.prop('checked', false).prop('indeterminate', false);
                 return;
@@ -43,7 +49,52 @@
             }
         }
 
-        const table = $('#projectAssetsTable').DataTable({
+        function renderActionButtons(status) {
+            const uuid = PROJECT_UUID;
+
+            const statusBtn = (status === 'CLOSED') ?
+                `<button class="btn btn-sm btn-warning btn-re-open-project" data-uuid="${uuid}" id="btnReopenProject">
+                    Re-open
+                 </button>` :
+                `<button class="btn btn-sm btn-danger btn-close-project" data-uuid="${uuid}" id="btnCloseProject">
+                    Close
+                 </button>`;
+
+            $('#actionButtons').html(`
+                ${statusBtn}
+                <a href="${EXPORT_URL}" class="btn btn-sm btn-success me-2">Export Excel</a>
+                <a href="${BACK_URL}" class="btn btn-sm btn-light me-2">Back</a>
+            `);
+        }
+
+        function applyStatusToCheckboxes(status) {
+            const closed = (status === 'CLOSED');
+
+            // header checkbox
+            $('#cb-stockopname-all')
+                .prop('disabled', closed)
+                .prop('checked', false)
+                .prop('indeterminate', false);
+
+            // visible row checkboxes
+            if (window.table) {
+                window.table.rows({
+                        page: 'current'
+                    }).nodes().to$()
+                    .find('.cb-stockopname')
+                    .prop('disabled', closed);
+            }
+        }
+
+        function refreshProjectUI(newStatus) {
+            PROJECT_STATUS = newStatus; // IMPORTANT
+            renderActionButtons(newStatus);
+            applyStatusToCheckboxes(newStatus);
+            syncHeaderCheckbox(window.table);
+        }
+
+        // ===================== DATATABLE =====================
+        window.table = $('#projectAssetsTable').DataTable({
             serverSide: true,
             processing: true,
             scrollX: true,
@@ -100,7 +151,8 @@
                             hour12: false
                         }).format(d);
                     }
-                }, {
+                },
+                {
                     data: 'stock_opname_done',
                     name: 'pa.stock_opname_done',
                     orderable: false,
@@ -111,12 +163,12 @@
                         const checked = (Number(v) === 1 || v === true) ? 'checked' : '';
                         const disabled = (PROJECT_STATUS === 'CLOSED') ? 'disabled' : '';
                         return `
-                        <div class="form-check form-check-sm form-check-custom form-check-solid d-inline-flex justify-content-center">
-                            <input class="form-check-input cb-stockopname"
-                                type="checkbox"
-                                data-uuid="${row.uuid}"
-                                ${checked} ${disabled}/>
-                        </div>
+                            <div class="form-check form-check-sm form-check-custom form-check-solid d-inline-flex justify-content-center">
+                                <input class="form-check-input cb-stockopname"
+                                    type="checkbox"
+                                    data-uuid="${row.uuid}"
+                                    ${checked} ${disabled}/>
+                            </div>
                         `;
                     }
                 },
@@ -129,12 +181,20 @@
             ]
         });
 
-        table.on('draw', function() {
-            syncHeaderCheckbox(table);
+        window.table.on('draw', function() {
+            syncHeaderCheckbox(window.table);
+            applyStatusToCheckboxes(PROJECT_STATUS);
         });
 
+        // initial render (so action buttons + checkbox state reflect current status)
+        $(document).ready(function() {
+            renderActionButtons(PROJECT_STATUS);
+            applyStatusToCheckboxes(PROJECT_STATUS);
+        });
+
+        // ===================== RE-OPEN =====================
         $(document).on('click', '#btnReopenProject', function(e) {
-            e.preventDefault();
+            const uuid = $(this).data('uuid');
 
             Swal.fire({
                 icon: 'question',
@@ -144,13 +204,101 @@
                 confirmButtonText: 'Yes, re-open',
                 cancelButtonText: 'Cancel',
                 confirmButtonColor: '#EA242A',
-            }).then((r) => {
-                if (r.isConfirmed) {
-                    $('#formReopenProject').trigger('submit');
+            }).then(async r => {
+                if (!r.isConfirmed) return;
+
+                const REOPEN_PROJECT_URL_TPL = @json(route('stockopname.asset_projects.reopen', '__UUID__'));
+                const url = REOPEN_PROJECT_URL_TPL.replace('__UUID__', encodeURIComponent(uuid));
+
+                const res = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    // prefer json status if available, fallback OPEN
+                    let nextStatus = 'OPEN';
+                    try {
+                        const j = await res.json();
+                        if (j?.status) nextStatus = j.status;
+                    } catch (e) {}
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Re-opened',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+
+                    refreshProjectUI(nextStatus);
+                    window.table.ajax.reload(null, false);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: 'Could not re-open project.'
+                    });
                 }
             });
         });
 
+        // ===================== CLOSE =====================
+        $(document).on('click', '#btnCloseProject', function(e) {
+            const uuid = $(this).data('uuid');
+
+            Swal.fire({
+                icon: 'question',
+                title: 'Close project?',
+                text: 'Project will be closed and stock opname checklist can no longer be edited.',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, close',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#EA242A',
+            }).then(async r => {
+                if (!r.isConfirmed) return;
+
+                const CLOSE_PROJECT_URL_TPL = @json(route('stockopname.asset_projects.close', '__UUID__'));
+                const url = CLOSE_PROJECT_URL_TPL.replace('__UUID__', encodeURIComponent(uuid));
+
+                const res = await fetch(url, {
+                    method: 'PATCH',
+                    headers: {
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (res.ok) {
+                    // prefer json status if available, fallback CLOSED
+                    let nextStatus = 'CLOSED';
+                    try {
+                        const j = await res.json();
+                        if (j?.status) nextStatus = j.status;
+                    } catch (e) {}
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Closed',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+
+                    refreshProjectUI(nextStatus);
+                    window.table.ajax.reload(null, false);
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Failed',
+                        text: 'Could not close project.'
+                    });
+                }
+            });
+        });
+
+        // ===================== REMOVE ASSET =====================
         $(document).on('click', '.btn-remove-asset', function() {
             const assetUuid = $(this).data('uuid');
 
@@ -185,7 +333,7 @@
                         timer: 1200,
                         showConfirmButton: false
                     });
-                    table.ajax.reload(null, false);
+                    window.table.ajax.reload(null, false);
                 } else {
                     Swal.fire({
                         icon: 'error',
@@ -195,11 +343,13 @@
                 }
             });
         });
+
+        // ===================== SINGLE CHECKBOX =====================
         $(document).on('change', '.cb-stockopname', async function() {
             const assetUuid = $(this).data('uuid');
             const done = this.checked;
 
-            // optimasi UX: disable dulu biar ga double click
+            // UX: disable to prevent double click
             $(this).prop('disabled', true);
 
             const url = DONE_URL_TPL
@@ -222,7 +372,7 @@
                 });
 
                 if (!res.ok) {
-                    // revert kalau gagal
+                    // revert if failed
                     this.checked = !done;
 
                     let msg = 'Update failed';
@@ -237,14 +387,13 @@
                         text: msg
                     });
                 } else {
-                    // optional toast kecil
                     Swal.fire({
                         icon: 'success',
                         title: 'Updated',
                         timer: 900,
                         showConfirmButton: false
                     });
-                    syncHeaderCheckbox(table);
+                    syncHeaderCheckbox(window.table);
                 }
             } catch (e) {
                 this.checked = !done;
@@ -254,15 +403,17 @@
                     text: 'Network error'
                 });
             } finally {
-                // enable lagi (kecuali CLOSED)
+                // enable again unless CLOSED
                 $(this).prop('disabled', PROJECT_STATUS === 'CLOSED');
             }
         });
+
+        // ===================== HEADER CHECKBOX (BULK CURRENT PAGE) =====================
         $(document).on('change', '#cb-stockopname-all', async function() {
             if (PROJECT_STATUS === 'CLOSED') return;
 
             const done = this.checked;
-            const assetUuids = getVisibleAssetUuids(table); // table harus scope global / outer
+            const assetUuids = getVisibleAssetUuids(window.table);
 
             if (!assetUuids.length) {
                 this.checked = !done;
@@ -282,13 +433,13 @@
 
             if (!ok.isConfirmed) {
                 this.checked = !done;
-                syncHeaderCheckbox(table);
+                syncHeaderCheckbox(window.table);
                 return;
             }
 
-            // disable all checkboxes sementara
+            // disable all checkboxes while processing
             $('#cb-stockopname-all').prop('disabled', true);
-            table.rows({
+            window.table.rows({
                 page: 'current'
             }).nodes().to$().find('.cb-stockopname').prop('disabled', true);
 
@@ -313,18 +464,18 @@
                     try {
                         msg = (await res.json()).message || msg;
                     } catch (e) {}
-                    // revert header state
+
                     Swal.fire({
                         icon: 'error',
                         title: 'Failed',
                         text: msg
                     });
-                    syncHeaderCheckbox(table);
+                    syncHeaderCheckbox(window.table);
                     return;
                 }
 
-                // update UI checkboxes current page tanpa reload
-                table.rows({
+                // update current page UI without reload
+                window.table.rows({
                     page: 'current'
                 }).nodes().to$().find('.cb-stockopname').prop('checked', done);
 
@@ -341,21 +492,20 @@
                     title: 'Failed',
                     text: 'Network error'
                 });
-                syncHeaderCheckbox(table);
+                syncHeaderCheckbox(window.table);
             } finally {
-                // enable back (kecuali CLOSED)
+                // enable back unless CLOSED
                 $('#cb-stockopname-all').prop('disabled', PROJECT_STATUS === 'CLOSED');
-                table.rows({
+                window.table.rows({
                         page: 'current'
                     }).nodes().to$().find('.cb-stockopname')
                     .prop('disabled', PROJECT_STATUS === 'CLOSED');
 
-                syncHeaderCheckbox(table);
+                syncHeaderCheckbox(window.table);
             }
         });
     </script>
 @endpush
-
 
 @section('content')
     <div id="kt_app_toolbar" class="app-toolbar py-3 py-lg-6 mb-10">
@@ -383,33 +533,19 @@
                         <div class="row w-100">
                             <div class="col-md-9">
                                 <h2 class="fw-bold mb-1">{{ $project->name }}</h2>
-                                <div class="text-muted">Assigned Assets: <span
-                                        class="fw-semibold">{{ $assetCount }}</span>
+                                <div class="text-muted">
+                                    Assigned Assets: <span class="fw-semibold">{{ $assetCount }}</span>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                @if ($project->status === 'CLOSED')
-                                    <form id="formReopenProject" method="POST"
-                                        action="{{ route('stockopname.asset_projects.reopen', $project->uuid) }}"
-                                        class="d-inline">
-                                        @csrf
-                                        @method('PATCH')
-                                        <button type="button" class="btn btn-sm btn-warning me-2" id="btnReopenProject">
-                                            Re-open
-                                        </button>
-                                    </form>
-                                @endif
-                                <a href="{{ route('stockopname.asset_projects.assets.export_excel', $project->uuid) }}"
-                                    class="btn btn-sm btn-success me-2">
-                                    Export Excel
-                                </a>
-                                <a href="{{ route('stockopname.asset_projects.index') }}"
-                                    class="btn btn-sm btn-light me-2">Back</a>
-                            </div>
+
+                            {{-- IMPORTANT: buttons will be rendered by JS so they can refresh after close/reopen --}}
+                            <div class="col-md-3" id="actionButtons"></div>
+
                         </div>
                     </div>
                 </div>
             </div>
+
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title fw-bold">Assigned Assets</h3>

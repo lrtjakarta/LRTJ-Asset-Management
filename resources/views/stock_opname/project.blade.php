@@ -145,7 +145,7 @@
                 width: '100%',
                 allowClear: true,
                 placeholder: '— Select project —',
-                dropdownParent: $modal.find('.modal-content'), // ✅ must be inside modal-content
+                dropdownParent: $modal.find('.modal-content'),
                 ajax: {
                     url: "{{ route('stockopname.asset_projects.options') }}",
                     dataType: 'json',
@@ -172,8 +172,6 @@
                     }
                 }
             });
-
-            // ✅ reliable fill project_uuid
             $sel.on('select2:select', function(e) {
                 const id = e.params?.data?.id || '';
                 $('#projectUuid').val(id);
