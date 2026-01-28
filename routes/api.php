@@ -1,15 +1,17 @@
 <?php
+// routes/api.php
 
-use App\Http\Controllers\Api\AssetsApi;
 use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MasterDataApi;
+use App\Http\Controllers\Api\AssetsApi;
 use App\Http\Controllers\Api\TransferApi;
 use App\Http\Controllers\Api\DisposalApi;
 use App\Http\Controllers\Api\ReturnHistoryApi;
-use App\Http\Controllers\Api\RfidApiController;
 use App\Http\Controllers\Api\StockOpnameApi;
 use App\Http\Controllers\Api\StorageApi;
+use App\Http\Controllers\Api\RfidApiController;
 
 Route::prefix('v1')->group(function () {
     // PUBLIC
@@ -44,10 +46,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/disposals', [DisposalApi::class, 'store']);
         Route::post('/disposals/approve', [DisposalApi::class, 'approve'])->name('disposals.approve');
         Route::post('/disposals/reject', [DisposalApi::class, 'reject'])->name('disposals.reject');
-        Route::get('/disposals/form', [DisposalApi::class, 'downloadForm'])
-            ->name('disposals.form.download');
-        Route::get('/disposals/ba', [DisposalApi::class, 'downloadBa'])
-            ->name('disposals.ba.download');
+        Route::get('/disposals/form', [DisposalApi::class, 'downloadForm'])->name('disposals.form.download');
+        Route::get('/disposals/ba', [DisposalApi::class, 'downloadBa'])->name('disposals.ba.download');
 
         // RETURN HISTORY
         Route::get('/returns', [ReturnHistoryApi::class, 'index']);
@@ -58,6 +58,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/stock-opname', [StockOpnameApi::class, 'index'])->name('stockopname.api.index');
         Route::post('/stock-opname/transfer', [StockOpnameApi::class, 'storeTransfer'])->name('stockopname.api.transfer.store');
         Route::post('/stock-opname/disposal', [StockOpnameApi::class, 'storeDisposal'])->name('stockopname.api.disposal.store');
+        Route::patch('/stock-opname/projects/{projectUuid}/close',  [StockOpnameApi::class, 'projectClose']);
+        Route::patch('/stock-opname/projects/{projectUuid}/reopen', [StockOpnameApi::class, 'projectReopen']);
+        Route::patch('/stock-opname/projects/{projectUuid}/done', [StockOpnameApi::class, 'stockOpnameDone']);
+        Route::get('/v1/stock-opname/projects/{projectUuid}', [StockOpnameApi::class, 'projectShow']);
+        Route::get('/v1/stock-opname/projects', [StockOpnameApi::class, 'projects']);
+
+
+        // PREVIEW (query param: asset_uuid=...)
         Route::get('stock-opname/preview/transfer-form', [StockOpnameApi::class, 'previewTransferForm'])
             ->name('api.stockopname.preview.transfer-form');
         Route::get('stock-opname/preview/disposal-form', [StockOpnameApi::class, 'previewDisposalForm'])
@@ -65,13 +73,15 @@ Route::prefix('v1')->group(function () {
         Route::get('stock-opname/preview/disposal-ba', [StockOpnameApi::class, 'previewDisposalBa'])
             ->name('api.stockopname.preview.disposal-ba');
 
+
         // FILES/STORAGE
-        Route::get('/files/{kind}/{uuid}/download', [StorageApi::class, 'download'])->whereIn('kind', ['disposal', 'transfer'])
+        Route::get('/files/{kind}/{uuid}/download', [StorageApi::class, 'download'])
+            ->whereIn('kind', ['disposal', 'transfer'])
             ->name('files.download.kind');
         Route::get('/files/manifest', [StorageApi::class, 'manifest'])->name('files.manifest');
-        Route::get('/files/{uuid}/download', [StorageApi::class, 'downloadLegacy'])
-            ->name('files.download');
+        Route::get('/files/{uuid}/download', [StorageApi::class, 'downloadLegacy'])->name('files.download');
 
+        // RFID
         Route::post('/rfid/lookup', [RfidApiController::class, 'lookupByEpc']);
 
         // LOGOUT
