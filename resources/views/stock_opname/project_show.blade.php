@@ -101,6 +101,11 @@
             ajax: {
                 url: "{{ route('stockopname.asset_projects.assets.datatable', $project->uuid) }}"
             },
+            dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
+                "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
+                "<'table-responsive'tr>" +
+                "<'row'<'col-sm-12 col-md-5 d-flex align-items-center justify-content-center justify-content-md-start'i>" +
+                "<'col-sm-12 col-md-7 d-flex align-items-center justify-content-center justify-content-md-end'p>>",
             order: [
                 [6, 'desc']
             ], // assigned_at column index (0-based)
@@ -115,7 +120,7 @@
                 },
                 {
                     data: 'kode_asset_class_label',
-                    name: 'kode_asset_class_label'
+                    name: 'a.kode_asset_class'
                 },
                 {
                     data: 'description',
@@ -123,11 +128,11 @@
                 },
                 {
                     data: 'kode_location_label',
-                    name: 'kode_location_label'
+                    name: 'a.kode_location'
                 },
                 {
                     data: 'kode_status_label',
-                    name: 'kode_status_label'
+                    name: 'a.kode_status'
                 },
                 {
                     data: 'total',
