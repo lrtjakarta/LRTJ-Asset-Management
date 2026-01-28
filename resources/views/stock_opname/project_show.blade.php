@@ -392,12 +392,12 @@
                         text: msg
                     });
                 } else {
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Updated',
-                        timer: 900,
-                        showConfirmButton: false
-                    });
+                    // Swal.fire({
+                    //     icon: 'success',
+                    //     title: 'Updated',
+                    //     timer: 900,
+                    //     showConfirmButton: false
+                    // });
                     syncHeaderCheckbox(window.table);
                 }
             } catch (e) {
