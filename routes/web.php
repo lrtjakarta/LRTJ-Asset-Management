@@ -323,10 +323,17 @@ Route::middleware('ldap.session')->group(function () {
             ->name('asset_projects.options');
         Route::patch('/asset-projects/{project:uuid}/close', [StockOpnameController::class, 'projectClose'])
             ->name('asset_projects.close');
-
+        Route::patch('/asset-projects/{project}/reopen', [StockOpnameController::class, 'reopenProject'])
+            ->name('asset_projects.reopen');
 
         Route::get('/asset-projects/assets/options', [StockOpnameController::class, 'projectAssetOptions'])
             ->name('asset_projects.assets.options');
+        Route::get('/asset-projects/{project}/assets/export-excel', [StockOpnameController::class, 'projectAssetsExportExcel'])
+            ->name('asset_projects.assets.export_excel');
+        Route::patch('/asset-projects/{project}/assets/{assetUuid}/stock-opname', [StockOpnameController::class, 'setStockOpnameDone'])
+            ->name('asset_projects.assets.stockopname_done');
+        Route::patch('/asset-projects/{project}/assets/stock-opname/bulk', [StockOpnameController::class, 'bulkSetStockOpnameDone'])
+            ->name('asset_projects.assets.stockopname_bulk');
     });
 
     // DEPRECIATION ROUTE

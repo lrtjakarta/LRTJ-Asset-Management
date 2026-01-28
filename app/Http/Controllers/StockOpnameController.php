@@ -1831,6 +1831,7 @@ class StockOpnameController extends Controller
                 'a.asset_code',
                 'a.description',
                 'pa.created_at as assigned_at',
+                'pa.stock_opname_done',
                 DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label"),
                 DB::raw("CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label"),
                 DB::raw("CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label"),
@@ -1844,6 +1845,72 @@ class StockOpnameController extends Controller
             })
             ->rawColumns(['actions'])
             ->make(true);
+    }
+
+    public function setStockOpnameDone(Request $request, AssetProject $project, string $assetUuid)
+    {
+        // abort_unless($request->user()?->hasAction('STOCK_OPN', 'C'), 403);
+        // abort_if($project->deleted_at, 404);
+        abort_if($project->status === 'CLOSED', 422, 'Project already CLOSED');
+
+        $data = $request->validate([
+            'done' => ['required', 'boolean'],
+        ]);
+
+        $exists = DB::table('asset_project_assets')
+            ->where('project_uuid', $project->uuid)
+            ->where('asset_uuid', $assetUuid)
+            ->exists();
+
+        abort_if(!$exists, 404, 'Asset not assigned to this project');
+
+        $done = (bool) $data['done'];
+        $by = $request->user()->name ?? $request->user()->email ?? null;
+
+        DB::table('asset_project_assets')
+            ->where('project_uuid', $project->uuid)
+            ->where('asset_uuid', $assetUuid)
+            ->update([
+                'stock_opname_done' => $done,
+                'stock_opname_at'   => $done ? now() : null,
+                'stock_opname_by'   => $done ? $by : null,
+                'updated_at'        => now(),
+            ]);
+
+        return response()->json(['ok' => true, 'done' => $done]);
+    }
+
+    public function bulkSetStockOpnameDone(Request $request, AssetProject $project)
+    {
+        abort_unless($request->user()?->hasAction('STOCK_OPN', 'C'), 403);
+        abort_if($project->deleted_at, 404);
+        abort_if($project->status === 'CLOSED', 422, 'Project already CLOSED');
+
+        $data = $request->validate([
+            'done' => ['required', 'boolean'],
+            'asset_uuids' => ['required', 'array', 'min:1', 'max:500'],
+            'asset_uuids.*' => ['required', 'string', 'max:64'],
+        ]);
+
+        $done = (bool) $data['done'];
+        $by = $request->user()->name ?? $request->user()->email ?? null;
+
+        // update hanya asset yang memang assigned ke project tsb
+        $affected = DB::table('asset_project_assets')
+            ->where('project_uuid', $project->uuid)
+            ->whereIn('asset_uuid', $data['asset_uuids'])
+            ->update([
+                'stock_opname_done' => $done,
+                'stock_opname_at'   => $done ? now() : null,
+                'stock_opname_by'   => $done ? $by : null,
+                'updated_at'        => now(),
+            ]);
+
+        return response()->json([
+            'ok' => true,
+            'done' => $done,
+            'affected' => (int) $affected,
+        ]);
     }
 
     public function removeAssetProject(Request $request, AssetProject $project, string $assetUuid)
@@ -1941,6 +2008,24 @@ class StockOpnameController extends Controller
 
         $project->update(['status' => 'CLOSED']);
         return response()->json(['ok' => true, 'status' => 'CLOSED']);
+    }
+    public function reopenProject(Request $request, AssetProject $project)
+    {
+        // abort_unless($request->user()?->hasAction('STOCK_OPN', 'U'), 403);
+        // abort_if($project->deleted_at, 404);
+
+        if ($project->status !== 'CLOSED') {
+            return back()->with('success', 'Project already OPEN.');
+        }
+
+        DB::table('asset_projects')
+            ->where('uuid', $project->uuid)
+            ->update([
+                'status'     => 'OPEN',
+                'updated_at' => now(),
+            ]);
+
+        return back()->with('success', 'Project reopened.');
     }
 
     public function selectExportExcel(Request $request)
@@ -2082,6 +2167,96 @@ class StockOpnameController extends Controller
             $writer->save('php://output');
 
             // cleanup
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+        }, 200, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control' => 'max-age=0, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma' => 'public',
+        ]);
+    }
+    public function projectAssetsExportExcel(Request $request, AssetProject $project)
+    {
+        abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
+        abort_if($project->deleted_at, 404);
+
+        $q = DB::table('asset_project_assets as pa')
+            ->join('assets as a', 'a.uuid', '=', 'pa.asset_uuid')
+            ->leftJoin('master_asset_class as mac', 'mac.kode', '=', 'a.kode_asset_class')
+            ->leftJoin('master_location as ml', 'ml.kode', '=', 'a.kode_location')
+            ->leftJoin('master_status as ms', 'ms.kode', '=', 'a.kode_status')
+            ->leftJoin('assets_value as v', 'v.asset_uuid', '=', 'a.uuid')
+            ->where('pa.project_uuid', $project->uuid)
+            ->whereNull('a.deleted_at')
+            ->orderBy('a.asset_code')
+            ->selectRaw("
+            a.asset_code,
+            CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS asset_class,
+            a.description,
+            CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS location,
+            CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS status,
+            COALESCE(v.total, 0) as total,
+            pa.created_at as assigned_at,
+            pa.stock_opname_done
+        ");
+
+        $safeName = preg_replace('/[^A-Za-z0-9_\-]+/', '_', (string) $project->name);
+        $filename = 'stockopname_project_' . $safeName . '_' . now()->format('Ymd_His') . '.xlsx';
+
+        return new StreamedResponse(function () use ($q) {
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Project Assets');
+
+            $headers = [
+                'Asset Code',
+                'Asset Class',
+                'Description',
+                'Location',
+                'Status',
+                'Total',
+                'Assigned At',
+                'Stock Opname',
+            ];
+
+            foreach ($headers as $i => $h) {
+                $col = Coordinate::stringFromColumnIndex($i + 1);
+                $sheet->setCellValue($col . '1', $h);
+            }
+
+            $sheet->getStyle('A1:H1')->getFont()->setBold(true);
+            $sheet->freezePane('A2');
+
+            $rowNum = 2;
+
+            $q->chunk(1000, function ($rows) use (&$rowNum, $sheet) {
+                foreach ($rows as $r) {
+                    $sheet->setCellValueExplicit("A{$rowNum}", (string) $r->asset_code, DataType::TYPE_STRING);
+                    $sheet->setCellValue("B{$rowNum}", (string) $r->asset_class);
+                    $sheet->setCellValue("C{$rowNum}", (string) $r->description);
+                    $sheet->setCellValue("D{$rowNum}", (string) $r->location);
+                    $sheet->setCellValue("E{$rowNum}", (string) $r->status);
+                    $sheet->setCellValue("F{$rowNum}", (float) $r->total);
+                    $sheet->setCellValue("G{$rowNum}", (string) $r->assigned_at);
+                    $sheet->setCellValue("H{$rowNum}", ((int)$r->stock_opname_done === 1) ? '✓' : '');
+                    $rowNum++;
+                }
+            });
+
+            $lastRow = max(2, $rowNum - 1);
+
+            $sheet->getStyle("F2:F{$lastRow}")
+                ->getNumberFormat()
+                ->setFormatCode(NumberFormat::FORMAT_NUMBER_COMMA_SEPARATED1);
+
+            foreach (range('A', 'H') as $c) {
+                $sheet->getColumnDimension($c)->setAutoSize(true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+
             $spreadsheet->disconnectWorksheets();
             unset($spreadsheet);
         }, 200, [
