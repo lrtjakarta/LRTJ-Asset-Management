@@ -36,6 +36,7 @@ class AssetsApi extends Controller
 
             'updated_from' => ['nullable', 'date'],
             'updated_to'   => ['nullable', 'date'],
+            'project_uuid' => ['nullable', 'uuid'],
 
             // sorting/paging
             'sort_by'      => ['nullable', 'in:a.updated_at,a.created_at,a.asset_code,a.description,a.kode_location,a.kode_asset_class,a.kode_status,v.price,v.total'],
@@ -128,6 +129,16 @@ class AssetsApi extends Controller
                 }
             }
         );
+        $projectUuid = $v['project_uuid'] ?? null;
+
+        $q->when($projectUuid, function ($qb) use ($projectUuid) {
+            $qb->whereExists(function ($sq) use ($projectUuid) {
+                $sq->select(DB::raw(1))
+                    ->from('asset_project_assets as apa')
+                    ->whereColumn('apa.asset_uuid', 'a.uuid')
+                    ->where('apa.project_uuid', $projectUuid);
+            });
+        });
 
         // ---- filters: mirrored from datatable() + extra API filters ----
         $q->when(!empty($v['asset_class']), fn($qb) => $qb->where('a.kode_asset_class', $v['asset_class']));

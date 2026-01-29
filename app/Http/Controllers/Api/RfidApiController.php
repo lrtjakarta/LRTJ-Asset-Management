@@ -8,6 +8,7 @@ use App\Models\AssetsRfid;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class RfidApiController extends Controller
 {
@@ -16,8 +17,9 @@ class RfidApiController extends Controller
         $data = $request->validate([
             'epcs'   => ['required', 'array', 'min:1', 'max:300'],
             'epcs.*' => ['required', 'string', 'max:128'],
+            'project_uuid' => ['nullable', 'uuid'],
         ]);
-
+        $projectUuid = $data['project_uuid'] ?? null;
         // normalize + unique, buang empty
         $epcs = collect($data['epcs'])
             ->map(fn($v) => strtoupper(trim((string) $v)))
@@ -40,14 +42,27 @@ class RfidApiController extends Controller
 
         // Ambil assets sekali query
         $assetUuids = $tags->pluck('asset_uuid')->unique()->values();
+        $inProject = collect();
 
+        if ($projectUuid) {
+            $inProject = DB::table('asset_project_assets')
+                ->where('project_uuid', $projectUuid)
+                ->whereIn('asset_uuid', $assetUuids->all())
+                ->pluck('asset_uuid')
+                ->flip();
+        }
         $assets = Assets::query()
-            ->with([
-                'location:uuid,kode,name',
-                'status:uuid,kode,name',
-            ])
+            ->with(['location:uuid,kode,name', 'status:uuid,kode,name'])
             ->whereIn('uuid', $assetUuids->all())
-            ->where('kode_status', '!=', 'DIS')        // <--- exclude disposed
+            ->where('kode_status', '!=', 'DIS')
+            ->when($projectUuid, function ($qb) use ($projectUuid) {
+                $qb->whereExists(function ($sq) use ($projectUuid) {
+                    $sq->selectRaw('1')
+                        ->from('asset_project_assets as apa')
+                        ->whereColumn('apa.asset_uuid', 'assets.uuid')
+                        ->where('apa.project_uuid', $projectUuid);
+                });
+            })
             ->get(['uuid', 'asset_code', 'description', 'kode_status', 'kode_location']);
 
         $assetByUuid = $assets->keyBy('uuid');
@@ -57,12 +72,15 @@ class RfidApiController extends Controller
             ->pluck('uuid')
             ->flip();
         // Build results per EPC (preserve input order)
-        $results = $epcs->map(function (string $epc) use ($tagByEpc, $assetByUuid, $disposedUuids) {
+        $results = $epcs->map(function (string $epc) use ($tagByEpc, $assetByUuid, $disposedUuids, $inProject, $projectUuid) {
             $tag = $tagByEpc->get($epc);
-            if (! $tag) {
+            if (! $tag) return ['epc' => $epc, 'status' => 'not_found'];
+
+            if ($projectUuid && !isset($inProject[$tag->asset_uuid])) {
+                // tag ada, tapi asset bukan anggota project => silent ignore di frontend
                 return [
                     'epc' => $epc,
-                    'status' => 'not_found',
+                    'status' => 'not_in_project',
                 ];
             }
 
