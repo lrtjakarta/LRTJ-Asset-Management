@@ -122,6 +122,7 @@ class StockOpnameApi extends Controller
         $updatedTo   = $v['updated_to']   ?? null;
         $createdFrom = $v['created_from'] ?? null;
         $createdTo   = $v['created_to']   ?? null;
+        $projectUuid = $v['project_uuid'] ?? null;
 
         // === base union queries (copy dari datatable) ===
         $t = DB::table('assets_transfers as t')
@@ -254,6 +255,7 @@ class StockOpnameApi extends Controller
                 $qq->where('code', 'ilike', "%{$qSearch}%")
                     ->orWhere('asset_code', 'ilike', "%{$qSearch}%")
                     ->orWhere('description', 'ilike', "%{$qSearch}%")
+                    ->orWhere('project_name', 'ilike', "%{$qSearch}%")
                     ->orWhere('note', 'ilike', "%{$qSearch}%")
                     ->orWhere('pic_request_uid', 'ilike', "%{$qSearch}%")
                     ->orWhere('pic_approve_uid', 'ilike', "%{$qSearch}%");
@@ -1052,6 +1054,8 @@ class StockOpnameApi extends Controller
                 'before_label'      => $beforeLabel,
                 'after_label'       => $afterLabel,
 
+                'project_uuid'      => $r->project_uuid,
+                'project_name'      => $r->project_name,
                 'note'              => $r->note,
                 'pic_request_uid'   => $r->pic_request_uid,
                 'pic_approve_uid'   => $r->pic_approve_uid,
