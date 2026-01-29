@@ -61,8 +61,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('/stock-opname/projects/{projectUuid}/close',  [StockOpnameApi::class, 'projectClose']);
         Route::patch('/stock-opname/projects/{projectUuid}/reopen', [StockOpnameApi::class, 'projectReopen']);
         Route::patch('/stock-opname/projects/{projectUuid}/done', [StockOpnameApi::class, 'stockOpnameDone']);
-        Route::get('/v1/stock-opname/projects/{projectUuid}', [StockOpnameApi::class, 'projectShow']);
-        Route::get('/v1/stock-opname/projects', [StockOpnameApi::class, 'projects']);
+        Route::get('/stock-opname/projects/{projectUuid}', [StockOpnameApi::class, 'projectShow']);
+        Route::get('/stock-opname/projects', [StockOpnameApi::class, 'projects']);
 
 
         // PREVIEW (query param: asset_uuid=...)

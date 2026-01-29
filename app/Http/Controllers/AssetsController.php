@@ -1089,7 +1089,51 @@ class AssetsController extends Controller
             'asset_number_internal',
             'asset_alias',
         ];
+        $hasGroupCounters  = \Illuminate\Support\Facades\Schema::hasTable('asset_group_counters');
+        $hasParentCounters = \Illuminate\Support\Facades\Schema::hasTable('asset_parent_counters');
 
+        $syncCountersFromAsset = function (\App\Models\Assets $asset) use ($hasGroupCounters, $hasParentCounters) {
+            $parent = trim((string) ($asset->asset_number_parent ?? ''));
+            $child  = trim((string) ($asset->asset_number_child ?? ''));
+
+            if ($parent === '' || $child === '') return;
+
+            // group_code: pakai kode_group_category kalau ada, fallback LEFT(parent,5)
+            $group = trim((string) ($asset->kode_group_category ?? ''));
+            if ($group === '') $group = substr($parent, 0, 5);
+            if ($group === '') return;
+
+            // parent seq = 6 digit terakhir dari parent (AT123000001 -> 1)
+            $digits = preg_replace('/\D+/', '', $parent);
+            $last6  = substr($digits, -6);
+            $parentSeq = (int) ltrim($last6, '0'); // "000001" -> 1, "" -> 0
+
+            // child seq int ("00" -> 0, "05" -> 5)
+            $childDigits = preg_replace('/\D+/', '', $child);
+            $childInt = (int) ltrim($childDigits === '' ? '0' : $childDigits, '0');
+
+            // === upsert group counter ===
+            if ($hasGroupCounters) {
+                \Illuminate\Support\Facades\DB::statement("
+            INSERT INTO asset_group_counters (group_code, last_parent_seq, created_at, updated_at)
+            VALUES (?, ?, NOW(), NOW())
+            ON CONFLICT (group_code) DO UPDATE
+            SET last_parent_seq = GREATEST(asset_group_counters.last_parent_seq, EXCLUDED.last_parent_seq),
+                updated_at = NOW()
+        ", [$group, $parentSeq]);
+            }
+
+            // === upsert parent counter ===
+            if ($hasParentCounters) {
+                \Illuminate\Support\Facades\DB::statement("
+            INSERT INTO asset_parent_counters (parent_code, last_child_seq, created_at, updated_at)
+            VALUES (?, ?, NOW(), NOW())
+            ON CONFLICT (parent_code) DO UPDATE
+            SET last_child_seq = GREATEST(asset_parent_counters.last_child_seq, EXCLUDED.last_child_seq),
+                updated_at = NOW()
+        ", [$parent, $childInt]);
+            }
+        };
         // ===================== TABLE DETECTION =====================
 
         $hasAssignments   = \Illuminate\Support\Facades\Schema::hasTable('assets_assignment');
@@ -1408,6 +1452,7 @@ class AssetsController extends Controller
 
                 $asset->save();
                 $isNew ? $inserted++ : $updated++;
+                $syncCountersFromAsset($asset);
 
                 // === QR ===
                 try {
