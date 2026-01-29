@@ -111,6 +111,7 @@ class TransferApi extends Controller
             ->leftJoin('master_status       as ms',   'ms.kode',   '=', 'a.kode_status')
             ->leftJoin('master_sumber       as msrc', 'msrc.kode', '=', 'a.kode_sumber')
             ->with(['status:uuid,kode,name'])
+            ->whereNull('assets_transfers.project_uuid')
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
             ->when($uuidSet->isNotEmpty(),   fn($x) => $x->whereIn('assets_transfers.uuid', $uuidSet))
