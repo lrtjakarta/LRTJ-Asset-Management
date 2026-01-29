@@ -106,6 +106,7 @@ class DisposalApi extends Controller
                 'asset.assignment.user',
                 'asset.assignment.maintenance',
             ])
+            ->whereNull('assets_disposals.project_uuid')
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($uuidSet->isNotEmpty(),    fn($x) => $x->whereIn('assets_disposals.uuid', $uuidSet))
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
