@@ -66,6 +66,12 @@ class StockOpnameApi extends Controller
      *
      * Union MOVEMENT (Transfer ACC) + DISPOSAL (ACC) dengan filter & pagination.
      */
+    /**
+     * GET /api/v1/stock-opname
+     *
+     * Union MOVEMENT (Transfer ACC) + DISPOSAL (ACC) dengan filter & pagination.
+     * NOTE: khusus correction: hanya yang punya project_uuid (whereNotNull)
+     */
     public function index(Request $request)
     {
         abort_unless($this->canReadStockOpname($request), 403);
@@ -93,6 +99,7 @@ class StockOpnameApi extends Controller
             'sort_dir' => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
             'page'     => ['nullable', 'integer', 'min:1'],
+
             'project_uuid' => ['nullable', 'uuid'],
         ]);
 
@@ -105,114 +112,146 @@ class StockOpnameApi extends Controller
             is_array($request->asset_uuid)
                 ? $request->asset_uuid
                 : (is_string($request->asset_uuid) ? explode(',', $request->asset_uuid) : [])
-        )->map(fn($x) => trim((string) $x))
+        )
+            ->map(fn($x) => trim((string) $x))
             ->filter(fn($x) => Str::isUuid($x))
             ->unique()
             ->values();
 
-        $source    = $v['source'] ?? null;
-        $tfType    = $v['tf_type'] ?? ($v['type'] ?? null);
-        $assetQ    = trim((string) ($v['asset_q'] ?? ''));
-        $requester = trim((string) ($v['requester'] ?? ''));
-        $qSearch   = trim((string) ($v['q'] ?? ''));
+        $source      = $v['source'] ?? null;
+        $tfType      = $v['tf_type'] ?? ($v['type'] ?? null);
+        $assetQ      = trim((string) ($v['asset_q'] ?? ''));
+        $requester   = trim((string) ($v['requester'] ?? ''));
+        $qSearch     = trim((string) ($v['q'] ?? ''));
         $projectUuid = $v['project_uuid'] ?? null;
+
         $dateFrom    = $v['date_from']    ?? null;
         $dateTo      = $v['date_to']      ?? null;
         $updatedFrom = $v['updated_from'] ?? null;
         $updatedTo   = $v['updated_to']   ?? null;
         $createdFrom = $v['created_from'] ?? null;
         $createdTo   = $v['created_to']   ?? null;
-        $projectUuid = $v['project_uuid'] ?? null;
 
-        // === base union queries (copy dari datatable) ===
+        /**
+         * IMPORTANT:
+         * - Kolom select antara transfer & disposal HARUS sama persis (jumlah & urutan)
+         * - Kita include project_status buat Android (t.projectStatus)
+         */
+
+        // === base transfer query ===
         $t = DB::table('assets_transfers as t')
             ->join('assets as a', 'a.uuid', '=', 't.asset_uuid')
             ->leftJoin('asset_projects as p', 'p.uuid', '=', 't.project_uuid')
             ->selectRaw("
-        t.uuid,
-        t.asset_uuid,
-        t.project_uuid,
-        COALESCE(p.name,'') as project_name,
+            t.uuid,
+            t.asset_uuid,
+            t.project_uuid,
+            COALESCE(p.name,'')   as project_name,
+            COALESCE(p.status,'') as project_status,
 
-        a.asset_code,
-        a.description,
+            a.asset_code,
+            a.description,
 
-        t.transfer_code       as code,
-        'transfer'            as source_type,
-        t.type                as tf_type,
-        COALESCE(t.before->>'value','') as before_val,
-        COALESCE(t.after->>'value','')  as after_val,
-        t.pic_request_uid,
-        t.pic_approve_uid,
-        t.note,
-        t.file_name,
-        t.file_path,
-        t.flow_file_name,
-        t.flow_file_path,
-        NULL::text            as ba_file_name,
-        NULL::text            as ba_file_path,
-        t.updated_at,
-        t.created_at
-    ")
+            t.transfer_code       as code,
+            'transfer'            as source_type,
+            t.type                as tf_type,
+
+            COALESCE(t.before->>'value','') as before_val,
+            COALESCE(t.after->>'value','')  as after_val,
+
+            t.pic_request_uid,
+            t.pic_approve_uid,
+            t.note,
+
+            t.file_name,
+            t.file_path,
+
+            t.flow_file_name,
+            t.flow_file_path,
+
+            NULL::text            as ba_file_name,
+            NULL::text            as ba_file_path,
+
+            t.updated_at,
+            t.created_at
+        ")
             ->whereNull('t.deleted_at')
             ->whereNotNull('t.project_uuid')
             ->where('t.kode_status', 'ACC');
 
+        // === base disposal query ===
         $d = DB::table('assets_disposals as d')
             ->join('assets as a', 'a.uuid', '=', 'd.asset_uuid')
             ->leftJoin('asset_projects as p', 'p.uuid', '=', 'd.project_uuid')
             ->selectRaw("
-        d.uuid,
-        d.asset_uuid,
-        d.project_uuid,
-        COALESCE(p.name,'') as project_name,
+            d.uuid,
+            d.asset_uuid,
+            d.project_uuid,
+            COALESCE(p.name,'')   as project_name,
+            COALESCE(p.status,'') as project_status,
 
-        a.asset_code,
-        a.description,
+            a.asset_code,
+            a.description,
 
-        d.disposal_code       as code,
-        'disposal'            as source_type,
-        NULL::text            as tf_type,
-        COALESCE(d.before_status,'') as before_val,
-        COALESCE('DIS','')           as after_val,
-        d.pic_request_uid,
-        d.pic_approve_uid,
-        d.note,
-        d.file_name,
-        d.file_path,
-        d.flow_file_name,
-        d.flow_file_path,
-        d.ba_file_name,
-        d.ba_file_path,
-        d.updated_at,
-        d.created_at
-    ")
+            d.disposal_code       as code,
+            'disposal'            as source_type,
+            NULL::text            as tf_type,
+
+            COALESCE(d.before_status,'') as before_val,
+            COALESCE('DIS','')           as after_val,
+
+            d.pic_request_uid,
+            d.pic_approve_uid,
+            d.note,
+
+            d.file_name,
+            d.file_path,
+
+            d.flow_file_name,
+            d.flow_file_path,
+
+            d.ba_file_name,
+            d.ba_file_path,
+
+            d.updated_at,
+            d.created_at
+        ")
             ->whereNull('d.deleted_at')
             ->whereNotNull('d.project_uuid')
             ->where('d.kode_status', 'ACC');
 
-
+        // filters that must apply to BOTH base queries (before union)
         if ($assetUuids->isNotEmpty()) {
             $t->whereIn('t.asset_uuid', $assetUuids);
             $d->whereIn('d.asset_uuid', $assetUuids);
         }
+
         if (!empty($projectUuid)) {
             $t->where('t.project_uuid', $projectUuid);
             $d->where('d.project_uuid', $projectUuid);
         }
+
+        // build union
         if ($source === 'transfer') {
             $union = $t;
         } elseif ($source === 'disposal') {
             $union = $d;
         } else {
+            // unionAll returns builder of $t
             $union = $t->unionAll($d);
         }
 
         $q = DB::query()->fromSub($union, 'u');
 
-        if ($tfType) {
-            $q->where('source_type', 'transfer')
-                ->where('tf_type', $tfType);
+        /**
+         * tf_type filter: hanya masuk akal buat transfer.
+         * Jangan sampai disposal ikut “ke-buang” kalau source=both.
+         */
+        if (!empty($tfType)) {
+            $q->where(function ($qq) use ($tfType) {
+                $qq->where('source_type', 'transfer')
+                    ->where('tf_type', $tfType);
+            });
         }
 
         // created_at filter (pakai date_from/date_to)
@@ -223,7 +262,7 @@ class StockOpnameApi extends Controller
             $q->whereDate('created_at', '<=', $dateTo);
         }
 
-        // optional created_from/created_to (kalau mau beda dari date_from/date_to)
+        // optional created_from/created_to (override style)
         if ($createdFrom) {
             $q->whereDate('created_at', '>=', $createdFrom);
         }
@@ -239,6 +278,7 @@ class StockOpnameApi extends Controller
             $q->whereDate('updated_at', '<=', $updatedTo);
         }
 
+        // asset_q filter
         if ($assetQ !== '') {
             $q->where(function ($qq) use ($assetQ) {
                 $qq->where('asset_code', 'ilike', "%{$assetQ}%")
@@ -246,22 +286,26 @@ class StockOpnameApi extends Controller
             });
         }
 
+        // requester filter (simple contains)
         if ($requester !== '') {
             $q->where('pic_request_uid', 'ilike', "%{$requester}%");
         }
 
+        // global search
         if ($qSearch !== '') {
             $q->where(function ($qq) use ($qSearch) {
                 $qq->where('code', 'ilike', "%{$qSearch}%")
                     ->orWhere('asset_code', 'ilike', "%{$qSearch}%")
                     ->orWhere('description', 'ilike', "%{$qSearch}%")
                     ->orWhere('project_name', 'ilike', "%{$qSearch}%")
+                    ->orWhere('project_status', 'ilike', "%{$qSearch}%")
                     ->orWhere('note', 'ilike', "%{$qSearch}%")
                     ->orWhere('pic_request_uid', 'ilike', "%{$qSearch}%")
                     ->orWhere('pic_approve_uid', 'ilike', "%{$qSearch}%");
             });
         }
 
+        // sorting
         $sortColumns = [
             'updated_at' => 'updated_at',
             'code'       => 'code',
@@ -291,6 +335,7 @@ class StockOpnameApi extends Controller
                         'requester'    => $requester,
                         'asset_uuid'   => $assetUuids->all(),
                         'asset_q'      => $assetQ,
+                        'project_uuid' => $projectUuid,
                         'date_from'    => $dateFrom,
                         'date_to'      => $dateTo,
                         'updated_from' => $updatedFrom,
@@ -305,7 +350,8 @@ class StockOpnameApi extends Controller
         $perPage   = (int) ($v['per_page'] ?? 15);
         $page      = (int) ($v['page'] ?? 1);
 
-        $paginator = $q->orderBy($orderBy, $sortDir)->paginate($perPage, ['*'], 'page', $page)
+        $paginator = $q->orderBy($orderBy, $sortDir)
+            ->paginate($perPage, ['*'], 'page', $page)
             ->appends($request->query());
 
         $data = $this->mapRows($paginator->getCollection(), $tz);
@@ -331,6 +377,7 @@ class StockOpnameApi extends Controller
             ],
         ]);
     }
+
 
     /**
      * POST /api/v1/stock-opname/transfer
@@ -778,7 +825,7 @@ class StockOpnameApi extends Controller
 
             // Code generator (mirip transfer)
             $now    = Carbon::now();
-            $prefix = 'DSP' . $now->format('ym');
+            $prefix = 'OPN' . $now->format('ym');
 
             $last = Disposal::where('disposal_code', 'like', $prefix . '%')
                 ->orderBy('disposal_code', 'desc')

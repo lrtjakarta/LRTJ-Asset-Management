@@ -92,8 +92,10 @@ class TransferApi extends Controller
                 DB::raw('a.kode_asset_class  as asset_kode_asset_class'),
                 DB::raw('a.kode_status       as asset_kode_status'),
                 DB::raw('a.kode_sumber       as asset_kode_sumber'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
 
-                // ðŸ”¹ NEW: assignment fields from assets_assignment
                 DB::raw('g.asset_owner       as asset_owner'),
                 DB::raw('g.asset_user        as asset_user'),
                 DB::raw('g.asset_maintenance as asset_maintenance'),
@@ -104,14 +106,17 @@ class TransferApi extends Controller
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber     || ' - ' || msrc.name END AS asset_kode_sumber_label"),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
-            // ðŸ”¹ NEW: join assignment so we can expose asset owner/user/maintenance
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('master_location     as ml',   'ml.kode',   '=', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  '=', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   '=', 'a.kode_status')
             ->leftJoin('master_sumber       as msrc', 'msrc.kode', '=', 'a.kode_sumber')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_transfers.project_uuid')
             ->with(['status:uuid,kode,name'])
-            ->whereNull('assets_transfers.project_uuid')
+            ->when(
+                !$request->filled('uuid') && !$request->filled('uuids'),
+                fn($x) => $x->whereNull('assets_transfers.project_uuid')
+            )
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
             ->when($uuidSet->isNotEmpty(),   fn($x) => $x->whereIn('assets_transfers.uuid', $uuidSet))
@@ -459,7 +464,6 @@ class TransferApi extends Controller
                 }
             }
 
-            // ðŸ”¹ NEW: include current asset owner/user/maintenance codes into lookup pool
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -479,8 +483,8 @@ class TransferApi extends Controller
 
         $mapStatus = $setStatus->isNotEmpty()
             ? MasterStatus::whereIn('kode', $setStatus)
-                ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
-                ->pluck('name', 'kode')->all()
+            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+            ->pluck('name', 'kode')->all()
             : [];
 
         $mapLoc = $setLoc->isNotEmpty()
@@ -498,7 +502,7 @@ class TransferApi extends Controller
                 ? ($t->kode_status . ' - ' . $t->status->name)
                 : $t->kode_status;
 
-            // ðŸ”¹ Build asset owner/user/maintenance label from mapUser
+            // current assignment labels
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -515,6 +519,19 @@ class TransferApi extends Controller
                 ? (isset($mapUser[$assetMaint]) ? "{$assetMaint} - {$mapUser[$assetMaint]}" : $assetMaint)
                 : '(empty)';
 
+            $projectUuid   = $t->getAttribute('project_uuid');
+            $projectName   = $t->getAttribute('project_name');
+            $projectStatus = $t->getAttribute('project_status');
+
+            $project = null;
+            if ($projectUuid) {
+                $project = [
+                    'uuid'   => $projectUuid,
+                    'name'   => $projectName,
+                    'status' => $projectStatus, // OPEN / CLOSED
+                ];
+            }
+
             $asset = [
                 'asset_uuid'                    => $t->asset_uuid,
                 'asset_code'                    => $t->getAttribute('asset_code'),
@@ -528,7 +545,6 @@ class TransferApi extends Controller
                 'asset_kode_status_label'       => $t->getAttribute('asset_kode_status_label'),
                 'asset_kode_sumber_label'       => $t->getAttribute('asset_kode_sumber_label'),
 
-                // ðŸ”¹ NEW: current assignment info
                 'asset_owner'                   => $assetOwner,
                 'asset_owner_label'             => $assetOwnerLabel,
                 'asset_user'                    => $assetUser,
@@ -537,6 +553,7 @@ class TransferApi extends Controller
                 'asset_maintenance_label'       => $assetMaintLabel,
             ];
 
+            // file object
             $fileObj = null;
             if ($t->file_path) {
                 $disk   = 'public';
@@ -558,6 +575,7 @@ class TransferApi extends Controller
                 ];
             }
 
+            // flow file object
             $flowFileObj = null;
             if ($t->flow_file_path) {
                 $disk   = 'public';
@@ -602,6 +620,11 @@ class TransferApi extends Controller
                 'after_display'     => $afterDisplay,
                 'note'              => $t->note,
 
+                'project'           => $project,
+                'project_uuid'      => $projectUuid,
+                'project_name'      => $projectName,
+                'project_status'    => $projectStatus,
+
                 'asset'             => $asset,
 
                 'file'              => $fileObj,
@@ -616,6 +639,7 @@ class TransferApi extends Controller
             ];
         });
     }
+
 
     protected function buildFlowTemplate(string $type, ?string $creatorName = null): array
     {
@@ -901,9 +925,9 @@ class TransferApi extends Controller
 
                     $line = trim(
                         ($label ?: '') .
-                        ($role ? ' (' . $role . ')' : '') .
-                        ($at ? ' - ' . $at : '') .
-                        ($by ? ' - ' . $by : '')
+                            ($role ? ' (' . $role . ')' : '') .
+                            ($at ? ' - ' . $at : '') .
+                            ($by ? ' - ' . $by : '')
                     );
 
                     if ($line !== '') {

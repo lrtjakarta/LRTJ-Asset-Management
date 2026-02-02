@@ -42,7 +42,7 @@ class DisposalApi extends Controller
             'created_from' => ['nullable', 'date'],
             'created_to'   => ['nullable', 'date'],
             'asset_q'      => ['nullable', 'string', 'max:200'],
-
+            'project_uuid' => ['nullable', 'uuid'],
             'sort_by'      => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'target_status', 'asset_code'])],
             'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -93,12 +93,16 @@ class DisposalApi extends Controller
                 'assets_disposals.*',
                 DB::raw('a.asset_code as asset_code'),
                 DB::raw('a.description as asset_description'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_disposals.project_uuid')
+
             ->with([
                 'status:uuid,kode,name',
                 'target:uuid,kode,name',
-                // asset + relations we need for location/status/owner/user/maintenance + value
                 'asset.value',
                 'asset.location',
                 'asset.status',
@@ -106,7 +110,6 @@ class DisposalApi extends Controller
                 'asset.assignment.user',
                 'asset.assignment.maintenance',
             ])
-            ->whereNull('assets_disposals.project_uuid')
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($uuidSet->isNotEmpty(),    fn($x) => $x->whereIn('assets_disposals.uuid', $uuidSet))
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
@@ -263,16 +266,29 @@ class DisposalApi extends Controller
     {
         $tz = config('app.timezone', 'UTC');
 
-        $row = Disposal::with([
-            'status:id,kode,name',
-            'target:id,kode,name',
-            'asset.value',
-            'asset.location',
-            'asset.status',
-            'asset.assignment.owner',
-            'asset.assignment.user',
-            'asset.assignment.maintenance',
-        ])->where('uuid', $uuid)->firstOrFail();
+        $row = Disposal::query()
+            ->select([
+                'assets_disposals.*',
+                DB::raw('a.asset_code as asset_code'),
+                DB::raw('a.description as asset_description'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
+            ])
+            ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_disposals.project_uuid')
+            ->with([
+                'status:uuid,kode,name',
+                'target:uuid,kode,name',
+                'asset.value',
+                'asset.location',
+                'asset.status',
+                'asset.assignment.owner',
+                'asset.assignment.user',
+                'asset.assignment.maintenance',
+            ])
+            ->where('assets_disposals.uuid', $uuid)
+            ->firstOrFail();
 
         $data = $this->mapRows(collect([$row]), $tz)->first();
 
@@ -637,7 +653,17 @@ class DisposalApi extends Controller
                 'commercial_accum_depr'  => intval($accSum),            // Commercial Accumulated Depreciation (IDR)
                 'commercial_nbv'         => intval($nbvSum),            // Commercial Net Book Value (IDR)
             ];
-
+            $projectUuid   = $t->getAttribute('project_uuid');
+            $projectName   = $t->getAttribute('project_name');
+            $projectStatus = $t->getAttribute('project_status');
+            $project = null;
+            if ($projectUuid) {
+                $project = [
+                    'uuid'   => $projectUuid,
+                    'name'   => $projectName,
+                    'status' => $projectStatus, // OPEN / CLOSED
+                ];
+            }
             // main attachment (original file)
             $fileObj = null;
             if ($t->file_path) {
@@ -735,6 +761,11 @@ class DisposalApi extends Controller
                 'note'              => $t->note,
                 'file'              => $fileObj,
 
+                'project'        => $project,
+                'project_uuid'   => $projectUuid,
+                'project_name'   => $projectName,
+                'project_status' => $projectStatus,
+                
                 'form_file'         => $formFileObj,
                 'ba_file'           => $baFileObj,
                 'form_file_url'     => $t->flow_file_url ?? null,
