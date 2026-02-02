@@ -7,9 +7,31 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
+use NumberFormatter;
 
 class AssetsApi extends Controller
 {
+    /**
+     * Format to IDR currency string.
+     * - Uses intl NumberFormatter if available
+     * - Fallback: "Rp 1.234.567"
+     */
+    protected function formatIdr($value): string
+    {
+        $n = (float) ($value ?? 0);
+
+        // Prefer intl if installed
+        if (class_exists(NumberFormatter::class)) {
+            $fmt = new NumberFormatter('id_ID', NumberFormatter::CURRENCY);
+            $fmt->setAttribute(NumberFormatter::FRACTION_DIGITS, 0);
+            $out = $fmt->formatCurrency($n, 'IDR');
+            if (is_string($out) && $out !== '') return $out;
+        }
+
+        // Fallback (no intl)
+        return 'Rp ' . number_format($n, 0, ',', '.');
+    }
+
     public function index(Request $request)
     {
         // ---- Validate & normalize ----
@@ -36,6 +58,7 @@ class AssetsApi extends Controller
 
             'updated_from' => ['nullable', 'date'],
             'updated_to'   => ['nullable', 'date'],
+
             'project_uuid' => ['nullable', 'uuid'],
 
             // sorting/paging
@@ -54,8 +77,8 @@ class AssetsApi extends Controller
         $uuids = collect()
             ->merge(Arr::wrap($request->query('uuids')))
             ->when($request->filled('uuid'), fn($c) => $c->push($request->query('uuid')))
-            ->flatMap(fn($v) => is_array($v) ? $v : (is_string($v) ? explode(',', $v) : []))
-            ->map(fn($x) => trim($x))
+            ->flatMap(fn($val) => is_array($val) ? $val : (is_string($val) ? explode(',', $val) : []))
+            ->map(fn($x) => trim((string) $x))
             ->filter(fn($x) => $x !== '' && Str::isUuid($x))
             ->unique()
             ->values();
@@ -76,15 +99,27 @@ class AssetsApi extends Controller
             ->leftJoin('master_user_code    as ou',   'ou.kode',   '=', 'g.asset_owner')
             ->leftJoin('master_user_code    as uu',   'uu.kode',   '=', 'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',  '=', 'g.asset_maintenance')
-            // NEW: aggregated ledger (accumulated depreciation & NBV)
+
+            /**
+             * IMPORTANT:
+             * Match AssetsController@detail:
+             * - pick latest monthly ledger row per asset (ORDER BY period DESC LIMIT 1)
+             * Using ROW_NUMBER window to keep it fast in list.
+             */
             ->leftJoin(DB::raw("(
-                SELECT
-                    asset_uuid,
-                    COALESCE(SUM(accumulated_depr_end), 0) AS commercial_accum_depr,
-                    COALESCE(SUM(ending_balance), 0)       AS commercial_nbv
-                FROM assets_depr_ledger_monthly
-                GROUP BY asset_uuid
-            ) as l"), 'l.asset_uuid', '=', 'a.uuid')
+                SELECT asset_uuid, period, ending_balance, accumulated_depr_end
+                FROM (
+                    SELECT
+                        asset_uuid,
+                        period,
+                        ending_balance,
+                        accumulated_depr_end,
+                        ROW_NUMBER() OVER (PARTITION BY asset_uuid ORDER BY period DESC) AS rn
+                    FROM assets_depr_ledger_monthly
+                ) x
+                WHERE x.rn = 1
+            ) as ld"), 'ld.asset_uuid', '=', 'a.uuid')
+
             ->when(!$withTrashed, fn($qb) => $qb->whereNull('a.deleted_at'));
 
         // ---- search (q / asset_q) ----
@@ -92,7 +127,7 @@ class AssetsApi extends Controller
             !empty($v['asset_q'] ?? null) || !empty($v['q'] ?? null),
             function ($qb) use ($v) {
                 $term = !empty($v['asset_q'] ?? null) ? $v['asset_q'] : $v['q'];
-                $like = '%' . trim($term) . '%';
+                $like = '%' . trim((string) $term) . '%';
 
                 if (!empty($v['asset_q'] ?? null)) {
                     // focused asset search (like datatable)
@@ -129,8 +164,9 @@ class AssetsApi extends Controller
                 }
             }
         );
-        $projectUuid = $v['project_uuid'] ?? null;
 
+        // ---- project filter (asset belongs to project) ----
+        $projectUuid = $v['project_uuid'] ?? null;
         $q->when($projectUuid, function ($qb) use ($projectUuid) {
             $qb->whereExists(function ($sq) use ($projectUuid) {
                 $sq->select(DB::raw(1))
@@ -140,7 +176,7 @@ class AssetsApi extends Controller
             });
         });
 
-        // ---- filters: mirrored from datatable() + extra API filters ----
+        // ---- filters ----
         $q->when(!empty($v['asset_class']), fn($qb) => $qb->where('a.kode_asset_class', $v['asset_class']));
         $q->when(!empty($v['transaction']), fn($qb) => $qb->where('mac.kode_transaction', $v['transaction']));
         $q->when(!empty($v['location']),   fn($qb) => $qb->where('a.kode_location', $v['location']));
@@ -152,22 +188,25 @@ class AssetsApi extends Controller
 
         // uuid / value / date range filters
         $q->when($uuids->isNotEmpty(), fn($qb) => $qb->whereIn('a.uuid', $uuids->all()));
+
         $q->when(isset($v['price_min']) || isset($v['price_max']), function ($qb) use ($v) {
             $min = $v['price_min'] ?? null;
             $max = $v['price_max'] ?? null;
             if ($min !== null) $qb->where('v.price', '>=', $min);
             if ($max !== null) $qb->where('v.price', '<=', $max);
         });
+
         $q->when(isset($v['total_min']) || isset($v['total_max']), function ($qb) use ($v) {
             $min = $v['total_min'] ?? null;
             $max = $v['total_max'] ?? null;
             if ($min !== null) $qb->where('v.total', '>=', $min);
             if ($max !== null) $qb->where('v.total', '<=', $max);
         });
+
         $q->when(!empty($v['updated_from']), fn($qb) => $qb->where('a.updated_at', '>=', $v['updated_from']));
         $q->when(!empty($v['updated_to']),   fn($qb) => $qb->where('a.updated_at', '<=', $v['updated_to']));
 
-        // ---- SELECT: copied from datatable() (plus upload_code & new commercial fields) ----
+        // ---- SELECT ----
         $q->select(
             'a.uuid',
             'a.asset_code',
@@ -190,11 +229,11 @@ class AssetsApi extends Controller
             'a.kode_asset_class',
             'a.kode_status',
 
-            'v.price',
-            'v.quantity',
+            DB::raw('COALESCE(v.price, 0)::numeric(18,2) AS price'),
+            DB::raw('COALESCE(v.quantity, 0)::numeric(18,0) AS quantity'),
             'v.vat_in',
             'v.kode_uom',
-            'v.total',
+            DB::raw('COALESCE(v.total, 0)::numeric(18,2) AS total'),
             'v.useful_life_month',
             'v.useful_life_year',
 
@@ -208,11 +247,24 @@ class AssetsApi extends Controller
 
             DB::raw("CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label"),
 
-            // NEW: fields right below location_label
-            'v.actual_date as acquisition_date',                                     // Acquisition Date (raw, frontend can format)
-            DB::raw('v.total AS commercial_acq_cost'),                               // Commercial Acquisition Cost (IDR)
-            DB::raw('COALESCE(l.commercial_accum_depr, 0) AS commercial_accum_depr'), // Commercial Accumulated Depreciation (IDR)
-            DB::raw('COALESCE(l.commercial_nbv, 0) AS commercial_nbv'),              // Commercial Net Book Value (IDR)
+            // acquisition date
+            // 'v.actual_date as acquisition_date',
+            DB::raw("TO_CHAR(v.actual_date, 'DD FMMonth YYYY') AS acquisition_date"),
+
+            /**
+             * Commercial fields (match AssetsController@detail):
+             * - commercial_acq_cost = v.total
+             * - commercial_accum_depr = latest accumulated_depr_end (ld)
+             * - commercial_nbv = v.total - latest accumulated_depr_end
+             *
+             * Cast to numeric to keep consistent money-like numeric type.
+             */
+            DB::raw('COALESCE(v.total, 0)::numeric(18,2) AS commercial_acq_cost'),
+            DB::raw('COALESCE(ld.accumulated_depr_end, 0)::numeric(18,2) AS commercial_accum_depr'),
+            DB::raw('(COALESCE(v.total, 0) - COALESCE(ld.accumulated_depr_end, 0))::numeric(18,2) AS commercial_nbv'),
+
+            // optional: you can expose period too (useful for UI)
+            DB::raw('ld.period AS commercial_depr_period'),
 
             DB::raw("CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label"),
             DB::raw("CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label"),
@@ -225,7 +277,8 @@ class AssetsApi extends Controller
         )
             ->orderBy($sortBy, $sortDir);
 
-        $q->where('a.kode_status', '!=', 'DIS'); // Exclude disposed assets by default
+        // Exclude disposed assets by default
+        $q->where('a.kode_status', '!=', 'DIS');
 
         // ---- pagination wrapper ----
         $paginationRequested = $request->has('per_page') || $request->has('page');
@@ -233,8 +286,21 @@ class AssetsApi extends Controller
         if (!$paginationRequested) {
             $rows = $q->get();
 
+            $data = $rows->map(function ($r) {
+                $r = (array) $r;
+
+                // add formatted currency fields
+                $r['commercial_acq_cost']   = $this->formatIdr($r['commercial_acq_cost'] ?? 0);
+                $r['commercial_accum_depr'] = $this->formatIdr($r['commercial_accum_depr'] ?? 0);
+                $r['commercial_nbv']        = $this->formatIdr($r['commercial_nbv'] ?? 0);
+                $r['total']        = $this->formatIdr($r['total'] ?? 0);
+                $r['price']        = $this->formatIdr($r['price'] ?? 0);
+
+                return $r;
+            });
+
             return response()->json([
-                'data' => $rows->map(fn($r) => (array) $r),
+                'data' => $data,
                 'meta' => [
                     'total'     => $rows->count(),
                     'paginated' => false,
@@ -258,6 +324,7 @@ class AssetsApi extends Controller
                         'total_max'    => $request->query('total_max'),
                         'updated_from' => $request->query('updated_from'),
                         'updated_to'   => $request->query('updated_to'),
+                        'project_uuid' => $request->query('project_uuid'),
                         'uuid'         => $request->query('uuid'),
                         'uuids'        => $uuids->all(),
                     ],
@@ -274,8 +341,21 @@ class AssetsApi extends Controller
         $perPage   = (int) ($v['per_page'] ?? 15);
         $paginator = $q->paginate($perPage)->appends($request->query());
 
+        $data = $paginator->getCollection()->map(function ($r) {
+            $r = (array) $r;
+
+            // add formatted currency fields
+            $r['commercial_acq_cost']   = $this->formatIdr($r['commercial_acq_cost'] ?? 0);
+            $r['commercial_accum_depr'] = $this->formatIdr($r['commercial_accum_depr'] ?? 0);
+            $r['commercial_nbv']        = $this->formatIdr($r['commercial_nbv'] ?? 0);
+            $r['total']        = $this->formatIdr($r['total'] ?? 0);
+            $r['price']        = $this->formatIdr($r['price'] ?? 0);
+
+            return $r;
+        });
+
         return response()->json([
-            'data' => $paginator->getCollection()->map(fn($r) => (array) $r),
+            'data' => $data,
             'meta' => [
                 'current_page' => $paginator->currentPage(),
                 'per_page'     => $paginator->perPage(),
@@ -304,6 +384,7 @@ class AssetsApi extends Controller
                     'total_max'    => $request->query('total_max'),
                     'updated_from' => $request->query('updated_from'),
                     'updated_to'   => $request->query('updated_to'),
+                    'project_uuid' => $request->query('project_uuid'),
                     'uuid'         => $request->query('uuid'),
                     'uuids'        => $uuids->all(),
                 ],
