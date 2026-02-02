@@ -66,11 +66,11 @@ Route::prefix('v1')->group(function () {
 
 
         // PREVIEW (query param: asset_uuid=...)
-        Route::get('stock-opname/preview/transfer-form', [StockOpnameApi::class, 'previewTransferForm'])
+        Route::get('/stock-opname/preview/transfer-form', [StockOpnameApi::class, 'previewTransferForm'])
             ->name('api.stockopname.preview.transfer-form');
-        Route::get('stock-opname/preview/disposal-form', [StockOpnameApi::class, 'previewDisposalForm'])
+        Route::get('/stock-opname/preview/disposal-form', [StockOpnameApi::class, 'previewDisposalForm'])
             ->name('api.stockopname.preview.disposal-form');
-        Route::get('stock-opname/preview/disposal-ba', [StockOpnameApi::class, 'previewDisposalBa'])
+        Route::get('/stock-opname/preview/disposal-ba', [StockOpnameApi::class, 'previewDisposalBa'])
             ->name('api.stockopname.preview.disposal-ba');
 
 
