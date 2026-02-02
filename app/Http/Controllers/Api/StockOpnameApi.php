@@ -1312,7 +1312,7 @@ class StockOpnameApi extends Controller
         $template = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
         if (!file_exists($template)) {
             return abort(404, 'Template not found');
-        }
+        } 
 
         $spreadsheet = IOFactory::load($template);
         $sheet = $spreadsheet->getSheetByName('Form Disposal Aset Tetap')
@@ -1341,13 +1341,19 @@ class StockOpnameApi extends Controller
         $sheet->setCellValue('H24', '');
 
         $fileName = 'Form_Disposal_Preview_' . ($asset->asset_code ?? $assetUuid) . '.xlsx';
+        $tmp = tempnam(sys_get_temp_dir(), 'opn_dis_') . '.xlsx';
+        $writer = new XlsxWriter($spreadsheet);
+        $writer->save($tmp);
 
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new XlsxWriter($spreadsheet);
-            $writer->save('php://output');
-        }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        // cleanup memory
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        return $this->downloadTempFile(
+            $tmp,
+            $fileName,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
     }
 
     /**
@@ -1380,15 +1386,12 @@ class StockOpnameApi extends Controller
         $ownerDept = $owner?->department ?? '';
 
         $date = now()->timezone('Asia/Jakarta');
-
         Carbon::setLocale('id');
         $hari  = $date->translatedFormat('l');
         $tglBT = $date->translatedFormat('d F Y');
 
         $template = storage_path('app/public/template/berita_acara_disposal_asset_tetap.docx');
-        if (!file_exists($template)) {
-            return abort(404, 'Template not found');
-        }
+        abort_if(!file_exists($template), 404, 'Template not found');
 
         $tpl = new TemplateProcessor($template);
 
@@ -1406,11 +1409,14 @@ class StockOpnameApi extends Controller
 
         $fileName = 'BA_Disposal_Preview_' . ($asset->asset_code ?? $assetUuid) . '.docx';
 
-        return response()->streamDownload(function () use ($tpl) {
-            $tpl->saveAs('php://output');
-        }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ]);
+        $tmp = tempnam(sys_get_temp_dir(), 'opn_ba_') . '.docx';
+        $tpl->saveAs($tmp);
+
+        return $this->downloadTempFile(
+            $tmp,
+            $fileName,
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        );
     }
 
     /**
@@ -1525,13 +1531,18 @@ class StockOpnameApi extends Controller
         $sheet->setCellValue('I36', $toDeptLabel);
 
         $fileName = 'Form_Transfer_Preview_' . ($asset->asset_code ?? $assetUuid) . '.xlsx';
+        $tmp = tempnam(sys_get_temp_dir(), 'opn_trf_') . '.xlsx';
+        $writer = new XlsxWriter($spreadsheet);
+        $writer->save($tmp);
 
-        return response()->streamDownload(function () use ($spreadsheet) {
-            $writer = new XlsxWriter($spreadsheet);
-            $writer->save('php://output');
-        }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        ]);
+        $spreadsheet->disconnectWorksheets();
+        unset($spreadsheet);
+
+        return $this->downloadTempFile(
+            $tmp,
+            $fileName,
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
     }
     public function projectClose(Request $request, string $projectUuid)
     {
@@ -2026,5 +2037,20 @@ class StockOpnameApi extends Controller
                 'last'  => $paginator->url($paginator->lastPage()),
             ],
         ]);
+    }
+    private function downloadTempFile(string $tmpPath, string $fileName, string $contentType)
+    {
+        // Pastikan tidak ada output buffering yang nyangkut
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        return response()->download($tmpPath, $fileName, [
+            'Content-Type'              => $contentType,
+            'X-Content-Type-Options'    => 'nosniff',
+            'Cache-Control'             => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma'                    => 'no-cache',
+            'Expires'                   => '0',
+        ])->deleteFileAfterSend(true);
     }
 }
