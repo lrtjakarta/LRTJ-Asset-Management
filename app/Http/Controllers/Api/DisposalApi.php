@@ -111,7 +111,7 @@ class DisposalApi extends Controller
                 'asset.assignment.user',
                 'asset.assignment.maintenance',
             ])
-            
+
             ->when(
                 !$request->filled('uuid') && !$request->filled('uuids'),
                 fn($x) => $x->whereNull('assets_disposals.project_uuid')
@@ -121,7 +121,7 @@ class DisposalApi extends Controller
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
             // keep old "target"
             ->when(!empty($v['target']),      fn($x) => $x->where('assets_disposals.target_status', $v['target']));
-            
+
 
 
         // === workflow / status logic (match datatable_all) ===
@@ -543,16 +543,23 @@ class DisposalApi extends Controller
 
         $ledgerMap = [];
         if ($assetUuids->isNotEmpty()) {
-            $ledgerRows = DB::table('assets_depr_ledger_monthly')
-                ->selectRaw('asset_uuid, COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
-                ->whereIn('asset_uuid', $assetUuids)
-                ->groupBy('asset_uuid')
+            $ledgerRows = DB::table(DB::raw("(
+                SELECT DISTINCT ON (asset_uuid)
+                    asset_uuid,
+                    period,
+                    ending_balance,
+                    accumulated_depr_end
+                FROM assets_depr_ledger_monthly
+                ORDER BY asset_uuid, period DESC
+            ) as ld"))
+                ->whereIn('ld.asset_uuid', $assetUuids)
                 ->get();
 
             $ledgerMap = $ledgerRows->keyBy('asset_uuid')->map(function ($r) {
                 return [
-                    'acc_sum' => (float) $r->acc_sum,
-                    'nbv_sum' => (float) $r->nbv_sum,
+                    'period'    => $r->period,
+                    'acc_end'   => (float) ($r->accumulated_depr_end ?? 0),
+                    'end_bal'   => (float) ($r->ending_balance ?? 0),
                 ];
             })->all();
         }
@@ -619,9 +626,11 @@ class DisposalApi extends Controller
             }
 
             // Ledger sums (Commercial Accumulated Depreciation + NBV)
-            $ledger = $ledgerMap[$t->asset_uuid] ?? null;
-            $accSum = $ledger['acc_sum'] ?? 0;
-            $nbvSum = $ledger['nbv_sum'] ?? 0;
+            $ledger  = $ledgerMap[$t->asset_uuid] ?? null;
+            $accEnd  = (float) ($ledger['acc_end'] ?? 0);                     // latest accumulated_depr_end
+            $comCost = (float) ($value?->total ?? 0);                         // v.total
+            $comNbv  = $comCost - $accEnd;                                    // match detail
+            $comNbv  = $comNbv < 0 ? 0 : $comNbv;                              // optional guard
 
             // Build asset block (same spirit as AssetsApi)
             $assetArr = [
@@ -647,18 +656,19 @@ class DisposalApi extends Controller
                 'asset_maintenance_label' => $maintLabel,
 
                 // value fields (from AssetsApi)
-                'price'             => $value?->price,
-                'quantity'          => $value?->quantity,
+                'price'             => $this->formatIdr($value?->price),
+                'quantity'          => intval($value?->quantity ?? 0),
                 'vat_in'            => $value?->vat_in,
-                'total'             => $value?->total,
+                'total'             => $this->formatIdr($value?->total),
                 'kode_uom'          => $value?->kode_uom,
                 'useful_life_month' => $value?->useful_life_month,
 
                 // NEW: depreciation / NBV (same meaning as AssetsApi)
                 'acquisition_date'       => $acqDateFmt,        // Acquisition Date
-                'commercial_acq_cost'    => intval($value?->total),     // Commercial Acquisition Cost (IDR)
-                'commercial_accum_depr'  => intval($accSum),            // Commercial Accumulated Depreciation (IDR)
-                'commercial_nbv'         => intval($nbvSum),            // Commercial Net Book Value (IDR)
+                'commercial_acq_cost'       => $this->formatIdr($comCost),
+                'commercial_accum_depr'     => $this->formatIdr($accEnd),
+                'commercial_nbv'            => $this->formatIdr($comNbv),
+
             ];
             $projectUuid   = $t->getAttribute('project_uuid');
             $projectName   = $t->getAttribute('project_name');
@@ -1496,5 +1506,20 @@ class DisposalApi extends Controller
             'batch'   => true,
             'results' => $results,
         ]);
+    }
+    protected function formatIdr($value): string
+    {
+        $n = (float) ($value ?? 0);
+
+        // Prefer intl if installed
+        if (class_exists(\NumberFormatter::class)) {
+            $fmt = new \NumberFormatter('id_ID', \NumberFormatter::CURRENCY);
+            $fmt->setAttribute(\NumberFormatter::FRACTION_DIGITS, 0);
+            $out = $fmt->formatCurrency($n, 'IDR');
+            if (is_string($out) && $out !== '') return $out;
+        }
+
+        // Fallback (no intl)
+        return 'Rp ' . number_format($n, 0, ',', '.');
     }
 }
