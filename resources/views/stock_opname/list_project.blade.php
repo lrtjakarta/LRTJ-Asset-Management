@@ -14,9 +14,9 @@
                 url: "{{ route('stockopname.asset_projects.datatable') }}"
             },
             order: [
-                [3, 'desc']
+                [5, 'desc']
             ],
-            columns: [{
+            columns:[{
                     data: 'name',
                     name: 'p.name',
                     render: function(data, type, row) {
@@ -29,16 +29,33 @@
                     data: 'status',
                     name: 'p.status'
                 },
+
+                // {
+                //     data: 'asset_count',
+                //     name: 'asset_count',
+                //     searchable: false
+                // },
+
                 {
-                    data: 'asset_count',
-                    name: 'asset_count',
-                    searchable: false
+                    data: null,
+                    name: 'done_count',
+                    searchable: false,
+                    orderable: false,
+                    render: function(_, type, row) {
+                        const done = Number(row.done_count ?? 0);
+                        const total = Number(row.asset_count ?? 0);
+                        if (type !== 'display') return done;
+                        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                        return `<div class="fw-semibold">${done} / ${total} <span class="text-muted fs-8">(${pct}%)</span></div>`;
+                    }
                 },
+
                 {
                     data: 'created_by_name',
                     name: 'created_by_name',
                     searchable: false
                 },
+
                 {
                     data: 'created_at',
                     name: 'p.created_at',
@@ -57,6 +74,7 @@
                         }).format(d);
                     }
                 },
+
                 {
                     data: 'actions',
                     name: 'actions',
@@ -107,7 +125,7 @@
                 }
             });
         });
-        
+
         $(document).on('click', '.btn-re-open-project', function() {
             const uuid = $(this).data('uuid');
 
@@ -184,7 +202,8 @@
                             <tr>
                                 <th>Project Name</th>
                                 <th>Status</th>
-                                <th class="min-w-100px">Assets</th>
+                                {{-- <th class="min-w-100px">Assets</th> --}}
+                                <th class="min-w-140px">Checked / Total</th>
                                 <th class="min-w-200px">Created By</th>
                                 <th class="min-w-200px">Created At</th>
                                 <th class="min-w-120px">Action</th>

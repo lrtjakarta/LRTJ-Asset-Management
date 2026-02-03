@@ -1777,29 +1777,30 @@ class StockOpnameController extends Controller
             ->whereNull('p.deleted_at')
             ->groupBy('p.uuid', 'p.name', 'p.status', 'p.created_at', 'u.name')
             ->selectRaw("
-                p.uuid,
-                p.name,
-                p.status,
-                p.created_at,
-                COALESCE(u.name,'-') as created_by_name,
-                COUNT(pa.asset_uuid) as asset_count
-                ");
+            p.uuid,
+            p.name,
+            p.status,
+            p.created_at,
+            COALESCE(u.name,'-') as created_by_name,
+            COUNT(pa.asset_uuid) as asset_count,
+            SUM(CASE WHEN pa.stock_opname_done = true THEN 1 ELSE 0 END) as done_count
+        ");
 
         return DataTables::of($q)
             ->addColumn('actions', function ($row) {
                 $uuid = e($row->uuid);
-                $disabled = ($row->status === 'CLOSED') ? 'disabled' : '';
+                $disabled   = ($row->status === 'CLOSED') ? 'disabled' : '';
                 $disabled_c = ($row->status !== 'CLOSED') ? 'disabled' : '';
                 return '
-                    <button class="btn btn-sm btn-light-danger btn-close-project"
-                    data-uuid="' . $uuid . '" ' . $disabled . '>
-                    Close
-                    </button>
-                    <button class="btn btn-sm btn-light-success btn-re-open-project"
-                    data-uuid="' . $uuid . '" ' . $disabled_c . '>
-                    Re-open
-                    </button>
-                ';
+                <button class="btn btn-sm btn-light-danger btn-close-project"
+                data-uuid="' . $uuid . '" ' . $disabled . '>
+                Close
+                </button>
+                <button class="btn btn-sm btn-light-success btn-re-open-project"
+                data-uuid="' . $uuid . '" ' . $disabled_c . '>
+                Re-open
+                </button>
+            ';
             })
             ->rawColumns(['actions'])
             ->make(true);
