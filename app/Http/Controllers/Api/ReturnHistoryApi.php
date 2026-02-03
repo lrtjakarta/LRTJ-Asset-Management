@@ -45,6 +45,8 @@ class ReturnHistoryApi extends Controller
             'date_to'      => ['nullable', 'date'],
             'asset_q'      => ['nullable', 'string', 'max:200'],
             'requester'    => ['nullable', 'string', 'max:255'],
+            'asset'        => ['nullable', 'string', 'max:200'],
+            'users'        => ['nullable', 'string', 'max:255'],
         ])->validate();
 
         $parseUuidSet = function ($singleKey, $multiKey) use ($request) {
@@ -69,8 +71,9 @@ class ReturnHistoryApi extends Controller
         $tfType    = $v['tf_type'] ?? null;
         $dateFrom  = $v['date_from'] ?? $v['from'] ?? null;
         $dateTo    = $v['date_to'] ?? $v['to'] ?? null;
-        $assetLike = $v['asset'] ?? null;
-        $users     = $v['users'] ?? null;
+
+        $assetLike = $v['asset_q'] ?? $v['asset'] ?? null;
+        $requester = $v['requester'] ?? $v['users'] ?? null;
 
         $qStr = !empty($v['q']) ? trim($v['q']) : null;
 
@@ -120,7 +123,7 @@ class ReturnHistoryApi extends Controller
                 });
             })
             // users = pic_request_uid
-            ->when($users, fn($qb) => $qb->where('r.pic_request_uid', $users))
+            ->when($requester, fn($qb) => $qb->where('r.pic_request_uid', $requester))
             // tf_type: only valid for transfers
             ->when($tfType, function ($qb) use ($tfType) {
                 $qb->where('r.source_type', 'transfer')
@@ -290,8 +293,8 @@ class ReturnHistoryApi extends Controller
                         'tf_type'     => $tfType,
                         'date_from'   => $dateFrom,
                         'date_to'     => $dateTo,
-                        'asset'       => $assetLike,
-                        'users'       => $users,
+                        'asset_q'   => $assetLike,
+                        'requester' => $requester,
                     ],
                 ],
                 'links' => ['first' => null, 'prev' => null, 'next' => null, 'last' => null],
@@ -328,8 +331,8 @@ class ReturnHistoryApi extends Controller
                     'tf_type'     => $tfType,
                     'date_from'   => $dateFrom,
                     'date_to'     => $dateTo,
-                    'asset'       => $assetLike,
-                    'users'       => $users,
+                    'asset_q'   => $assetLike,
+                    'requester' => $requester,
                 ],
             ],
             'links' => [
@@ -722,5 +725,4 @@ class ReturnHistoryApi extends Controller
             'pagination' => ['more' => false],
         ]);
     }
-    
 }

@@ -625,6 +625,8 @@ class TransferApi extends Controller
                 'project_uuid'      => $projectUuid,
                 'project_name'      => $projectName,
                 'project_status'    => $projectStatus,
+                'pic_request_uid'   => $t->pic_request_uid,
+                'pic_approve_uid'   => $t->pic_approve_uid,
 
                 'asset'             => $asset,
 
