@@ -45,7 +45,7 @@
                             <div class="text-center mb-11">
                                 <!--begin::Title-->
                                 <h1 class="text-gray-900 fw-bolder mb-3">SIGN IN</h1>
-                                <h3 class="text-gray-900 fw-bolder mb-3">ASSET MANAGEMENT LRT JAKARTA</h3>
+                                <h3 class="text-gray-900 fw-bolder mb-3">ENTERPRISE ASSET MANAGEMENT SYSTEM</h3>
                                 @if ($errors->any())
                                     <div class="alert alert-danger mb-6">{{ $errors->first() }}</div>
                                 @endif
