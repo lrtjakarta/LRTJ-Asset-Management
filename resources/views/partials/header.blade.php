@@ -37,7 +37,7 @@
                     <div data-kt-menu-placement="bottom-start" class="menu-item here menu-here-bg me-0 me-lg-2">
                         <!--begin:Menu link-->
                         <span class="" style="pointer-events:none;">
-                            <span class="menu-title">ASSET MANAGEMENT LRT JAKARTA</span>
+                            <span class="menu-title">ENTERPRISE ASSET MANAGEMENT SYSTEM</span>
                         </span>
                         <!--end:Menu link-->
                     </div>
