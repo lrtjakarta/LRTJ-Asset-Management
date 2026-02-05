@@ -42,9 +42,9 @@
                             <label class="form-label">Transfer Type</label>
                             <select id="f-type" class="form-select">
                                 <option value="">All</option>
-                                <option value="tf-val">1. Partials/Full (Gross only)</option>
-                                <option value="acq_fix">2. Acquisition Fix</option>
-                                <option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>
+                                <option value="tf-val">1. Transfer Value Current Month</option>
+                                <option value="acq_fix">2. Transfer Value Multi Years</option>
+                                <option value="carry_over_gross_accum">3. Transfer Value Current Year</option>
                             </select>
                         </div>
 
@@ -169,9 +169,13 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Transfer Type</label>
                                 <select class="form-select" id="edit-transfer-type" name="transfer_type">
-                                    <option value="tf-val">1. Partials/Full (Gross only)</option>
-                                    <option value="acq_fix">2. Acquisition Fix</option>
-                                    <option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>
+                                    
+                                <option value="tf-val">1. Transfer Value Current Month</option>
+                                <option value="acq_fix">2. Transfer Value Multi Years</option>
+                                <option value="carry_over_gross_accum">3. Transfer Value Current Year</option>
+                                    <!--<option value="tf-val">1. Partials/Full (Gross only)</option>-->
+                                    <!--<option value="acq_fix">2. Acquisition Fix</option>-->
+                                    <!--<option value="carry_over_gross_accum">3. Carry-Over (Gross + Accum)</option>-->
                                 </select>
                                 <small class="text-muted">
                                     Type changes are allowed only while status is APR (waiting for approval).
@@ -250,19 +254,19 @@
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-tf-val"
                                            value="tf-val" checked>
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-tf-val">
-                                        1. Partials/Full (Gross only)
+                                        1. Transfer Value Current Month
                                     </label>
 
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-acq-fix"
                                            value="acq_fix">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-acq-fix">
-                                        2. Acquisition Fix
+                                        2. Transfer Value Multi Years
                                     </label>
 
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-carry"
                                            value="carry_over_gross_accum">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-carry">
-                                        3. Carry-Over (Gross + Accum)
+                                        3. Transfer Value Current Year
                                     </label>
                                 </div>
                             </div>
@@ -475,13 +479,13 @@
                         .removeClass('alert-warning alert-danger')
                         .addClass('alert-info')
                         .html(`
-                            <div class="fw-bold mb-1">Rule: Transfer Nilai Asset (Gross only)</div>
+                            <div class="fw-bold mb-1">Rule: Transfer Value Current Month</div>
                             <ol class="mb-0 ps-4">
                                 <li>Transfer parsial/full <b>tidak boleh melebihi NBV terakhir</b>.</li>
                                 <li>Transfer ini <b>tidak mengubah akumulasi depresiasi sebelumnya</b> (accum tetap di aset asal).</li>
                             </ol>
                         <br>
-                            <p>Transfer nilai asset  parsial atau full tidak boleh melebihi nilai dari net book value terakhir  dan tidak mengubah nilai akumulasi depresiasi sebelumnya.</p>
+                            <p>Transfer Value Curret Month (nilai yang dipindahkan tidak bisa melebihi nilai buku di bulan berjalan)</p>
                         `);
                     return;
                 }
@@ -491,14 +495,14 @@
                         .removeClass('alert-warning alert-danger')
                         .addClass('alert-info')
                         .html(`
-                            <div class="fw-bold mb-1">Rule: Acquisition Fix (Kesalahan akuisisi di awal)</div>
+                            <div class="fw-bold mb-1">Rule: Transfer Value Multi Years</div>
                             <ol class="mb-0 ps-4">
                                 <li>Nilai <b>akuisisi</b> dan <b>akumulasi depresiasi dari awal</b> harus dipindahkan dari aset yang salah ke aset penerima.</li>
                                 <li>${STRICT_ACQ_FIX_FULL ? '<b>Wajib FULL</b>: amount harus sama dengan nilai akuisisi (bukan parsial).' : 'Boleh parsial (pastikan backend support proporsional).'}
                                 </li>
                             </ol>
                         <br>
-                            <p>Transfer nilai asset  parsial atau full karena kesalahan akuisisi diawal maka nilai akuisisi dan nilai akumulasi depresiasi dari awal harus dipindahkan dari aset yang salah ke asset penerima.</p>
+                            <p>Transfer Value Multi Years (perpindahan nilai akuisisi dan nilai akumulasi depresiasi dari tahun awal transaksi)</p>
                         `);
                     return;
                 }
@@ -508,13 +512,13 @@
                         .removeClass('alert-warning alert-danger')
                         .addClass('alert-info')
                     .html(`
-                        <div class="fw-bold mb-1">Rule: Carry-Over (Gross + Accum)</div>
+                        <div class="fw-bold mb-1">Rule: Transfer Value Current Year</div>
                         <ol class="mb-0 ps-4">
                             <li>Nilai <b>akuisisi</b> dan <b>akumulasi depresiasi</b> dipindahkan (gross + accum).</li>
                             <li><b>Backdate hanya bisa di tahun ini</b> (audit tahun sebelumnya sudah release).</li>
                         </ol>
                         <br>
-                            <p>Transfer nilai asset parsial atau full karena kesalahan akuisisi diawal maka nilai akusisi dan nilai akumulasi depresiasi dari awal harus dipindahkan dari asset yang salah ke asset penerima Namun laporan audit tahun sebelumnya sudah di release sehingga transaksi backdate hanya bisa dilakukan di  tahun ini.</p>
+                            <p>Transfer Value Current Year (perpindahan nilai akuisisi dan nilai akumulasi depresiasi dari awal tahun berjalan)</p>
                     `);
             }
 
@@ -597,9 +601,9 @@
             };
 
             const typeLabel = (t) => {
-                if (t === 'acq_fix') return '2. Acquisition Fix';
-                if (t === 'carry_over_gross_accum') return '3. Carry-Over (Gross + Accum)';
-                return '1. Partials/Full (Gross only)';
+                if (t === 'acq_fix') return '2. Transfer Value Multi Years';
+                if (t === 'carry_over_gross_accum') return '3. Transfer Value Current Year';
+                return '1. Transfer Value Current Month,';
             };
 
             const TR_PERMS = {
@@ -1284,7 +1288,7 @@
                             Swal.fire({
                                 icon: 'warning',
                                 title: 'Validation error',
-                                text: `Acquisition Fix wajib FULL. Amount harus sama dengan nilai akuisisi (${fmt2(acqTotal)}).`
+                                text: `Wajib FULL. Amount harus sama dengan nilai akuisisi (${fmt2(acqTotal)}).`
                             });
                             return;
                         }
