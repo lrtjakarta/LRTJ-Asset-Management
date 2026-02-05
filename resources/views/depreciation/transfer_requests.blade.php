@@ -1,12 +1,13 @@
 @php
     use Carbon\Carbon;
-    $currentMonth = Carbon::now()->startOfMonth()->toDateString();
-    $currentMonthText = Carbon::now()->isoFormat('MMMM YYYY');
-    $prevYearLabel = Carbon::now()->year - 1;
-    $currentYear = Carbon::parse($currentMonth)->year;
 
     $currentMonthStart = Carbon::now()->startOfMonth()->toDateString();
     $currentMonthEnd = Carbon::now()->endOfMonth()->toDateString();
+    $today = Carbon::now()->toDateString();
+    $currentMonthText = Carbon::now()->isoFormat('MMMM YYYY');
+
+    $prevYearLabel = Carbon::now()->year - 1;
+    $currentYear = Carbon::parse($currentMonthStart)->year;
 @endphp
 
 @extends('layouts.app')
@@ -31,9 +32,7 @@
         </div>
     </div>
 
-
     <div id="kt_app_content" class="app-content flex-column-fluid">
-        <!--begin::Content container-->
         <div id="kt_app_content_container" class="app-container container-fluid">
             <div class="card mb-6">
                 <div class="card-body">
@@ -96,6 +95,7 @@
                     <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
                 </div>
             </div>
+
             <div class="card">
                 <div class="card-header align-items-center justify-content-between">
                     <div class="d-flex flex-column">
@@ -103,9 +103,9 @@
                             <span class="card-label fw-bold fs-3 mb-1">Transfer Value Data</span>
                         </h3>
                     </div>
+
                     @canAction('TRANSFER','C')
                     <div class="card-toolbar">
-                        {{-- Transfer Value --}}
                         <button type="button" id="btn-open-transfer" class="btn btn-danger btn-sm me-2">
                             <i class="ki-duotone ki-plus fs-2"></i>
                             Add New
@@ -130,7 +130,7 @@
                                 <th class="min-w-150px">Approved By</th>
                                 <th class="min-w-150px">Attachment</th>
                                 <th class="min-w-200px">Note</th>
-                                <th class="min-w-200px ">Actions</th>
+                                <th class="min-w-200px">Actions</th>
                             </tr>
                         </thead>
                     </table>
@@ -184,6 +184,9 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="edit-actual-date" name="actual_date">
+                                <small class="text-muted d-block mt-1">
+                                    Actual Date locked to current month: <b>{{ $currentMonthText }}</b>
+                                </small>
                             </div>
 
                             <div class="col-md-6">
@@ -239,21 +242,18 @@
                                 <label class="form-label"><b>Transfer Type :</b></label>
                                 <div class="btn-group" role="group" aria-label="Transfer type"
                                     style="border: solid .5px black; width:100%;">
-                                    {{-- 1. tf-val (existing case 1) --}}
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-tf-val"
                                         value="tf-val" checked>
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-tf-val">
                                         1. Partials/Full (Gross only)
                                     </label>
 
-                                    {{-- 2. Acquisition Fix --}}
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-acq-fix"
                                         value="acq_fix">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-acq-fix">
                                         2. Acquisition Fix
                                     </label>
 
-                                    {{-- 3. Carry-Over (Gross + Accum) --}}
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-carry"
                                         value="carry_over_gross_accum">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-carry">
@@ -266,12 +266,10 @@
                                 <label class="form-label required">From Asset</label>
                                 <select id="tr-from-asset" class="form-select" style="width:100%"></select>
                                 <input type="hidden" id="tr-from-uuid" name="from_asset_uuid">
+
                                 <div id="tf-asset-snapshot-1" class="mt-4 d-none">
                                     <div class="p-3 border rounded bg-light">
                                         <div class="fw-semibold mb-2">Current Asset Info</div>
-                                        <div id="snap-acq-warn-1"
-                                            class="alert alert-warning py-2 px-3 mt-3 d-none mb-0 small"></div>
-
                                         <div class="row gy-2">
                                             <div class="col-6">
                                                 <div class="text-muted">Owner</div>
@@ -281,7 +279,6 @@
                                                 <div class="text-muted">User</div>
                                                 <div id="snap-user-1" class="fw-semibold"></div>
                                             </div>
-
                                             <div class="col-6">
                                                 <div class="text-muted">Maintenance</div>
                                                 <div id="snap-maintenance-1" class="fw-semibold"></div>
@@ -290,7 +287,6 @@
                                                 <div class="text-muted">Status</div>
                                                 <div id="snap-status-1" class="fw-semibold"></div>
                                             </div>
-
                                             <div class="col-12">
                                                 <div class="text-muted">Location</div>
                                                 <div id="snap-location-1" class="fw-semibold"></div>
@@ -299,6 +295,7 @@
                                     </div>
                                 </div>
                             </div>
+
                             <div class="col-md-6">
                                 <label class="form-label required">To Asset</label>
                                 <select id="tr-to-asset" class="form-select" style="width:100%"></select>
@@ -307,9 +304,6 @@
                                 <div id="tf-asset-snapshot-2" class="mt-4 d-none">
                                     <div class="p-3 border rounded bg-light">
                                         <div class="fw-semibold mb-2">Current Asset Info</div>
-                                        <div id="snap-acq-warn-2"
-                                            class="alert alert-warning py-2 px-3 mt-3 d-none mb-0 small"></div>
-
                                         <div class="row gy-2">
                                             <div class="col-6">
                                                 <div class="text-muted">Owner</div>
@@ -319,7 +313,6 @@
                                                 <div class="text-muted">User</div>
                                                 <div id="snap-user-2" class="fw-semibold"></div>
                                             </div>
-
                                             <div class="col-6">
                                                 <div class="text-muted">Maintenance</div>
                                                 <div id="snap-maintenance-2" class="fw-semibold"></div>
@@ -328,7 +321,6 @@
                                                 <div class="text-muted">Status</div>
                                                 <div id="snap-status-2" class="fw-semibold"></div>
                                             </div>
-
                                             <div class="col-12">
                                                 <div class="text-muted">Location</div>
                                                 <div id="snap-location-2" class="fw-semibold"></div>
@@ -350,12 +342,10 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="tr-date" name="actual_date"
-                                    value="{{ Carbon::now()->toDateString() }}" min="{{ $currentMonthStart }}"
-                                    max="{{ $currentMonthEnd }}">
-                                <small class="text-muted">
-                                    Actual Date hanya boleh di bulan berjalan ({{ $currentMonthText }}).
+                                    value="{{ $today }}">
+                                <small class="text-muted d-block mt-1">
+                                    Actual Date locked to current month: <b>{{ $currentMonthText }}</b>
                                 </small>
-
                             </div>
 
                             <div class="col-md-12">
@@ -384,13 +374,21 @@
         </div>
     </div>
 @endsection
+
 @push('scripts')
     <script>
         (function() {
             const money2 = v => new Intl.NumberFormat(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(Number(v ?? 0));
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                })
+                .format(Number(v ?? 0));
+
+            // ==== CURRENT MONTH LOCK (from PHP) ====
+            const CUR_MONTH_START = @json($currentMonthStart);
+            const CUR_MONTH_END = @json($currentMonthEnd);
+            const TODAY = @json($today);
+            const CUR_MONTH_TEXT = @json($currentMonthText);
 
             const ATTACH_URL_TPL = @json(route('depreciation.transfer-requests.attachment', '__UUID__'));
             const APPROVE_URL_TPL = @json(route('depreciation.transfer-requests.approve', '__UUID__'));
@@ -402,34 +400,50 @@
             const $modalEdit = new bootstrap.Modal(document.getElementById('modal-edit-transfer-request'));
             const $formEdit = $('#form-edit-transfer-request');
             const $btnUpdate = $('#btn-update-transfer-request');
+
             const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
-            const PERIOD = "{{ $currentMonth }}";
-            const CUR_MONTH_START = @json($currentMonthStart);
-            const CUR_MONTH_END = @json($currentMonthEnd);
-            const CUR_MONTH_TEXT = @json($currentMonthText);
 
-            function clampDateToCurrentMonth(inputSel) {
-                const $inp = $(inputSel);
-                const v = $inp.val();
-                if (!v) return;
+            // --- helpers ---
+            const fmt2 = (v) => money2(v);
+            const getTransferType = () => $('input[name="tr-type"]:checked').val();
 
-                if (v < CUR_MONTH_START || v > CUR_MONTH_END) {
-                    $inp.val(CUR_MONTH_START);
+            function clampDateToCurrentMonth(inputEl) {
+                const $el = $(inputEl);
+                const val = $el.val();
+                if (!val) return;
+
+                if (val < CUR_MONTH_START) {
+                    $el.val(CUR_MONTH_START);
                     Swal.fire({
                         icon: 'warning',
                         title: 'Actual Date locked',
-                        text: `Actual Date hanya boleh di bulan berjalan (${CUR_MONTH_TEXT}).`
+                        text: `Actual Date must be within ${CUR_MONTH_TEXT}.`
+                    });
+                } else if (val > CUR_MONTH_END) {
+                    $el.val(CUR_MONTH_END);
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Actual Date locked',
+                        text: `Actual Date must be within ${CUR_MONTH_TEXT}.`
                     });
                 }
             }
 
-            $('#tr-date').on('change', () => {
-                clampDateToCurrentMonth('#tr-date');
-                if (getTransferType() === 'tf-val') refreshTransferCap();
-                else refreshCarryPreview();
-            });
+            function applyCurrentMonthLock(selector, defaultValue) {
+                const $el = $(selector);
+                $el.attr('min', CUR_MONTH_START);
+                $el.attr('max', CUR_MONTH_END);
 
+                // kalau empty, isi default
+                if (defaultValue && !$el.val()) $el.val(defaultValue);
 
+                // prevent manual out-of-range
+                $el.off('change.lock').on('change.lock', function() {
+                    clampDateToCurrentMonth(this);
+                });
+            }
+
+            // ==== requester filter select2 ====
             $('#f-requester').select2({
                 placeholder: 'Select requester',
                 allowClear: true,
@@ -446,7 +460,7 @@
                 }
             });
 
-            // Open Transfer modal
+            // ==== Open Transfer modal ====
             $('#btn-open-transfer').on('click', () => {
                 $('#form-transfer')[0].reset();
                 $('#tr-from-uuid, #tr-to-uuid').val('');
@@ -455,11 +469,16 @@
                 $('#tr-cap-help').text('');
                 $('#tr-carry-help').text('');
                 $('#tr-preview').addClass('d-none').empty();
+
+                // LOCK actual date to current month
+                $('#tr-date').val(TODAY);
+                applyCurrentMonthLock('#tr-date', TODAY);
+
                 $modal.show();
                 syncTypeUI();
             });
 
-            // select2 init (transfer modal)
+            // ==== select2 init (transfer modal) ====
             const initAssetSelect = ($el) => {
                 $el.select2({
                     dropdownParent: $('#modal-transfer'),
@@ -476,21 +495,11 @@
                         processResults: data => data
                     }
                 }).on('select2:select', function(e) {
-                    if (this.id === 'tr-from-asset') {
-                        const assetUuid = e.params.data.id;
-                        fetchAssetSnapshot1(assetUuid);
-                    }
-                    if (this.id === 'tr-to-asset') {
-                        const assetUuid = e.params.data.id;
-                        fetchAssetSnapshot2(assetUuid);
-                    }
+                    if (this.id === 'tr-from-asset') fetchAssetSnapshot1(e.params.data.id);
+                    if (this.id === 'tr-to-asset') fetchAssetSnapshot2(e.params.data.id);
                 }).on('select2:clear', function() {
-                    if (this.id === 'tr-from-asset') {
-                        clearSnapshot1();
-                    }
-                    if (this.id === 'tr-to-asset') {
-                        clearSnapshot2();
-                    }
+                    if (this.id === 'tr-from-asset') clearSnapshot1();
+                    if (this.id === 'tr-to-asset') clearSnapshot2();
                 });
             };
             initAssetSelect($('#tr-from-asset'));
@@ -513,18 +522,17 @@
                 if (t === 'carry_over_gross_accum') return '3. Carry-Over (Gross + Accum)';
                 return '1. Partials/Full (Gross only)';
             };
+
             const TR_PERMS = {
                 edit: @json(auth()->user()?->hasAction('TRANSFER', 'U') ?? false),
                 approve: @json(auth()->user()?->hasAction('TRANSFER', 'APR') ?? false),
                 delete: @json(auth()->user()?->hasAction('TRANSFER', 'D') ?? false),
             };
 
-
             const urlParams = new URLSearchParams(window.location.search);
             const statusFromUrl = urlParams.get('status');
-            if (statusFromUrl) {
-                $('#f-status').val(statusFromUrl);
-            }
+            if (statusFromUrl) $('#f-status').val(statusFromUrl);
+
             const tbl = $('#tbl-transfer-requests').DataTable({
                 processing: true,
                 serverSide: true,
@@ -550,12 +558,12 @@
                 },
                 order: [
                     [5, 'desc']
-                ], // actual_date
+                ],
                 columns: [{
                         data: 'transfer_code',
                         name: 'transfer_code'
                     },
-                    // From asset
+
                     {
                         data: 'from_code',
                         name: 'from_asset_uuid',
@@ -574,7 +582,7 @@
                     `;
                         }
                     },
-                    // To asset
+
                     {
                         data: 'to_code',
                         name: 'to_asset_uuid',
@@ -593,7 +601,7 @@
                     `;
                         }
                     },
-                    // Type
+
                     {
                         data: 'transfer_type',
                         name: 'transfer_type',
@@ -601,7 +609,7 @@
                             return typeLabel(data);
                         }
                     },
-                    // Amount
+
                     {
                         data: 'amount',
                         name: 'amount',
@@ -609,13 +617,12 @@
                             return money2(v);
                         }
                     },
-                    // Actual Date
+
                     {
                         data: 'actual_date',
                         name: 'actual_date',
                         render: function(iso, type) {
                             if (!iso) return '';
-                            // server sends full ISO with time; cut to date for value, but keep full for sort
                             if (type === 'sort' || type === 'type') return iso;
                             const d = new Date(iso);
                             return new Intl.DateTimeFormat('en-GB', {
@@ -625,7 +632,7 @@
                             }).format(d);
                         }
                     },
-                    // Status
+
                     {
                         data: 'kode_status',
                         name: 'kode_status',
@@ -633,7 +640,7 @@
                             return statusBadge(k);
                         }
                     },
-                    // Requested by
+
                     {
                         data: 'requested_by',
                         name: 'requested_by',
@@ -653,7 +660,7 @@
                             return `<div class="fw-semibold">${by}</div><div class="text-muted small">${date}</div>`;
                         }
                     },
-                    // Approved by / at
+
                     {
                         data: 'approved_by',
                         name: 'approved_by',
@@ -673,18 +680,18 @@
                             return `<div class="fw-semibold">${by}</div><div class="text-muted small">${date}</div>`;
                         }
                     },
-                    // Attachment
+
                     {
                         data: 'attachment_path',
                         name: 'attachment_path',
                         render: function(path, type, row) {
                             if (!path) return '<span class="text-muted">-</span>';
                             const url = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(row
-                                .uuid));
+                            .uuid));
                             return `<a href="${url}" target="_blank" class="btn btn-sm btn-light-primary">Download</a>`;
                         }
                     },
-                    // Note
+
                     {
                         data: 'note',
                         name: 'note',
@@ -692,11 +699,11 @@
                             return v ? $('<div/>').text(v).html() : '<span class="text-muted">-</span>';
                         }
                     },
+
                     {
                         data: null,
                         orderable: false,
                         searchable: false,
-                        className: '',
                         render: function(row) {
                             const id = row.uuid;
                             const status = (row.kode_status || '').toUpperCase();
@@ -708,33 +715,260 @@
                                 `<button type="button" class="btn btn-light-success btn-approve" data-id="${id}">Approve</button>`;
                             const btnReject =
                                 `<button type="button" class="btn btn-light-warning btn-reject" data-id="${id}">Reject</button>`;
-                            // const btnDelete = `<button type="button" class="btn btn-light-danger btn-delete" data-id="${id}">Delete</button>`;
-                            const btnDelete = '';
+                            const btnDelete = ''; // keep empty like your original
 
                             if (status === 'APR') {
-                                if (TR_PERMS.edit) {
-                                    buttons += btnEdit;
-                                }
-                                if (TR_PERMS.approve) {
-                                    buttons += btnApprove + btnReject;
-                                }
+                                if (TR_PERMS.edit) buttons += btnEdit;
+                                if (TR_PERMS.approve) buttons += btnApprove + btnReject;
                             }
+                            if (TR_PERMS.delete) buttons += btnDelete;
 
-                            if (TR_PERMS.delete) {
-                                buttons += btnDelete;
-                            }
-
-                            if (!buttons) {
-                                return '';
-                            }
-
+                            if (!buttons) return '';
                             return '<div class="btn-group btn-group-sm">' + buttons + '</div>';
                         }
                     }
                 ]
             });
 
+            // ===== filters =====
+            $('#btnFilter').on('click', function(e) {
+                e.preventDefault();
+                tbl.ajax.reload();
+            });
 
+            $('#btnReset').on('click', function(e) {
+                e.preventDefault();
+                $('#f-type').val('');
+                $('#f-status').val('');
+                $('#f-req-from').val('');
+                $('#f-req-to').val('');
+                $('#f-apr-from').val('');
+                $('#f-apr-to').val('');
+                $('#f-asset').val('');
+                $('#f-requester').val(null).trigger('change');
+                tbl.ajax.reload();
+            });
+
+            $('#btnExport').on('click', function(e) {
+                e.preventDefault();
+
+                const params = $.param({
+                    type: $('#f-type').val() || '',
+                    requester: $('#f-requester').val() || '',
+                    status: $('#f-status').val() || '',
+                    req_from: $('#f-req-from').val() || '',
+                    req_to: $('#f-req-to').val() || '',
+                    apr_from: $('#f-apr-from').val() || '',
+                    apr_to: $('#f-apr-to').val() || '',
+                    asset_q: $('#f-asset').val() || '',
+                });
+
+                Swal.fire({
+                    title: 'Export transfer requests?',
+                    text: 'Export current filtered transfer value data to Excel.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+                    window.location = "{{ route('export.transfer-requests') }}" + '?' + params;
+                });
+            });
+
+            // ===== Row actions =====
+            $('#tbl-transfer-requests').on('click', '.btn-approve', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Approve this transfer?',
+                    icon: 'question',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Applying…',
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    $.ajax({
+                        url: APPROVE_URL_TPL.replace('__UUID__', encodeURIComponent(id)),
+                        type: 'POST',
+                        data: {
+                            _token: "{{ csrf_token() }}",
+                            _method: 'POST'
+                        }
+                    }).done(() => {
+                        Swal.fire('Approved', '', 'success');
+                        tbl.ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+            $('#tbl-transfer-requests').on('click', '.btn-reject', function() {
+                const id = $(this).data('id');
+                Swal.fire({
+                    title: 'Reject this transfer?',
+                    icon: 'warning',
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No',
+                    showCancelButton: true
+                }).then(r => {
+                    if (!r.isConfirmed) return;
+                    Swal.fire({
+                        title: 'Updating…',
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    $.ajax({
+                        url: REJECT_URL_TPL.replace('__UUID__', encodeURIComponent(id)),
+                        type: 'POST',
+                        data: {
+                            _token: "{{ csrf_token() }}",
+                            _method: 'POST'
+                        }
+                    }).done(() => {
+                        Swal.fire('Rejected', '', 'success');
+                        tbl.ajax.reload(null, false);
+                    }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
+                });
+            });
+
+            // ===== Edit =====
+            $('#tbl-transfer-requests').on('click', '.btn-edit', function() {
+                const rowData = tbl.row($(this).closest('tr')).data();
+                if (!rowData) return;
+
+                $('#edit-uuid').val(rowData.uuid);
+
+                const fromText = (rowData.from_code || '') + (rowData.from_name ? ' - ' + rowData.from_name :
+                    '');
+                const toText = (rowData.to_code || '') + (rowData.to_name ? ' - ' + rowData.to_name : '');
+
+                $('#edit-from-asset').val(fromText);
+                $('#edit-to-asset').val(toText);
+
+                $('#edit-transfer-type').val(rowData.transfer_type || 'tf-val');
+                $('#edit-amount').val(rowData.amount);
+
+                const actualIso = (rowData.actual_date || '').substring(0, 10);
+                $('#edit-actual-date').val(actualIso);
+
+                // apply lock current month on edit actual date too
+                applyCurrentMonthLock('#edit-actual-date', actualIso || TODAY);
+
+                $('#edit-note').val(rowData.note || '');
+
+                const statusText = (rowData.kode_status || '').toUpperCase();
+                $('#edit-status-text').val(statusText);
+
+                // Current attachment
+                if (rowData.attachment_path) {
+                    const attUrl = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(rowData.uuid));
+                    $('#edit-attachment-current').html(
+                        `<a href="${attUrl}" target="_blank">Download current attachment</a>`);
+                } else {
+                    $('#edit-attachment-current').text('-');
+                }
+
+                const editable = (statusText === 'APR');
+
+                $('#edit-transfer-type').prop('disabled', !editable);
+                $('#edit-amount').prop('readonly', !editable);
+
+                // IMPORTANT: if editable, keep enabled BUT still month-locked
+                $('#edit-actual-date').prop('disabled', !editable);
+
+                $('#edit-attachment').prop('disabled', !editable);
+
+                $modalEdit.show();
+            });
+
+            $formEdit.on('submit', function(e) {
+                e.preventDefault();
+
+                const uuid = $('#edit-uuid').val();
+                const amt = Number($('#edit-amount').val() || 0);
+                const date = $('#edit-actual-date').val();
+
+                if (!uuid) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Error',
+                        text: 'Missing request ID.'
+                    });
+                    return;
+                }
+                if (!(amt > 0)) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Amount must be greater than 0'
+                    });
+                    return;
+                }
+                if (!date) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Validation error',
+                        text: 'Actual Date is required'
+                    });
+                    return;
+                }
+
+                // enforce lock
+                if (date < CUR_MONTH_START || date > CUR_MONTH_END) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Actual Date locked',
+                        text: `Actual Date must be within ${CUR_MONTH_TEXT}.`
+                    });
+                    // auto clamp to nearest bound
+                    if (date < CUR_MONTH_START) $('#edit-actual-date').val(CUR_MONTH_START);
+                    else $('#edit-actual-date').val(CUR_MONTH_END);
+                    return;
+                }
+
+                const formData = new FormData(this);
+                formData.append('_method', 'PUT');
+
+                Swal.fire({
+                    title: 'Save changes?',
+                    text: 'Update this transfer request with the new values.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#EA242A',
+                    cancelButtonColor: '#B5B5B6',
+                    confirmButtonText: 'Yes',
+                    cancelButtonText: 'No'
+                }).then(result => {
+                    if (!result.isConfirmed) return;
+
+                    setBusyUpdate(true);
+
+                    $.ajax({
+                            url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
+                            type: 'POST',
+                            data: formData,
+                            processData: false,
+                            contentType: false,
+                        }).done(() => {
+                            Swal.fire('Updated', '', 'success');
+                            tbl.ajax.reload(null, false);
+                            $modalEdit.hide();
+                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
+                        .always(() => setBusyUpdate(false));
+                });
+            });
+
+            // ===== Transfer helpers =====
             function fetchAssetSnapshot1(assetUuid) {
                 if (!assetUuid) {
                     clearSnapshot1();
@@ -793,277 +1027,22 @@
             $('#tr-to-asset').on('select2:select select2:clear', function() {
                 $('#tr-to-uuid').val($(this).val() || '');
             });
+
+            // lock + preview refresh
             $('#tr-date').on('change', () => {
+                clampDateToCurrentMonth('#tr-date');
                 if (getTransferType() === 'tf-val') refreshTransferCap();
                 else refreshCarryPreview();
             });
+
             $('#tr-amount').on('keyup change', () => {
                 if (getTransferType() === 'carry_over_gross_accum') refreshCarryPreview();
             });
-            $('#btnFilter').on('click', function(e) {
-                e.preventDefault();
-                tbl.ajax.reload();
-            });
 
-            $('#btnReset').on('click', function(e) {
-                e.preventDefault();
-                $('#f-type').val('');
-                $('#f-status').val('');
-                $('#f-req-from').val('');
-                $('#f-req-to').val('');
-                $('#f-apr-from').val('');
-                $('#f-apr-to').val('');
-                $('#f-asset').val('');
-                $('#f-requester').val(null).trigger('change');
-                tbl.ajax.reload();
-            });
-
-            $('#btnExport').on('click', function(e) {
-                e.preventDefault();
-
-                const params = $.param({
-                    type: $('#f-type').val() || '',
-                    requester: $('#f-requester').val() || '',
-                    status: $('#f-status').val() || '',
-                    req_from: $('#f-req-from').val() || '',
-                    req_to: $('#f-req-to').val() || '',
-                    apr_from: $('#f-apr-from').val() || '',
-                    apr_to: $('#f-apr-to').val() || '',
-                    asset_q: $('#f-asset').val() || '',
-                });
-
-                Swal.fire({
-                    title: 'Export transfer requests?',
-                    text: 'Export current filtered transfer value data to Excel.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#EA242A',
-                    cancelButtonColor: '#B5B5B6',
-                    confirmButtonText: 'Yes',
-                    cancelButtonText: 'No'
-                }).then(result => {
-                    if (!result.isConfirmed) return;
-                    window.location = "{{ route('export.transfer-requests') }}" + '?' + params;
-                });
-            });
-
-            // ===== Row actions =====
-
-            $('#tbl-transfer-requests').on('click', '.btn-approve', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                        title: 'Approve this transfer?',
-                        icon: 'question',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6',
-                        confirmButtonText: 'Yes',
-                        cancelButtonText: 'No',
-                        showCancelButton: true
-                    })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Applying…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.ajax({
-                                url: APPROVE_URL_TPL.replace('__UUID__', encodeURIComponent(id)),
-                                type: 'POST',
-                                data: {
-                                    _token: "{{ csrf_token() }}",
-                                    _method: 'POST'
-                                }
-                            }).done(res => {
-                                Swal.fire('Approved', '', 'success');
-                                tbl.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                    });
-            });
-
-
-            $('#tbl-transfer-requests').on('click', '.btn-reject', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                        title: 'Reject this transfer?',
-                        icon: 'warning',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6',
-                        confirmButtonText: 'Yes',
-                        cancelButtonText: 'No',
-                        showCancelButton: true
-                    })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Updating…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.ajax({
-                                url: REJECT_URL_TPL.replace('__UUID__', encodeURIComponent(id)),
-                                type: 'POST',
-                                data: {
-                                    _token: "{{ csrf_token() }}",
-                                    _method: 'POST'
-                                }
-                            }).done(res => {
-                                Swal.fire('Rejected', '', 'success');
-                                tbl.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                    });
-            });
-
-            $('#tbl-transfer-requests').on('click', '.btn-delete', function() {
-                const id = $(this).data('id');
-                Swal.fire({
-                        title: 'Delete this transfer?',
-                        text: 'Record will be moved to trash.',
-                        icon: 'warning',
-                        confirmButtonColor: '#EA242A',
-                        cancelButtonColor: '#B5B5B6',
-                        confirmButtonText: 'Yes',
-                        cancelButtonText: 'No',
-                        showCancelButton: true
-                    })
-                    .then(r => {
-                        if (!r.isConfirmed) return;
-                        Swal.fire({
-                            title: 'Deleting…',
-                            didOpen: () => Swal.showLoading()
-                        });
-                        $.ajax({
-                                url: DELETE_URL_TPL.replace('__UUID__', encodeURIComponent(id)),
-                                type: 'POST',
-                                data: {
-                                    _token: "{{ csrf_token() }}",
-                                    _method: 'DELETE'
-                                }
-                            }).done(res => {
-                                Swal.fire('Deleted', '', 'success');
-                                tbl.ajax.reload(null, false);
-                            })
-                            .fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'));
-                    });
-            });
-
-            // ===== Edit =====
-
-            $('#tbl-transfer-requests').on('click', '.btn-edit', function() {
-                const rowData = tbl.row($(this).closest('tr')).data();
-                if (!rowData) return;
-
-                $('#edit-uuid').val(rowData.uuid);
-
-                const fromText = (rowData.from_code || '') +
-                    (rowData.from_name ? ' - ' + rowData.from_name : '');
-                const toText = (rowData.to_code || '') +
-                    (rowData.to_name ? ' - ' + rowData.to_name : '');
-
-                $('#edit-from-asset').val(fromText);
-                $('#edit-to-asset').val(toText);
-
-                $('#edit-transfer-type').val(rowData.transfer_type || 'tf-val');
-                $('#edit-amount').val(rowData.amount);
-
-                const actualIso = (rowData.actual_date || '').substring(0, 10);
-                $('#edit-actual-date').val(actualIso);
-
-                $('#edit-note').val(rowData.note || '');
-
-                const statusText = (rowData.kode_status || '').toUpperCase();
-                $('#edit-status-text').val(statusText);
-
-                // Current attachment
-                if (rowData.attachment_path) {
-                    const attUrl = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(rowData.uuid));
-                    $('#edit-attachment-current').html(
-                        `<a href="${attUrl}" target="_blank">Download current attachment</a>`
-                    );
-                } else {
-                    $('#edit-attachment-current').text('-');
-                }
-
-                const editable = (statusText === 'APR');
-                $('#edit-transfer-type').prop('disabled', !editable);
-                $('#edit-amount').prop('readonly', !editable);
-                $('#edit-actual-date').prop('readonly', !editable);
-                $('#edit-attachment').prop('disabled', !editable);
-
-                $modalEdit.show();
-            });
-
-            $formEdit.on('submit', function(e) {
-                e.preventDefault();
-
-                const uuid = $('#edit-uuid').val();
-                const amt = Number($('#edit-amount').val() || 0);
-                const date = $('#edit-actual-date').val();
-
-                if (!uuid) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: 'Missing request ID.'
-                    });
-                    return;
-                }
-                if (!(amt > 0)) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'Amount must be greater than 0'
-                    });
-                    return;
-                }
-                if (!date) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'Actual Date is required'
-                    });
-                    return;
-                }
-
-                const formData = new FormData(this);
-                formData.append('_method', 'PUT');
-
-                Swal.fire({
-                    title: 'Save changes?',
-                    text: 'Update this transfer request with the new values.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#EA242A',
-                    cancelButtonColor: '#B5B5B6',
-                    confirmButtonText: 'Yes',
-                    cancelButtonText: 'No'
-                }).then(result => {
-                    if (!result.isConfirmed) return;
-
-                    setBusyUpdate(true);
-
-                    $.ajax({
-                            url: UPDATE_URL_TPL.replace('__UUID__', encodeURIComponent(uuid)),
-                            type: 'POST',
-                            data: formData,
-                            processData: false,
-                            contentType: false,
-                        }).done(res => {
-                            Swal.fire('Updated', '', 'success');
-                            tbl.ajax.reload(null, false);
-                            $modalEdit.hide();
-                        }).fail(x => Swal.fire('Error', x.responseJSON?.message || 'Failed', 'error'))
-                        .always(() => {
-                            setBusyUpdate(false);
-                        });
-                });
-            });
-
-
-            // ===== Transfer helpers =====
             async function refreshTransferCap() {
                 const fromUUID = $('#tr-from-uuid').val();
                 const date = $('#tr-date').val();
+
                 if (!fromUUID || !date) {
                     $('#tr-cap-help').text('');
                     $('#tr-amount').data('capRemaining', 0);
@@ -1087,8 +1066,6 @@
                     $('#tr-amount').data('capRemaining', 0);
                 }
             }
-
-            const getTransferType = () => $('input[name="tr-type"]:checked').val();
 
             function syncTypeUI() {
                 const t = getTransferType();
@@ -1124,6 +1101,7 @@
                         actual_date: date,
                         amount: amount
                     });
+
                     const d = res || {};
                     const lc = d.last_closed_period ? new Date(d.last_closed_period).toISOString().slice(0, 10) :
                         '-';
@@ -1133,13 +1111,12 @@
                  Accum to carry: <b>${fmt2(d.acc_move)}</b> · NBV that moves: <b>${fmt2(d.nbv_move)}</b><br>
                  Gross remaining cap: <b>${fmt2(d.cap_remaining)}</b>`
                     );
+
                     $('#tr-amount').data('capGross', Number(d.cap_remaining || 0));
 
                     if (amount > Number(d.cap_remaining || 0)) {
                         $('#tr-carry-help').text(
                             'Amount exceeds max carry-over (gross remaining). Please reduce the amount.');
-                    } else {
-                        $('#tr-carry-help').text('');
                     }
                 } catch (e) {
                     console.error(e);
@@ -1194,6 +1171,16 @@
                     return;
                 }
 
+                // enforce lock for add new too
+                if (date < CUR_MONTH_START || date > CUR_MONTH_END) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Actual Date locked',
+                        text: `Actual Date must be within ${CUR_MONTH_TEXT}.`
+                    });
+                    return;
+                }
+
                 if (type === 'tf-val') {
                     const capRem = Number($('#tr-amount').data('capRemaining') || 0);
                     if (capRem && amount > capRem) {
@@ -1223,6 +1210,7 @@
                 fd.append('amount', amount);
                 fd.append('actual_date', date);
                 fd.append('note', $('#tr-note').val() || '');
+
                 const fileInput = document.getElementById('tr-attachment');
                 if (fileInput && fileInput.files && fileInput.files[0]) {
                     fd.append('attachment', fileInput.files[0]);
@@ -1238,7 +1226,6 @@
                     confirmButtonText: 'Yes',
                     cancelButtonText: 'No'
                 });
-
                 if (!confirmResult.isConfirmed) return;
 
                 try {
@@ -1260,7 +1247,6 @@
                         text: 'Transfer request saved. Waiting for approval.'
                     });
 
-                    $('#tbl-monthly').DataTable().ajax.reload(null, false);
                     $modal.hide();
                     tbl.ajax.reload(null, false);
                 } catch (err) {
@@ -1276,6 +1262,9 @@
                 }
             });
 
+            // ===== init lock on page load too (safety) =====
+            applyCurrentMonthLock('#tr-date', TODAY);
+            applyCurrentMonthLock('#edit-actual-date', null);
 
         })();
     </script>
