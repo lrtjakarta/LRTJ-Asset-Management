@@ -2,12 +2,12 @@
     use Carbon\Carbon;
 
     $currentMonthStart = Carbon::now()->startOfMonth()->toDateString();
-    $currentMonthEnd = Carbon::now()->endOfMonth()->toDateString();
-    $today = Carbon::now()->toDateString();
-    $currentMonthText = Carbon::now()->isoFormat('MMMM YYYY');
+    $currentMonthEnd   = Carbon::now()->endOfMonth()->toDateString();
+    $today             = Carbon::now()->toDateString();
+    $currentMonthText  = Carbon::now()->isoFormat('MMMM YYYY');
 
     $prevYearLabel = Carbon::now()->year - 1;
-    $currentYear = Carbon::parse($currentMonthStart)->year;
+    $currentYear   = Carbon::parse($currentMonthStart)->year;
 @endphp
 
 @extends('layouts.app')
@@ -34,6 +34,7 @@
 
     <div id="kt_app_content" class="app-content flex-column-fluid">
         <div id="kt_app_content_container" class="app-container container-fluid">
+
             <div class="card mb-6">
                 <div class="card-body">
                     <div class="row g-3 align-items-end">
@@ -85,7 +86,7 @@
                         <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="f-asset" class="form-control"
-                                placeholder="e.g. A1101000002-00 / Laptop Dell">
+                                   placeholder="e.g. A1101000002-00 / Laptop Dell">
                         </div>
                     </div>
                 </div>
@@ -116,26 +117,27 @@
 
                 <div class="card-body">
                     <table id="tbl-transfer-requests"
-                        class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
+                           class="table table-striped table-row-bordered table-column-bordered gy-5 gs-7 border rounded w-100">
                         <thead class="table-light">
-                            <tr>
-                                <th class="min-w-150px">Transaction Number</th>
-                                <th class="min-w-150px">From Asset</th>
-                                <th class="min-w-150px">To Asset</th>
-                                <th class="min-w-150px">Type</th>
-                                <th class="min-w-150px">Amount</th>
-                                <th class="min-w-150px">Actual Date</th>
-                                <th class="min-w-150px">Status</th>
-                                <th class="min-w-150px">Requested By</th>
-                                <th class="min-w-150px">Approved By</th>
-                                <th class="min-w-150px">Attachment</th>
-                                <th class="min-w-200px">Note</th>
-                                <th class="min-w-200px">Actions</th>
-                            </tr>
+                        <tr>
+                            <th class="min-w-150px">Transaction Number</th>
+                            <th class="min-w-150px">From Asset</th>
+                            <th class="min-w-150px">To Asset</th>
+                            <th class="min-w-150px">Type</th>
+                            <th class="min-w-150px">Amount</th>
+                            <th class="min-w-150px">Actual Date</th>
+                            <th class="min-w-150px">Status</th>
+                            <th class="min-w-150px">Requested By</th>
+                            <th class="min-w-150px">Approved By</th>
+                            <th class="min-w-150px">Attachment</th>
+                            <th class="min-w-200px">Note</th>
+                            <th class="min-w-200px">Actions</th>
+                        </tr>
                         </thead>
                     </table>
                 </div>
             </div>
+
         </div>
     </div>
 
@@ -143,6 +145,7 @@
     <div class="modal fade" id="modal-edit-transfer-request" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
+
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">Edit Transfer Request</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -178,7 +181,7 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Amount</label>
                                 <input type="number" step="0.01" min="0.01" class="form-control"
-                                    id="edit-amount" name="amount">
+                                       id="edit-amount" name="amount">
                             </div>
 
                             <div class="col-md-6">
@@ -229,6 +232,7 @@
     <div class="modal fade" id="modal-transfer" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-centered">
             <div class="modal-content">
+
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">Transfer Value</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -238,27 +242,37 @@
                     @csrf
                     <div class="modal-body py-4">
                         <div class="row g-4">
+
                             <div class="col-12">
                                 <label class="form-label"><b>Transfer Type :</b></label>
                                 <div class="btn-group" role="group" aria-label="Transfer type"
-                                    style="border: solid .5px black; width:100%;">
+                                     style="border: solid .5px black; width:100%;">
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-tf-val"
-                                        value="tf-val" checked>
+                                           value="tf-val" checked>
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-tf-val">
                                         1. Partials/Full (Gross only)
                                     </label>
 
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-acq-fix"
-                                        value="acq_fix">
+                                           value="acq_fix">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-acq-fix">
                                         2. Acquisition Fix
                                     </label>
 
                                     <input type="radio" class="btn-check" name="tr-type" id="tr-type-carry"
-                                        value="carry_over_gross_accum">
+                                           value="carry_over_gross_accum">
                                     <label class="btn btn-outline-danger btn-sm" for="tr-type-carry">
                                         3. Carry-Over (Gross + Accum)
                                     </label>
+                                </div>
+                            </div>
+
+                            {{-- NEW: Rule Info Box (changes based on transfer type) --}}
+                            <div class="col-12">
+                                <div id="tr-type-rule"
+                                     class="alert alert-info py-3 px-4 mb-0"
+                                     style="border-left: 4px solid #EA242A;">
+                                    {{-- filled by JS --}}
                                 </div>
                             </div>
 
@@ -333,7 +347,7 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Amount</label>
                                 <input type="number" step="0.01" min="0.01" class="form-control" id="tr-amount"
-                                    name="amount" placeholder="e.g. 15000000">
+                                       name="amount" placeholder="e.g. 15000000">
                                 <small id="tr-cap-help" class="text-muted d-block mt-1"></small>
                                 <small id="tr-carry-help" class="text-warning d-block mt-1"></small>
                                 <div id="tr-preview" class="alert d-none py-2 px-3 mt-2 small"></div>
@@ -342,7 +356,7 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="tr-date" name="actual_date"
-                                    value="{{ $today }}">
+                                       value="{{ $today }}">
                                 <small class="text-muted d-block mt-1">
                                     Actual Date locked to current month: <b>{{ $currentMonthText }}</b>
                                 </small>
@@ -357,6 +371,7 @@
                                 <label class="form-label">Note (Optional)</label>
                                 <textarea class="form-control" id="tr-note" name="note" placeholder="Optional note"></textarea>
                             </div>
+
                         </div>
                     </div>
 
@@ -369,7 +384,9 @@
                             </span>
                         </button>
                     </div>
+
                 </form>
+
             </div>
         </div>
     </div>
@@ -434,13 +451,71 @@
                 $el.attr('min', CUR_MONTH_START);
                 $el.attr('max', CUR_MONTH_END);
 
-                // kalau empty, isi default
                 if (defaultValue && !$el.val()) $el.val(defaultValue);
 
-                // prevent manual out-of-range
                 $el.off('change.lock').on('change.lock', function() {
                     clampDateToCurrentMonth(this);
                 });
+            }
+
+            // ===== Transfer Type Rules (UI + validation) =====
+            const STRICT_ACQ_FIX_FULL = true; // set false kalau mau allow partial acq_fix
+
+            function yearOf(dateStr) {
+                if (!dateStr || dateStr.length < 4) return null;
+                return Number(dateStr.substring(0, 4));
+            }
+
+            function setTypeRuleBox() {
+                const t = getTransferType();
+                const $box = $('#tr-type-rule');
+
+                if (t === 'tf-val') {
+                    $box
+                        .removeClass('alert-warning alert-danger')
+                        .addClass('alert-info')
+                        .html(`
+                            <div class="fw-bold mb-1">Rule: Transfer Nilai Asset (Gross only)</div>
+                            <ol class="mb-0 ps-4">
+                                <li>Transfer parsial/full <b>tidak boleh melebihi NBV terakhir</b>.</li>
+                                <li>Transfer ini <b>tidak mengubah akumulasi depresiasi sebelumnya</b> (accum tetap di aset asal).</li>
+                            </ol>
+                        <br>
+                            <p>Transfer nilai asset  parsial atau full tidak boleh melebihi nilai dari net book value terakhir  dan tidak mengubah nilai akumulasi depresiasi sebelumnya.</p>
+                        `);
+                    return;
+                }
+
+                if (t === 'acq_fix') {
+                    $box
+                        .removeClass('alert-warning alert-danger')
+                        .addClass('alert-info')
+                        .html(`
+                            <div class="fw-bold mb-1">Rule: Acquisition Fix (Kesalahan akuisisi di awal)</div>
+                            <ol class="mb-0 ps-4">
+                                <li>Nilai <b>akuisisi</b> dan <b>akumulasi depresiasi dari awal</b> harus dipindahkan dari aset yang salah ke aset penerima.</li>
+                                <li>${STRICT_ACQ_FIX_FULL ? '<b>Wajib FULL</b>: amount harus sama dengan nilai akuisisi (bukan parsial).' : 'Boleh parsial (pastikan backend support proporsional).'}
+                                </li>
+                            </ol>
+                        <br>
+                            <p>Transfer nilai asset  parsial atau full karena kesalahan akuisisi diawal maka nilai akuisisi dan nilai akumulasi depresiasi dari awal harus dipindahkan dari aset yang salah ke asset penerima.</p>
+                        `);
+                    return;
+                }
+
+                // carry_over_gross_accum
+                $box
+                        .removeClass('alert-warning alert-danger')
+                        .addClass('alert-info')
+                    .html(`
+                        <div class="fw-bold mb-1">Rule: Carry-Over (Gross + Accum)</div>
+                        <ol class="mb-0 ps-4">
+                            <li>Nilai <b>akuisisi</b> dan <b>akumulasi depresiasi</b> dipindahkan (gross + accum).</li>
+                            <li><b>Backdate hanya bisa di tahun ini</b> (audit tahun sebelumnya sudah release).</li>
+                        </ol>
+                        <br>
+                            <p>Transfer nilai asset parsial atau full karena kesalahan akuisisi diawal maka nilai akusisi dan nilai akumulasi depresiasi dari awal harus dipindahkan dari asset yang salah ke asset penerima Namun laporan audit tahun sebelumnya sudah di release sehingga transaksi backdate hanya bisa dilakukan di  tahun ini.</p>
+                    `);
             }
 
             // ==== requester filter select2 ====
@@ -465,6 +540,7 @@
                 $('#form-transfer')[0].reset();
                 $('#tr-from-uuid, #tr-to-uuid').val('');
                 $('#tr-from-asset, #tr-to-asset').val(null).trigger('change');
+
                 $('#tr-type-tf-val').prop('checked', true);
                 $('#tr-cap-help').text('');
                 $('#tr-carry-help').text('');
@@ -476,6 +552,9 @@
 
                 $modal.show();
                 syncTypeUI();
+
+                // NEW
+                setTypeRuleBox();
             });
 
             // ==== select2 init (transfer modal) ====
@@ -571,15 +650,14 @@
                             const code = row.from_code || '';
                             const name = row.from_name || '';
                             if (type !== 'display') return code;
-                            const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row
-                                .from_asset_uuid));
+                            const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row.from_asset_uuid));
                             const text = code || data || '';
                             return `
-                        <div class="fw-semibold">
-                            <a href="${url}" class="text-primary fw-semibold">${text}</a>
-                        </div>
-                        <div class="text-muted fs-7">${name}</div>
-                    `;
+                                <div class="fw-semibold">
+                                    <a href="${url}" class="text-primary fw-semibold">${text}</a>
+                                </div>
+                                <div class="text-muted fs-7">${name}</div>
+                            `;
                         }
                     },
 
@@ -590,15 +668,14 @@
                             const code = row.to_code || '';
                             const name = row.to_name || '';
                             if (type !== 'display') return code;
-                            const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row
-                                .to_asset_uuid));
+                            const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row.to_asset_uuid));
                             const text = code || data || '';
                             return `
-                        <div class="fw-semibold">
-                            <a href="${url}" class="text-primary fw-semibold">${text}</a>
-                        </div>
-                        <div class="text-muted fs-7">${name}</div>
-                    `;
+                                <div class="fw-semibold">
+                                    <a href="${url}" class="text-primary fw-semibold">${text}</a>
+                                </div>
+                                <div class="text-muted fs-7">${name}</div>
+                            `;
                         }
                     },
 
@@ -686,8 +763,7 @@
                         name: 'attachment_path',
                         render: function(path, type, row) {
                             if (!path) return '<span class="text-muted">-</span>';
-                            const url = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(row
-                            .uuid));
+                            const url = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(row.uuid));
                             return `<a href="${url}" target="_blank" class="btn btn-sm btn-light-primary">Download</a>`;
                         }
                     },
@@ -715,7 +791,7 @@
                                 `<button type="button" class="btn btn-light-success btn-approve" data-id="${id}">Approve</button>`;
                             const btnReject =
                                 `<button type="button" class="btn btn-light-warning btn-reject" data-id="${id}">Reject</button>`;
-                            const btnDelete = ''; // keep empty like your original
+                            const btnDelete = '';
 
                             if (status === 'APR') {
                                 if (TR_PERMS.edit) buttons += btnEdit;
@@ -848,8 +924,7 @@
 
                 $('#edit-uuid').val(rowData.uuid);
 
-                const fromText = (rowData.from_code || '') + (rowData.from_name ? ' - ' + rowData.from_name :
-                    '');
+                const fromText = (rowData.from_code || '') + (rowData.from_name ? ' - ' + rowData.from_name : '');
                 const toText = (rowData.to_code || '') + (rowData.to_name ? ' - ' + rowData.to_name : '');
 
                 $('#edit-from-asset').val(fromText);
@@ -861,7 +936,6 @@
                 const actualIso = (rowData.actual_date || '').substring(0, 10);
                 $('#edit-actual-date').val(actualIso);
 
-                // apply lock current month on edit actual date too
                 applyCurrentMonthLock('#edit-actual-date', actualIso || TODAY);
 
                 $('#edit-note').val(rowData.note || '');
@@ -869,11 +943,11 @@
                 const statusText = (rowData.kode_status || '').toUpperCase();
                 $('#edit-status-text').val(statusText);
 
-                // Current attachment
                 if (rowData.attachment_path) {
                     const attUrl = ATTACH_URL_TPL.replace('__UUID__', encodeURIComponent(rowData.uuid));
                     $('#edit-attachment-current').html(
-                        `<a href="${attUrl}" target="_blank">Download current attachment</a>`);
+                        `<a href="${attUrl}" target="_blank">Download current attachment</a>`
+                    );
                 } else {
                     $('#edit-attachment-current').text('-');
                 }
@@ -883,7 +957,7 @@
                 $('#edit-transfer-type').prop('disabled', !editable);
                 $('#edit-amount').prop('readonly', !editable);
 
-                // IMPORTANT: if editable, keep enabled BUT still month-locked
+                // keep enabled but locked via min/max
                 $('#edit-actual-date').prop('disabled', !editable);
 
                 $('#edit-attachment').prop('disabled', !editable);
@@ -930,7 +1004,6 @@
                         title: 'Actual Date locked',
                         text: `Actual Date must be within ${CUR_MONTH_TEXT}.`
                     });
-                    // auto clamp to nearest bound
                     if (date < CUR_MONTH_START) $('#edit-actual-date').val(CUR_MONTH_START);
                     else $('#edit-actual-date').val(CUR_MONTH_END);
                     return;
@@ -987,11 +1060,16 @@
                 $('#snap-status-1').text(safe(d.status_label));
                 $('#snap-location-1').text(safe(d.location_label));
                 $('#tf-asset-snapshot-1').removeClass('d-none');
+
+                // cache acquisition total for acq_fix strict validation
+                const acq = Number(d?.commercial_acq_cost || d?.total || 0);
+                $('#tr-amount').data('acqTotal', acq);
             }
 
             function clearSnapshot1() {
                 $('#snap-owner-1,#snap-user-1,#snap-maintenance-1,#snap-status-1,#snap-location-1').text('');
                 $('#tf-asset-snapshot-1').addClass('d-none');
+                $('#tr-amount').data('acqTotal', 0);
             }
 
             function fetchAssetSnapshot2(assetUuid) {
@@ -1021,23 +1099,51 @@
 
             $('#tr-from-asset').on('select2:select select2:clear', () => {
                 $('#tr-from-uuid').val($('#tr-from-asset').val() || '');
-                if (getTransferType() === 'tf-val') refreshTransferCap();
-                else refreshCarryPreview();
+                syncTypeUI();
             });
+
             $('#tr-to-asset').on('select2:select select2:clear', function() {
                 $('#tr-to-uuid').val($(this).val() || '');
             });
 
-            // lock + preview refresh
-            $('#tr-date').on('change', () => {
-                clampDateToCurrentMonth('#tr-date');
-                if (getTransferType() === 'tf-val') refreshTransferCap();
-                else refreshCarryPreview();
+            // lock + refresh
+            $('#tr-date').on('change', function() {
+                clampDateToCurrentMonth(this);
+                syncTypeUI();
             });
 
+            // amount changes only needed for carry preview
             $('#tr-amount').on('keyup change', () => {
                 if (getTransferType() === 'carry_over_gross_accum') refreshCarryPreview();
             });
+
+            // when type changes: update UI + rule box
+            $('input[name="tr-type"]').on('change', function() {
+                syncTypeUI();
+                setTypeRuleBox();
+            });
+
+            function syncTypeUI() {
+                const t = getTransferType();
+
+                // reset helper area
+                $('#tr-cap-help').text('');
+                $('#tr-carry-help').text('');
+                $('#tr-preview').addClass('d-none').empty();
+
+                if (t === 'tf-val') {
+                    refreshTransferCap(); // rule 1: amount <= NBV terakhir
+                    return;
+                }
+
+                if (t === 'acq_fix') {
+                    // rule 2: acquisition+accum from start moves (UI info handled by rule box)
+                    return;
+                }
+
+                // carry_over_gross_accum
+                refreshCarryPreview();
+            }
 
             async function refreshTransferCap() {
                 const fromUUID = $('#tr-from-uuid').val();
@@ -1055,8 +1161,7 @@
                         actual_date: date
                     });
                     const cap = res || {};
-                    const lastP = cap.last_closed_period ? new Date(cap.last_closed_period).toISOString().slice(0,
-                        10) : '-';
+                    const lastP = cap.last_closed_period ? new Date(cap.last_closed_period).toISOString().slice(0, 10) : '-';
                     $('#tr-cap-help').text(
                         `Max: ${fmt2(cap.remaining)} (Begin: ${fmt2(cap.begin_total)} − Last NBV ${lastP}: ${fmt2(cap.last_nbv)} − This month OUT: ${fmt2(cap.already_out)})`
                     );
@@ -1066,23 +1171,6 @@
                     $('#tr-amount').data('capRemaining', 0);
                 }
             }
-
-            function syncTypeUI() {
-                const t = getTransferType();
-                if (t === 'tf-val') {
-                    $('#tr-carry-help').text('');
-                    $('#tr-preview').addClass('d-none').empty();
-                    refreshTransferCap();
-                } else if (t === 'carry_over_gross_accum') {
-                    $('#tr-cap-help').text('');
-                    refreshCarryPreview();
-                } else {
-                    $('#tr-cap-help').text('');
-                    $('#tr-carry-help').text('');
-                    $('#tr-preview').addClass('d-none').empty();
-                }
-            }
-            $('input[name="tr-type"]').on('change', syncTypeUI);
 
             async function refreshCarryPreview() {
                 const fromUUID = $('#tr-from-uuid').val();
@@ -1103,20 +1191,18 @@
                     });
 
                     const d = res || {};
-                    const lc = d.last_closed_period ? new Date(d.last_closed_period).toISOString().slice(0, 10) :
-                        '-';
+                    const lc = d.last_closed_period ? new Date(d.last_closed_period).toISOString().slice(0, 10) : '-';
 
                     $('#tr-preview').removeClass('d-none').html(
                         `Total Gross A: <b>${fmt2(d.total_gross)}</b> · Accum as of <b>${lc}</b>: <b>${fmt2(d.accum_as_of_last)}</b><br>
-                 Accum to carry: <b>${fmt2(d.acc_move)}</b> · NBV that moves: <b>${fmt2(d.nbv_move)}</b><br>
-                 Gross remaining cap: <b>${fmt2(d.cap_remaining)}</b>`
+                         Accum to carry: <b>${fmt2(d.acc_move)}</b> · NBV that moves: <b>${fmt2(d.nbv_move)}</b><br>
+                         Gross remaining cap: <b>${fmt2(d.cap_remaining)}</b>`
                     );
 
                     $('#tr-amount').data('capGross', Number(d.cap_remaining || 0));
 
                     if (amount > Number(d.cap_remaining || 0)) {
-                        $('#tr-carry-help').text(
-                            'Amount exceeds max carry-over (gross remaining). Please reduce the amount.');
+                        $('#tr-carry-help').text('Amount exceeds max carry-over (gross remaining). Please reduce the amount.');
                     }
                 } catch (e) {
                     console.error(e);
@@ -1139,35 +1225,19 @@
                 const type = getTransferType();
 
                 if (!fromUUID || !toUUID) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'Please pick both assets'
-                    });
+                    Swal.fire({ icon: 'warning', title: 'Validation error', text: 'Please pick both assets' });
                     return;
                 }
                 if (fromUUID === toUUID) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'From/To asset cannot be the same'
-                    });
+                    Swal.fire({ icon: 'warning', title: 'Validation error', text: 'From/To asset cannot be the same' });
                     return;
                 }
                 if (!(amount > 0)) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'Amount must be greater than 0'
-                    });
+                    Swal.fire({ icon: 'warning', title: 'Validation error', text: 'Amount must be greater than 0' });
                     return;
                 }
                 if (!date) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Validation error',
-                        text: 'Actual Date is required'
-                    });
+                    Swal.fire({ icon: 'warning', title: 'Validation error', text: 'Actual Date is required' });
                     return;
                 }
 
@@ -1181,23 +1251,62 @@
                     return;
                 }
 
+                // ===== Type-based validations per rules =====
+                const y = yearOf(date);
+                const thisYear = Number(String(TODAY).substring(0, 4));
+
                 if (type === 'tf-val') {
+                    // (1) amount <= NBV terakhir (capRemaining from limit endpoint)
                     const capRem = Number($('#tr-amount').data('capRemaining') || 0);
                     if (capRem && amount > capRem) {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Validation error',
-                            text: 'Amount exceeds max allowed for that month.'
+                            text: 'Amount exceeds NBV terakhir (max allowed).'
                         });
                         return;
                     }
+                } else if (type === 'acq_fix') {
+                    // (2) acquisition + accum from start must move
+                    if (STRICT_ACQ_FIX_FULL) {
+                        let acqTotal = Number($('#tr-amount').data('acqTotal') || 0);
+
+                        // if not cached yet, fetch brief for fromUUID
+                        if (!acqTotal) {
+                            try {
+                                const d = await $.getJSON('{{ route('assets.brief', ':id') }}'.replace(':id', fromUUID));
+                                acqTotal = Number(d?.commercial_acq_cost || d?.total || 0);
+                                $('#tr-amount').data('acqTotal', acqTotal);
+                            } catch (_) {}
+                        }
+
+                        if (acqTotal > 0 && amount !== acqTotal) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Validation error',
+                                text: `Acquisition Fix wajib FULL. Amount harus sama dengan nilai akuisisi (${fmt2(acqTotal)}).`
+                            });
+                            return;
+                        }
+                    }
                 } else if (type === 'carry_over_gross_accum') {
+                    // (3) amount <= cap gross remaining
                     const capGross = Number($('#tr-amount').data('capGross') || 0);
                     if (capGross && amount > capGross) {
                         Swal.fire({
                             icon: 'warning',
                             title: 'Validation error',
                             text: 'Amount exceeds max carry-over (gross remaining).'
+                        });
+                        return;
+                    }
+
+                    // (3) backdate only in this year (extra safety)
+                    if (y && y !== thisYear) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Validation error',
+                            text: `Backdate hanya bisa dilakukan di tahun ini (${thisYear}).`
                         });
                         return;
                     }
@@ -1236,9 +1345,7 @@
                         data: fd,
                         processData: false,
                         contentType: false,
-                        headers: {
-                            'X-CSRF-TOKEN': "{{ csrf_token() }}"
-                        }
+                        headers: { 'X-CSRF-TOKEN': "{{ csrf_token() }}" }
                     });
 
                     Swal.fire({
@@ -1252,11 +1359,7 @@
                 } catch (err) {
                     console.error(err);
                     const msg = err?.responseJSON?.message || 'Failed to save transfer request';
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Error',
-                        text: msg
-                    });
+                    Swal.fire({ icon: 'error', title: 'Error', text: msg });
                 } finally {
                     setBusyTransfer(false);
                 }
@@ -1265,6 +1368,9 @@
             // ===== init lock on page load too (safety) =====
             applyCurrentMonthLock('#tr-date', TODAY);
             applyCurrentMonthLock('#edit-actual-date', null);
+
+            // init rule box default
+            setTypeRuleBox();
 
         })();
     </script>
