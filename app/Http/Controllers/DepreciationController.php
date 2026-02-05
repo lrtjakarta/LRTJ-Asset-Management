@@ -662,7 +662,7 @@ class DepreciationController extends Controller
             FROM calc
             ) AS remaining_useful_life_months")
             ]);
-            
+
         if ($status = $r->get('asset_status')) {
             $q->whereHas('asset', function ($qa) use ($status) {
                 $qa->where('kode_status', $status);
@@ -1981,6 +1981,9 @@ class DepreciationController extends Controller
             'note'            => ['nullable', 'string', 'max:300'],
             'attachment'      => ['nullable', 'file', 'max:5120'],
         ]);
+        $this->assertActualDateIsCurrentMonth($data['actual_date'], 'Add New');
+        $this->assertAssetsHaveAcquisition($data['from_asset_uuid'], $data['to_asset_uuid']);
+
 
         $type = $data['transfer_type'] ?? 'tf-val';
         $uid = auth()->user()?->name;
@@ -2047,6 +2050,8 @@ class DepreciationController extends Controller
 
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
+
+        $this->assertAssetsHaveAcquisition($req->from_asset_uuid, $req->to_asset_uuid);
 
         DB::transaction(function () use ($req, $uid) {
             $this->applyTransfer([
@@ -2157,6 +2162,7 @@ class DepreciationController extends Controller
             'note'          => ['nullable', 'string', 'max:300'],
             'attachment'    => ['nullable', 'file', 'max:5120'],
         ]);
+        $this->assertActualDateIsCurrentMonth($data['actual_date'], 'Edit');
 
         $type = $data['transfer_type'] ?? $req->transfer_type;
 
@@ -2221,5 +2227,50 @@ class DepreciationController extends Controller
     {
         $u = auth()->user();
         return $u && $u->hasAction('TRANSFER', 'D');
+    }
+    private function assertAssetsHaveAcquisition(string $fromUuid, string $toUuid): void
+    {
+        $rows = DB::table('assets_value')
+            ->select('asset_uuid', 'capitalization_date')
+            ->whereIn('asset_uuid', [$fromUuid, $toUuid])
+            ->get()
+            ->keyBy('asset_uuid');
+
+        $errors = [];
+
+        foreach (
+            [
+                'from_asset_uuid' => $fromUuid,
+                'to_asset_uuid'   => $toUuid,
+            ] as $field => $uuid
+        ) {
+
+            $av = $rows->get($uuid);
+
+            if (!$av) {
+                $errors[$field] = 'Asset belum punya assets_value (belum dilakukan acquisition).';
+                continue;
+            }
+
+            if (empty($av->capitalization_date)) {
+                $errors[$field] = 'Asset belum punya capitalization_date (belum dilakukan acquisition).';
+            }
+        }
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function assertActualDateIsCurrentMonth(string|\DateTimeInterface $actualDate, string $context = 'transfer_request'): void
+    {
+        $d = Carbon::parse($actualDate);
+        $now = now();
+
+        if ($d->format('Y-m') !== $now->format('Y-m')) {
+            throw ValidationException::withMessages([
+                'actual_date' => "Actual Date for {$context} must be within current month ({$now->isoFormat('MMMM YYYY')}).",
+            ]);
+        }
     }
 }
