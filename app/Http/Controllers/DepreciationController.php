@@ -306,22 +306,19 @@ class DepreciationController extends Controller
      * - dan harus jadi locked year paling terakhir (max fiscal_year locked)
      */
     private function assertSequentialRollback(int $year): void
-    {
-        $nowYear = (int) now()->year;
-        $expected = $nowYear - 1;
+{
+    $maxLocked = AssetDeprYearClosing::query()
+        ->where('is_locked', true)
+        ->max('fiscal_year');
 
-        if ($year !== $expected) {
-            throw new \RuntimeException("ROLLBACK_ONLY_PREV_YEAR|{$expected}");
-        }
-
-        $maxLocked = AssetDeprYearClosing::query()
-            ->where('is_locked', true)
-            ->max('fiscal_year');
-
-        if ((int)$maxLocked !== $year) {
-            throw new \RuntimeException("ROLLBACK_MUST_BE_LATEST_LOCKED|{$maxLocked}");
-        }
+    if ($maxLocked === null) {
+        throw new \RuntimeException("ROLLBACK_NO_LOCKED_YEAR");
     }
+
+    if ((int) $maxLocked !== (int) $year) {
+        throw new \RuntimeException("ROLLBACK_MUST_BE_LATEST_LOCKED|{$maxLocked}");
+    }
+}
 
     public function index()
     {
@@ -1247,66 +1244,63 @@ class DepreciationController extends Controller
 
 
     public function rollbackYear(Request $request)
-    {
-        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+{
+    abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
 
-        $data = $request->validate([
-            'year' => ['required', 'integer', 'min:1900', 'max:3000'],
-        ]);
+    $data = $request->validate([
+        'year' => ['required', 'integer', 'min:1900', 'max:3000'],
+    ]);
 
-        $year = (int) $data['year'];
-        try {
-            $this->assertSequentialRollback($year);
-        } catch (\Throwable $e) {
-            if (str_starts_with($e->getMessage(), 'ROLLBACK_ONLY_PREV_YEAR|')) {
-                $need = explode('|', $e->getMessage())[1] ?? null;
+    $year = (int) $data['year'];
 
-                return response()->json([
-                    'ok' => false,
-                    'code' => 'ROLLBACK_ONLY_PREV_YEAR',
-                    'message' => "Rollback hanya boleh untuk tahun sebelumnya: {$need}.",
-                    'allowed_year' => (int)$need,
-                ], 422);
-            }
+    try {
+        $this->assertSequentialRollback($year);
+    } catch (\Throwable $e) {
 
-            if (str_starts_with($e->getMessage(), 'ROLLBACK_MUST_BE_LATEST_LOCKED|')) {
-                $need = explode('|', $e->getMessage())[1] ?? null;
-
-                return response()->json([
-                    'ok' => false,
-                    'code' => 'ROLLBACK_MUST_BE_LATEST_LOCKED',
-                    'message' => "Rollback tidak boleh loncat. Harus rollback locked year paling terakhir: {$need}.",
-                    'latest_locked_year' => $need !== null ? (int)$need : null,
-                ], 422);
-            }
-
-            throw $e;
+        if (str_starts_with($e->getMessage(), 'ROLLBACK_NO_LOCKED_YEAR')) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'ROLLBACK_NO_LOCKED_YEAR',
+                'message' => "Tidak ada year yang sedang LOCKED untuk di-rollback.",
+            ], 422);
         }
 
-        DB::transaction(function () use ($year) {
+        if (str_starts_with($e->getMessage(), 'ROLLBACK_MUST_BE_LATEST_LOCKED|')) {
+            $need = explode('|', $e->getMessage())[1] ?? null;
 
-            // delete yearly summary
-            AssetDeprYearly::query()
-                ->where('fiscal_year', $year)
-                ->delete();
+            return response()->json([
+                'ok' => false,
+                'code' => 'ROLLBACK_MUST_BE_LATEST_LOCKED',
+                'message' => "Rollback tidak boleh loncat. Harus rollback locked year paling terakhir: {$need}.",
+                'latest_locked_year' => $need !== null ? (int) $need : null,
+            ], 422);
+        }
 
-            // unlock year
-            AssetDeprYearClosing::updateOrCreate(
-                ['fiscal_year' => $year],
-                [
-                    'is_locked' => false,
-                    'rolled_back_by' => auth()->user()?->name,
-                    'rolled_back_at' => now(),
-                ]
-            );
-        });
-
-        return response()->json([
-            'ok' => true,
-            'message' => "Year {$year} unlocked (rollback build year).",
-            'year' => $year,
-        ]);
+        throw $e;
     }
+
+    DB::transaction(function () use ($year) {
+        AssetDeprYearly::query()
+            ->where('fiscal_year', $year)
+            ->delete();
+
+        AssetDeprYearClosing::updateOrCreate(
+            ['fiscal_year' => $year],
+            [
+                'is_locked' => false,
+                'rolled_back_by' => auth()->user()?->name,
+                'rolled_back_at' => now(),
+            ]
+        );
+    });
+
+    return response()->json([
+        'ok' => true,
+        'message' => "Year {$year} unlocked (rollback build year).",
+        'year' => $year,
+    ]);
+}
+
 
 
     public function recordAddition(Request $r)
