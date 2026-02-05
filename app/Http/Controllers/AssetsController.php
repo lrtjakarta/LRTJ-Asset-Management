@@ -791,6 +791,10 @@ class AssetsController extends Controller
 
         $accSum = $ledger?->acc_sum ?? 0;
         $nbvSum = $ledger?->nbv_sum ?? 0;
+        $acqDate = $a->value?->actual_date;
+
+        $hasAcq = (bool) ($a->value && $acqDate);
+
 
         return response()->json([
             'asset_uuid'       => $a->uuid,
@@ -818,6 +822,9 @@ class AssetsController extends Controller
             'total'              => $a->value?->total,
             'kode_uom'           => $a->value?->kode_uom,
             'useful_life_month'  => $a->value?->useful_life_month,
+
+            'has_acquisition'       => $hasAcq,
+            'acquisition_date_iso'  => $acqDate ? $acqDate->toDateString() : null,
 
             // ---- NEW fields ----
             'acquisition_date'        => $a->value?->actual_date?->format('d F Y'),  // Acquisition Date

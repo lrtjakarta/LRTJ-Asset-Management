@@ -4,6 +4,9 @@
     $currentMonthText = Carbon::now()->isoFormat('MMMM YYYY');
     $prevYearLabel = Carbon::now()->year - 1;
     $currentYear = Carbon::parse($currentMonth)->year;
+
+    $currentMonthStart = Carbon::now()->startOfMonth()->toDateString();
+    $currentMonthEnd = Carbon::now()->endOfMonth()->toDateString();
 @endphp
 
 @extends('layouts.app')
@@ -266,6 +269,8 @@
                                 <div id="tf-asset-snapshot-1" class="mt-4 d-none">
                                     <div class="p-3 border rounded bg-light">
                                         <div class="fw-semibold mb-2">Current Asset Info</div>
+                                        <div id="snap-acq-warn-1"
+                                            class="alert alert-warning py-2 px-3 mt-3 d-none mb-0 small"></div>
 
                                         <div class="row gy-2">
                                             <div class="col-6">
@@ -302,6 +307,8 @@
                                 <div id="tf-asset-snapshot-2" class="mt-4 d-none">
                                     <div class="p-3 border rounded bg-light">
                                         <div class="fw-semibold mb-2">Current Asset Info</div>
+                                        <div id="snap-acq-warn-2"
+                                            class="alert alert-warning py-2 px-3 mt-3 d-none mb-0 small"></div>
 
                                         <div class="row gy-2">
                                             <div class="col-6">
@@ -343,7 +350,12 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="tr-date" name="actual_date"
-                                    value="{{ Carbon::now()->toDateString() }}">
+                                    value="{{ Carbon::now()->toDateString() }}" min="{{ $currentMonthStart }}"
+                                    max="{{ $currentMonthEnd }}">
+                                <small class="text-muted">
+                                    Actual Date hanya boleh di bulan berjalan ({{ $currentMonthText }}).
+                                </small>
+
                             </div>
 
                             <div class="col-md-12">
@@ -392,6 +404,32 @@
             const $btnUpdate = $('#btn-update-transfer-request');
             const $modal = new bootstrap.Modal(document.getElementById('modal-transfer'));
             const PERIOD = "{{ $currentMonth }}";
+            const CUR_MONTH_START = @json($currentMonthStart);
+            const CUR_MONTH_END = @json($currentMonthEnd);
+            const CUR_MONTH_TEXT = @json($currentMonthText);
+
+            function clampDateToCurrentMonth(inputSel) {
+                const $inp = $(inputSel);
+                const v = $inp.val();
+                if (!v) return;
+
+                if (v < CUR_MONTH_START || v > CUR_MONTH_END) {
+                    $inp.val(CUR_MONTH_START);
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Actual Date locked',
+                        text: `Actual Date hanya boleh di bulan berjalan (${CUR_MONTH_TEXT}).`
+                    });
+                }
+            }
+
+            $('#tr-date').on('change', () => {
+                clampDateToCurrentMonth('#tr-date');
+                if (getTransferType() === 'tf-val') refreshTransferCap();
+                else refreshCarryPreview();
+            });
+
+
             $('#f-requester').select2({
                 placeholder: 'Select requester',
                 allowClear: true,
