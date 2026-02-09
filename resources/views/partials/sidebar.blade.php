@@ -501,6 +501,8 @@
                         <!--begin:Menu sub-->
                         <div class="menu-sub menu-sub-accordion">
                             <!--begin:Menu item-->
+
+                            @canAction('STOCK_OPN','C')
                             <div class="menu-item">
                                 <!--begin:Menu link-->
                                 <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'create-projects' ? 'active' : '' }} "
@@ -512,6 +514,7 @@
                                 </a>
                                 <!--end:Menu link-->
                             </div>
+                            @endcanAction
                             <!--end:Menu item-->
                             <!--begin:Menu item-->
                             <div class="menu-item">
