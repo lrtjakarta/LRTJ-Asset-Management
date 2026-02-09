@@ -127,8 +127,11 @@ class SatoRfidPrinter
         $uuid      = strtolower((string) $asset->uuid);
         $assetCode = (string) ($asset->asset_code ?? '');
 
-        // ✅ DESC: tanpa simbol + max 20 char
-        $desc = $this->sanitizeDescForLabel($asset->description, 20);
+        if ($size !== '60x40') {
+            $desc = $this->sanitizeDescForLabel($asset->description, 36);
+        } else {
+            $desc = $this->sanitizeDescForLabel($asset->description, 20);
+        }
 
         $ownerCode    = (string) ($asset->assignment?->asset_owner ?? '');
         $locationCode = (string) ($asset->kode_location ?? '');
