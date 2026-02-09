@@ -1769,6 +1769,9 @@ class StockOpnameController extends Controller
 
     public function projectDatatable(Request $request)
     {
+        
+        $user      = $request->user();
+        $canCreate   = $user && $user->hasAction('STOCK_OPN', 'C');
         abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
 
         $q = DB::table('asset_projects as p')
@@ -1787,10 +1790,13 @@ class StockOpnameController extends Controller
         ");
 
         return DataTables::of($q)
-            ->addColumn('actions', function ($row) {
+            ->addColumn('actions', function ($row) use ($canCreate){
                 $uuid = e($row->uuid);
                 $disabled   = ($row->status === 'CLOSED') ? 'disabled' : '';
                 $disabled_c = ($row->status !== 'CLOSED') ? 'disabled' : '';
+                if($canCreate === false){
+                    return '';
+                }
                 return '
                 <button class="btn btn-sm btn-light-danger btn-close-project"
                 data-uuid="' . $uuid . '" ' . $disabled . '>
@@ -1823,6 +1829,9 @@ class StockOpnameController extends Controller
     {
         abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
         abort_if($project->deleted_at, 404);
+        
+        $user      = $request->user();
+        $canCreate   = $user && $user->hasAction('STOCK_OPN', 'C');
 
         $q = DB::table('asset_project_assets as pa')
             ->join('assets as a', 'a.uuid', '=', 'pa.asset_uuid')
@@ -1845,9 +1854,13 @@ class StockOpnameController extends Controller
             );
 
         return DataTables::of($q)
-            ->addColumn('actions', function ($row) {
+            ->addColumn('actions', function ($row) use ($canCreate) {
                 $uuid = e($row->uuid);
-                return '<button class="btn btn-sm btn-light-danger btn-remove-asset" data-uuid="' . $uuid . '">Remove</button>';
+                if($canCreate === false){
+                    return '';
+                }else{
+                    return '<button class="btn btn-sm btn-light-danger btn-remove-asset" data-uuid="' . $uuid . '">Remove</button>';
+                }
             })
             ->rawColumns(['actions'])
             ->make(true);

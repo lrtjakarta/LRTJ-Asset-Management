@@ -12,6 +12,7 @@
         // urls used for re-rendering action buttons
         const EXPORT_URL = @json(route('stockopname.asset_projects.assets.export_excel', $project->uuid));
         const BACK_URL = @json(route('stockopname.asset_projects.index'));
+        const can_create = @json((int) auth()->user()->hasAction('STOCK_OPN', 'C'));
 
         function getVisibleAssetUuids(table) {
             const rows = table.rows({
@@ -20,10 +21,14 @@
             return rows.map(r => r.uuid);
         }
 
+        function canEditChecklist() {
+            return PROJECT_STATUS !== 'CLOSED' && Number(can_create) === 1;
+        }
+
         function syncHeaderCheckbox(table) {
             const $all = $('#cb-stockopname-all');
-
-            if (PROJECT_STATUS === 'CLOSED') {
+            if (!$all.length) return;
+            if (!canEditChecklist()) {
                 $all.prop('checked', false).prop('indeterminate', false).prop('disabled', true);
                 return;
             }
@@ -51,14 +56,17 @@
 
         function renderActionButtons(status) {
             const uuid = PROJECT_UUID;
-
-            const statusBtn = (status === 'CLOSED') ?
-                `<button class="btn btn-sm btn-warning btn-re-open-project" data-uuid="${uuid}" id="btnReopenProject">
+            var statusBtn = '';
+            if (can_create) {
+                statusBtn = (status === 'CLOSED') ?
+                    `<button class="btn btn-sm btn-warning btn-re-open-project" data-uuid="${uuid}" id="btnReopenProject">
                     Re-open
                  </button>` :
-                `<button class="btn btn-sm btn-danger btn-close-project" data-uuid="${uuid}" id="btnCloseProject">
+                    `<button class="btn btn-sm btn-danger btn-close-project" data-uuid="${uuid}" id="btnCloseProject">
                     Close
                  </button>`;
+            }
+
 
             $('#actionButtons').html(`
                 ${statusBtn}
@@ -68,13 +76,15 @@
         }
 
         function applyStatusToCheckboxes(status) {
-            const closed = (status === 'CLOSED');
+            const editable = canEditChecklist();
 
-            // header checkbox
-            $('#cb-stockopname-all')
-                .prop('disabled', closed)
-                .prop('checked', false)
-                .prop('indeterminate', false);
+            // header checkbox (if exists)
+            const $all = $('#cb-stockopname-all');
+            if ($all.length) {
+                $all.prop('disabled', !editable)
+                    .prop('checked', false)
+                    .prop('indeterminate', false);
+            }
 
             // visible row checkboxes
             if (window.table) {
@@ -82,9 +92,10 @@
                         page: 'current'
                     }).nodes().to$()
                     .find('.cb-stockopname')
-                    .prop('disabled', closed);
+                    .prop('disabled', !editable);
             }
         }
+
 
         function refreshProjectUI(newStatus) {
             PROJECT_STATUS = newStatus; // IMPORTANT
@@ -166,16 +177,18 @@
                     render: function(v, type, row) {
                         if (type !== 'display') return v;
                         const checked = (Number(v) === 1 || v === true) ? 'checked' : '';
-                        const disabled = (PROJECT_STATUS === 'CLOSED') ? 'disabled' : '';
+                        const disabled = (!canEditChecklist()) ? 'disabled' : '';
+
                         return `
-                            <div class="form-check form-check-sm form-check-custom form-check-solid d-inline-flex justify-content-center">
-                                <input class="form-check-input cb-stockopname"
-                                    type="checkbox"
-                                    data-uuid="${row.uuid}"
-                                    ${checked} ${disabled}/>
-                            </div>
-                        `;
+        <div class="form-check form-check-sm form-check-custom form-check-solid d-inline-flex justify-content-center">
+            <input class="form-check-input cb-stockopname"
+                type="checkbox"
+                data-uuid="${row.uuid}"
+                ${checked} ${disabled}/>
+        </div>
+    `;
                     }
+
                 },
                 {
                     data: 'actions',
@@ -409,7 +422,7 @@
                 });
             } finally {
                 // enable again unless CLOSED
-                $(this).prop('disabled', PROJECT_STATUS === 'CLOSED');
+                $(this).prop('disabled', !canEditChecklist());
             }
         });
 
@@ -500,11 +513,13 @@
                 syncHeaderCheckbox(window.table);
             } finally {
                 // enable back unless CLOSED
-                $('#cb-stockopname-all').prop('disabled', PROJECT_STATUS === 'CLOSED');
+                const editable = canEditChecklist();
+                $('#cb-stockopname-all').prop('disabled', !editable);
                 window.table.rows({
                         page: 'current'
-                    }).nodes().to$().find('.cb-stockopname')
-                    .prop('disabled', PROJECT_STATUS === 'CLOSED');
+                    }).nodes().to$()
+                    .find('.cb-stockopname')
+                    .prop('disabled', !editable);
 
                 syncHeaderCheckbox(window.table);
             }
@@ -544,6 +559,7 @@
                             </div>
 
                             {{-- IMPORTANT: buttons will be rendered by JS so they can refresh after close/reopen --}}
+
                             <div class="col-md-3" id="actionButtons"></div>
 
                         </div>
@@ -570,10 +586,14 @@
                                 <th class="min-w-200px text-center align-middle">
                                     <div class="d-flex flex-column align-items-center justify-content-center">
                                         <span>Stock Opname</span>
+
+                                        @canAction('STOCK_OPN','C')
                                         <div class="form-check form-check-sm form-check-custom form-check-solid mt-2">
                                             <input class="form-check-input" style="margin-left:-15%;" type="checkbox"
                                                 id="cb-stockopname-all" />
                                         </div>
+
+                                        @endcanAction
                                     </div>
                                 </th>
                                 <th class="min-w-200px">Action</th>
