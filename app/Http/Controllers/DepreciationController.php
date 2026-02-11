@@ -306,19 +306,19 @@ class DepreciationController extends Controller
      * - dan harus jadi locked year paling terakhir (max fiscal_year locked)
      */
     private function assertSequentialRollback(int $year): void
-{
-    $maxLocked = AssetDeprYearClosing::query()
-        ->where('is_locked', true)
-        ->max('fiscal_year');
+    {
+        $maxLocked = AssetDeprYearClosing::query()
+            ->where('is_locked', true)
+            ->max('fiscal_year');
 
-    if ($maxLocked === null) {
-        throw new \RuntimeException("ROLLBACK_NO_LOCKED_YEAR");
-    }
+        if ($maxLocked === null) {
+            throw new \RuntimeException("ROLLBACK_NO_LOCKED_YEAR");
+        }
 
-    if ((int) $maxLocked !== (int) $year) {
-        throw new \RuntimeException("ROLLBACK_MUST_BE_LATEST_LOCKED|{$maxLocked}");
+        if ((int) $maxLocked !== (int) $year) {
+            throw new \RuntimeException("ROLLBACK_MUST_BE_LATEST_LOCKED|{$maxLocked}");
+        }
     }
-}
 
     public function index()
     {
@@ -1244,62 +1244,62 @@ class DepreciationController extends Controller
 
 
     public function rollbackYear(Request $request)
-{
-    abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+    {
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
 
-    $data = $request->validate([
-        'year' => ['required', 'integer', 'min:1900', 'max:3000'],
-    ]);
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'min:1900', 'max:3000'],
+        ]);
 
-    $year = (int) $data['year'];
+        $year = (int) $data['year'];
 
-    try {
-        $this->assertSequentialRollback($year);
-    } catch (\Throwable $e) {
+        try {
+            $this->assertSequentialRollback($year);
+        } catch (\Throwable $e) {
 
-        if (str_starts_with($e->getMessage(), 'ROLLBACK_NO_LOCKED_YEAR')) {
-            return response()->json([
-                'ok' => false,
-                'code' => 'ROLLBACK_NO_LOCKED_YEAR',
-                'message' => "Tidak ada year yang sedang LOCKED untuk di-rollback.",
-            ], 422);
+            if (str_starts_with($e->getMessage(), 'ROLLBACK_NO_LOCKED_YEAR')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'ROLLBACK_NO_LOCKED_YEAR',
+                    'message' => "Tidak ada year yang sedang LOCKED untuk di-rollback.",
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'ROLLBACK_MUST_BE_LATEST_LOCKED|')) {
+                $need = explode('|', $e->getMessage())[1] ?? null;
+
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'ROLLBACK_MUST_BE_LATEST_LOCKED',
+                    'message' => "Rollback tidak boleh loncat. Harus rollback locked year paling terakhir: {$need}.",
+                    'latest_locked_year' => $need !== null ? (int) $need : null,
+                ], 422);
+            }
+
+            throw $e;
         }
 
-        if (str_starts_with($e->getMessage(), 'ROLLBACK_MUST_BE_LATEST_LOCKED|')) {
-            $need = explode('|', $e->getMessage())[1] ?? null;
+        DB::transaction(function () use ($year) {
+            AssetDeprYearly::query()
+                ->where('fiscal_year', $year)
+                ->delete();
 
-            return response()->json([
-                'ok' => false,
-                'code' => 'ROLLBACK_MUST_BE_LATEST_LOCKED',
-                'message' => "Rollback tidak boleh loncat. Harus rollback locked year paling terakhir: {$need}.",
-                'latest_locked_year' => $need !== null ? (int) $need : null,
-            ], 422);
-        }
+            AssetDeprYearClosing::updateOrCreate(
+                ['fiscal_year' => $year],
+                [
+                    'is_locked' => false,
+                    'rolled_back_by' => auth()->user()?->name,
+                    'rolled_back_at' => now(),
+                ]
+            );
+        });
 
-        throw $e;
+        return response()->json([
+            'ok' => true,
+            'message' => "Year {$year} unlocked (rollback build year).",
+            'year' => $year,
+        ]);
     }
-
-    DB::transaction(function () use ($year) {
-        AssetDeprYearly::query()
-            ->where('fiscal_year', $year)
-            ->delete();
-
-        AssetDeprYearClosing::updateOrCreate(
-            ['fiscal_year' => $year],
-            [
-                'is_locked' => false,
-                'rolled_back_by' => auth()->user()?->name,
-                'rolled_back_at' => now(),
-            ]
-        );
-    });
-
-    return response()->json([
-        'ok' => true,
-        'message' => "Year {$year} unlocked (rollback build year).",
-        'year' => $year,
-    ]);
-}
 
 
 
@@ -1675,28 +1675,47 @@ class DepreciationController extends Controller
                 ]);
             }
 
-            $fromLife = (int) ($fromPolicy->useful_life_months ?: 0);
-            $toLife   = (int) ($toPolicy->useful_life_months   ?: 0);
+            $ulFrom = (int) ($fromPolicy->useful_life_months ?: 0);
+            $ulTo   = (int) ($toPolicy->useful_life_months   ?: 0);
 
-            if ($fromLife <= 0 || $toLife <= 0) {
+            if ($ulFrom <= 0 || $ulTo <= 0) {
                 throw ValidationException::withMessages([
                     'amount' => 'Useful life (months) must be set for both assets for acquisition correction.',
                 ]);
             }
 
-            $fromRate = $amount / $fromLife;
-            $toRate   = $amount / $toLife;
+            $rulFromPrev = $this->remainingUsefulLifePrevMonth($data['from_asset_uuid'], $fromPolicy, $period);
+            $rulToPrev   = $this->remainingUsefulLifePrevMonth($data['to_asset_uuid'],   $toPolicy,   $period);
 
-            $monthsFromYtd = $this->componentMonthsYtd($fromPolicy, $period);
-            $monthsToYtd   = $this->componentMonthsYtd($toPolicy, $period);
+            $x = max(0, $ulTo - $rulToPrev);
+            $y = max(0, $ulFrom - $rulFromPrev);
 
-            $depFromYtd = $fromRate * $monthsFromYtd;
-            $depToYtd   = $toRate   * $monthsToYtd;
+            $gaplife = $x - $y;
 
-            $adjDepA = $depToYtd;
-            $adjDepB = -$depFromYtd;
+            $ulFromForCalc = $ulFrom;
+            if ($gaplife < 0) {
+                $ulFromForCalc = $ulFrom + $gaplife;
 
-            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjDepA, $adjDepB) {
+                if ($ulFromForCalc <= 0) {
+                    throw ValidationException::withMessages([
+                        'amount' => 'Invalid acq-fix: resulting useful life for source asset becomes <= 0 (gaplife too negative).',
+                    ]);
+                }
+
+                $y = max(0, $ulFromForCalc - $rulFromPrev);
+            }
+
+            $denomTo = $ulTo - $gaplife;
+            if ($denomTo <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Invalid acq-fix: denominator (UL_to - gaplife) becomes <= 0.',
+                ]);
+            }
+
+            $adjTo   = round(($amount / $denomTo) * $y, 2);
+            $adjFrom = round(($amount / $ulFromForCalc) * $y, 2);
+
+            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjTo, $adjFrom) {
 
                 // Gross out FROM
                 AssetDeprMovement::create([
@@ -1711,6 +1730,7 @@ class DepreciationController extends Controller
                     'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross OUT'),
                 ]);
 
+                // Gross in TO
                 AssetDeprMovement::create([
                     'asset_uuid'        => $data['to_asset_uuid'],
                     'period'            => $period,
@@ -1723,37 +1743,40 @@ class DepreciationController extends Controller
                     'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross IN'),
                 ]);
 
-                if (abs($adjDepB) > 0.0001) {
+                // Reverse accumulated on FROM (ngurangin accumulated => adj negative)
+                if (abs($adjFrom) > 0.0001) {
                     AssetDeprMovement::create([
                         'asset_uuid'        => $data['from_asset_uuid'],
                         'period'            => $period,
                         'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepB,
+                        'amount'            => -$adjFrom,
                         'depr_start_period' => $period,
                         'group_uuid'        => $group,
                         'source_type'       => $data['source_type'] ?? 'manual',
                         'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix reverse YTD'),
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix adj accum -FROM'),
                     ]);
                 }
 
-                if (abs($adjDepA) > 0.0001) {
+                // Add accumulated on TO (nambah accumulated => adj positive)
+                if (abs($adjTo) > 0.0001) {
                     AssetDeprMovement::create([
                         'asset_uuid'        => $data['to_asset_uuid'],
                         'period'            => $period,
                         'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepA,
+                        'amount'            => +$adjTo,
                         'depr_start_period' => $period,
                         'group_uuid'        => $group,
                         'source_type'       => $data['source_type'] ?? 'manual',
                         'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix add YTD'),
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix adj accum +TO'),
                     ]);
                 }
             });
 
             return 'Acquisition correction transfer recorded';
         }
+
 
         // === Case 3: Carry-over (gross + accum) ===
         if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
@@ -2266,5 +2289,55 @@ class DepreciationController extends Controller
                 'actual_date' => "Actual Date for {$context} must be within current month ({$now->isoFormat('MMMM YYYY')}).",
             ]);
         }
+    }
+    private function remainingUsefulLifePrevMonth(string $assetUuid, AssetDeprPolicy $policy, Carbon $transferPeriod): int
+    {
+        $life = (int) ($policy->useful_life_months ?: 60);
+        if ($life <= 0) $life = 60;
+
+        $prev = $transferPeriod->copy()->subMonth()->startOfMonth();
+
+        // wajib ada row ledger bulan sebelumnya untuk asset tsb
+        $row = AssetDeprMonthly::query()
+            ->where('asset_uuid', $assetUuid)
+            ->whereDate('period', $prev->toDateString())
+            ->first();
+
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'actual_date' => "acq-fix butuh ledger bulan sebelumnya. Jalankan Process Depreciation Month untuk {$prev->format('Y-m')} dulu.",
+            ]);
+        }
+
+        // eligibleStart mengikuti cutoff & depr_start_date
+        $startDate = $policy->depr_start_date ? Carbon::parse($policy->depr_start_date) : null;
+        $cutoff    = (int) ($policy->cutoff_day ?: 15);
+
+        // kalau depr_start_date null, anggap belum eligible -> RUL=life
+        if (! $startDate) {
+            return $life;
+        }
+
+        $eligibleStart = $startDate->copy()->startOfMonth()->addMonths(
+            ($startDate->day <= $cutoff) ? 0 : 1
+        );
+
+        // kalau prev < eligibleStart -> belum mulai depreciate
+        if ($prev->lt($eligibleStart)) {
+            return $life;
+        }
+
+        // kalau benar-benar belum ada depresiasi sama sekali (acc_end=0 & depre=0 & adj=0) -> jangan berkurang
+        $accEnd = (float) ($row->accumulated_depr_end ?? 0);
+        $depr   = (float) ($row->depr_expense ?? 0);
+        $adj    = (float) ($row->adjustment_depreciation ?? 0);
+
+        $started = !($accEnd == 0.0 && $depr == 0.0 && $adj == 0.0);
+        if (! $started) {
+            return $life;
+        }
+
+        $used = $eligibleStart->diffInMonths($prev) + 1;
+        return max(0, $life - $used);
     }
 }
