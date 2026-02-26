@@ -11,19 +11,58 @@ use Carbon\Carbon;
 
 class DashboardController
 {
-    public function dashboard()
+    public function dashboard_monthly()
     {
         return view('dashboard');
     }
 
-    public function data(Request $request)
+    public function dashboard_yearly()
     {
-        $year  = (int) ($request->input('year') ?: Carbon::now()->year);
-        $month = $request->input('month');
+        return view('dashboard_yearly');
+    }
+    /**
+     * Normalize date range from request.
+     * Accept: from=YYYY-MM-DD, to=YYYY-MM-DD
+     * Default: from = start of current year, to = today (end of day)
+     */
+    protected function getDateRange(Request $request): array
+    {
+        $yearCtx = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->year
+            : now()->year;
 
-        $movementAgg = $this->aggregateStatus(Transfer::query(), $year, $month, 'created_at');
-        $disposalAgg = $this->aggregateStatus(Disposal::query(), $year, $month, 'created_at');
-        $valueAgg    = $this->aggregateStatus(AssetDeprTransferRequest::query(), $year, $month, 'created_at');
+        $from = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->startOfDay()
+            : Carbon::create($yearCtx, 1, 1)->startOfDay();
+
+        // Default "to" = end of that year (Dec 31 23:59:59)
+        $to = $request->filled('to')
+            ? Carbon::parse($request->input('to'))->endOfDay()
+            : Carbon::create($yearCtx, 12, 31)->endOfDay();
+
+        // swap if reversed
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        return [$from, $to];
+    }
+
+
+    protected function getYearCtx(Request $request): int
+    {
+        $year = (int) ($request->input('year') ?: now()->year);
+        if ($year < 1900) $year = (int) now()->year;
+        return $year;
+    }
+
+    public function data_monthly(Request $request)
+    {
+        [$from, $to] = $this->getDateRange($request);
+
+        $movementAgg = $this->aggregateStatus(Transfer::query(), $from, $to, 'created_at');
+        $disposalAgg = $this->aggregateStatus(Disposal::query(), $from, $to, 'created_at');
+        $valueAgg    = $this->aggregateStatus(AssetDeprTransferRequest::query(), $from, $to, 'created_at');
 
         return response()->json([
             'movement'       => [
@@ -44,30 +83,64 @@ class DashboardController
         ]);
     }
 
-    protected function aggregateStatus($query, int $year, $month = null, string $dateColumn = 'created_at')
+    public function data_yearly(Request $request)
     {
-        $query->whereYear($dateColumn, $year);
-        if ($month !== null && $month !== '') {
-            $query->whereMonth($dateColumn, (int) $month);
-        }
+        $year = $this->getYearCtx($request);
+
+        $movementAgg = $this->aggregateStatusYear(Transfer::query(), $year, 'created_at');
+        $disposalAgg = $this->aggregateStatusYear(Disposal::query(), $year, 'created_at');
+        $valueAgg    = $this->aggregateStatusYear(AssetDeprTransferRequest::query(), $year, 'created_at');
+
+        return response()->json([
+            'movement' => [
+                'waiting'  => (int) ($movementAgg->waiting  ?? 0),
+                'rejected' => (int) ($movementAgg->rejected ?? 0),
+                'total'    => (int) ($movementAgg->total    ?? 0),
+            ],
+            'transfer_value' => [
+                'waiting'  => (int) ($valueAgg->waiting  ?? 0),
+                'rejected' => (int) ($valueAgg->rejected ?? 0),
+                'total'    => (int) ($valueAgg->total    ?? 0),
+            ],
+            'disposal' => [
+                'waiting'  => (int) ($disposalAgg->waiting  ?? 0),
+                'rejected' => (int) ($disposalAgg->rejected ?? 0),
+                'total'    => (int) ($disposalAgg->total    ?? 0),
+            ],
+        ]);
+    }
+
+    protected function aggregateStatus($query, Carbon $from, Carbon $to, string $dateColumn = 'created_at')
+    {
+        $query->whereBetween($dateColumn, [$from, $to]);
 
         return $query->selectRaw("
             SUM(CASE WHEN kode_status = 'ACC' THEN 1 ELSE 0 END) AS total,
             SUM(CASE WHEN kode_status = 'APR' THEN 1 ELSE 0 END) AS waiting,
             SUM(CASE WHEN kode_status = 'REJ' THEN 1 ELSE 0 END) AS rejected
-        ")
-            ->first();
+        ")->first();
+    }
+
+    protected function aggregateStatusYear($query, int $year, string $dateColumn = 'created_at')
+    {
+        $query->whereYear($dateColumn, $year);
+
+        return $query->selectRaw("
+            SUM(CASE WHEN kode_status = 'ACC' THEN 1 ELSE 0 END) AS total,
+            SUM(CASE WHEN kode_status = 'APR' THEN 1 ELSE 0 END) AS waiting,
+            SUM(CASE WHEN kode_status = 'REJ' THEN 1 ELSE 0 END) AS rejected
+        ")->first();
     }
 
     public function acquisitionMonthly(Request $request)
     {
-        $year       = (int) ($request->input('year') ?: Carbon::now()->year);
-        $month      = $request->input('month');
+        [$from, $to] = $this->getDateRange($request);
+
         $owner      = $request->input('owner');
         $location   = $request->input('location');
         $assetClass = $request->input('asset_class');
 
-        // --- base query for totals (NO year/month filter) ---
+        // --- base query for totals (NO date filter) ---
         $base = DB::table('assets_value as v')
             ->join('assets as a', 'a.uuid', '=', 'v.asset_uuid')
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
@@ -78,24 +151,23 @@ class DashboardController
         if ($location)   $base->where('a.kode_location', $location);
         if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
 
-        $totals = (clone $base)
+        // total all-time (tetap)
+        $totalsAll = (clone $base)
             ->selectRaw('COUNT(*) as total_qty')
             ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
             ->first();
 
-        $totals_per_yeaer = (clone $base)
+        // total for selected range
+        $totalsRange = (clone $base)
+            ->whereBetween('v.capitalization_date', [$from->toDateString(), $to->toDateString()])
             ->selectRaw('COUNT(*) as total_qty')
             ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
-            ->whereYear('v.capitalization_date', $year)
             ->first();
 
-        $q = (clone $base)->whereYear('v.capitalization_date', $year);
-
-        if ($month !== null && $month !== '') {
-            $q->whereMonth('v.capitalization_date', (int) $month);
-        }
-
-        $rows = $q->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
+        // chart rows (per month within range)
+        $rows = (clone $base)
+            ->whereBetween('v.capitalization_date', [$from->toDateString(), $to->toDateString()])
+            ->selectRaw("DATE_TRUNC('month', v.capitalization_date)::date as month")
             ->selectRaw("COUNT(*) as qty")
             ->selectRaw("COALESCE(SUM(v.total), 0) as amount")
             ->groupBy('month')
@@ -109,31 +181,102 @@ class DashboardController
         ]);
 
         return response()->json([
-            'months'       => $months,
-            'total_qty'    => (int) ($totals->total_qty ?? 0),
-            'total_amount' => (float) ($totals->total_amount ?? 0),
-            'total_qty_per_year'    => (int) ($totals_per_year->total_qty ?? 0),
-            'total_amount_per_year' => (float) ($totals_per_year->total_amount ?? 0),
+            'months'            => $months,
+
+            'total_qty'         => (int) ($totalsAll->total_qty ?? 0),
+            'total_amount'      => (float) ($totalsAll->total_amount ?? 0),
+
+            'total_qty_range'   => (int) ($totalsRange->total_qty ?? 0),
+            'total_amount_range' => (float) ($totalsRange->total_amount ?? 0),
         ]);
     }
 
-    public function deprMonthly(Request $request)
+    public function acquisitionYearly(Request $request)
     {
-        $year       = (int) ($request->input('year') ?: Carbon::now()->year);
-        $month      = $request->input('month');
+        $yearCtx = $this->getYearCtx($request);
+
         $owner      = $request->input('owner');
         $location   = $request->input('location');
         $assetClass = $request->input('asset_class');
 
-        $base = DB::table('assets_depr_ledger_monthly as l')
-            ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
+        // --- base query for totals (NO year filter) ---
+        $base = DB::table('assets_value as v')
+            ->join('assets as a', 'a.uuid', '=', 'v.asset_uuid')
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
-            ->whereYear('l.period', $year);
+            ->whereNull('v.deleted_at')
+            ->whereNotNull('v.capitalization_date');
 
         if ($owner)      $base->where('g.asset_owner', $owner);
         if ($location)   $base->where('a.kode_location', $location);
         if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
 
+        // total all-time
+        $totalsAll = (clone $base)
+            ->selectRaw('COUNT(*) as total_qty')
+            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
+            ->first();
+
+        // total selected year
+        $totalsYear = (clone $base)
+            ->whereYear('v.capitalization_date', $yearCtx)
+            ->selectRaw('COUNT(*) as total_qty')
+            ->selectRaw('COALESCE(SUM(v.total), 0) as total_amount')
+            ->first();
+
+        // chart rows (per year) - show last N years found in data
+        $rows = (clone $base)
+            ->selectRaw("EXTRACT(YEAR FROM v.capitalization_date)::int as year")
+            ->selectRaw("COUNT(*) as qty")
+            ->selectRaw("COALESCE(SUM(v.total), 0) as amount")
+            ->groupBy('year')
+            ->orderBy('year')
+            ->get();
+
+        $years = $rows->map(fn($r) => [
+            'year'   => (int) $r->year,
+            'qty'    => (int) $r->qty,
+            'amount' => (float) $r->amount,
+        ]);
+
+        return response()->json([
+            'years'             => $years,
+            'year_ctx'          => $yearCtx,
+
+            'total_qty'         => (int) ($totalsAll->total_qty ?? 0),
+            'total_amount'      => (float) ($totalsAll->total_amount ?? 0),
+
+            'total_qty_year'    => (int) ($totalsYear->total_qty ?? 0),
+            'total_amount_year' => (float) ($totalsYear->total_amount ?? 0),
+        ]);
+    }
+
+    public function deprMonthly(Request $request)
+    {
+        [$from, $to] = $this->getDateRange($request);
+
+        $owner      = $request->input('owner');
+        $location   = $request->input('location');
+        $assetClass = $request->input('asset_class');
+
+        // yearCtx untuk "per-year" (pakai year dari from kalau ada)
+        $yearCtx = $request->filled('from')
+            ? Carbon::parse($request->input('from'))->year
+            : now()->year;
+
+        // range query (chart + total range)
+        $fromPeriod = $from->copy()->startOfMonth()->startOfDay();
+        $toPeriod   = $to->copy()->endOfMonth()->endOfDay();
+
+        $base = DB::table('assets_depr_ledger_monthly as l')
+            ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->whereBetween('l.period', [$fromPeriod, $toPeriod]);
+
+        if ($owner)      $base->where('g.asset_owner', $owner);
+        if ($location)   $base->where('a.kode_location', $location);
+        if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
+
+        // total in range = snapshot bulan terakhir dalam range
         $lastMonth = (clone $base)
             ->selectRaw("MAX(date_trunc('month', l.period)) AS last_month")
             ->value('last_month');
@@ -146,24 +289,146 @@ class DashboardController
                 ->value('total_depr') ?? 0);
         }
 
-        $q = clone $base;
-        if ($month !== null && $month !== '') {
-            $q->whereMonth('l.period', (int) $month);
-        }
-
-        $rows = $q->selectRaw("date_trunc('month', l.period)::date AS month")
+        $rows = (clone $base)
+            ->selectRaw("date_trunc('month', l.period)::date AS month")
             ->selectRaw("SUM(l.accumulated_depr_end) AS depr")
             ->selectRaw("SUM(l.ending_balance) AS nbv")
             ->groupByRaw("date_trunc('month', l.period)")
             ->orderByRaw("date_trunc('month', l.period)")
             ->get();
 
+        $totalNbvRange = (float) (optional($rows->last())->nbv ?? 0);
+
+        // ===== per-year totals (yearCtx full year) =====
+        $yearFrom = Carbon::create($yearCtx, 1, 1)->startOfMonth()->startOfDay();
+        $yearTo   = Carbon::create($yearCtx, 12, 31)->endOfMonth()->endOfDay();
+
+        $baseYear = DB::table('assets_depr_ledger_monthly as l')
+            ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->whereBetween('l.period', [$yearFrom, $yearTo]);
+
+        if ($owner)      $baseYear->where('g.asset_owner', $owner);
+        if ($location)   $baseYear->where('a.kode_location', $location);
+        if ($assetClass) $baseYear->where('a.kode_asset_class', $assetClass);
+
+        $lastMonthYear = (clone $baseYear)
+            ->selectRaw("MAX(date_trunc('month', l.period)) AS last_month")
+            ->value('last_month');
+
+        $totalDeprYear = 0.0;
+        $totalNbvYear  = 0.0;
+
+        if ($lastMonthYear) {
+            $snap = (clone $baseYear)
+                ->whereRaw("date_trunc('month', l.period) = ?", [$lastMonthYear])
+                ->selectRaw("COALESCE(SUM(l.accumulated_depr_end), 0) AS total_depr")
+                ->selectRaw("COALESCE(SUM(l.ending_balance), 0) AS total_nbv")
+                ->first();
+
+            $totalDeprYear = (float) ($snap->total_depr ?? 0);
+            $totalNbvYear  = (float) ($snap->total_nbv ?? 0);
+        }
+
         return response()->json([
-            'months'     => $rows,
-            'total_depr' => $totalDepr,
-            'total_nbv'  => (float) (optional($rows->last())->nbv ?? 0),
+            'months'            => $rows,
+
+            'total_depr'        => $totalDepr,
+            'total_nbv'         => $totalNbvRange,
+
+            'year_ctx'          => $yearCtx,
+            'total_depr_year'   => $totalDeprYear,
+            'total_nbv_year'    => $totalNbvYear,
         ]);
     }
+
+    public function deprYearly(Request $request)
+    {
+        $yearCtx = $this->getYearCtx($request);
+
+        $owner      = $request->input('owner');
+        $location   = $request->input('location');
+        $assetClass = $request->input('asset_class');
+
+        // base for all years (so chart can show multiple years)
+        $base = DB::table('assets_depr_ledger_monthly as l')
+            ->join('assets as a', 'a.uuid', '=', 'l.asset_uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid');
+
+        if ($owner)      $base->where('g.asset_owner', $owner);
+        if ($location)   $base->where('a.kode_location', $location);
+        if ($assetClass) $base->where('a.kode_asset_class', $assetClass);
+
+        /**
+         * YEAR-END snapshot per year:
+         * 1) find last month available in each year (per filter)
+         * 2) sum accumulated_depr_end & ending_balance on that last month
+         */
+        $rows = DB::query()
+            ->fromSub(function ($q) use ($base) {
+                $q->fromSub((clone $base)
+                    ->selectRaw("date_trunc('month', l.period)::date as m")
+                    ->selectRaw("EXTRACT(YEAR FROM l.period)::int as y")
+                    ->groupBy('m', 'y'), 't')
+                    ->selectRaw('y as year')
+                    ->selectRaw('MAX(m) as last_month')
+                    ->groupBy('y');
+            }, 'lm')
+            ->joinSub((clone $base)
+                ->selectRaw("date_trunc('month', l.period)::date as m")
+                ->selectRaw("EXTRACT(YEAR FROM l.period)::int as y")
+                ->selectRaw("l.accumulated_depr_end as depr_end")
+                ->selectRaw("l.ending_balance as nbv_end"), 'd', function ($j) {
+                $j->on('d.y', '=', 'lm.year')->on('d.m', '=', 'lm.last_month');
+            })
+            ->selectRaw('lm.year as year')
+            ->selectRaw('COALESCE(SUM(d.depr_end),0) as depr')
+            ->selectRaw('COALESCE(SUM(d.nbv_end),0) as nbv')
+            ->groupBy('lm.year')
+            ->orderBy('lm.year')
+            ->get();
+
+        $years = $rows->map(fn($r) => [
+            'year' => (int) $r->year,
+            'depr' => (float) $r->depr,
+            'nbv'  => (float) $r->nbv,
+        ]);
+
+        // selected year totals (from computed list)
+        $sel = $years->firstWhere('year', $yearCtx);
+        $totalDeprYear = (float) ($sel['depr'] ?? 0);
+        $totalNbvYear  = (float) ($sel['nbv'] ?? 0);
+
+        // ===== TOTAL ALL (latest snapshot overall) =====
+        $globalLastMonth = DB::table('assets_depr_ledger_monthly')
+            ->selectRaw("MAX(date_trunc('month', period)) AS last_month")
+            ->value('last_month');
+
+        $globalDeprAll = 0.0;
+        $globalNbvAll  = 0.0;
+
+        if ($globalLastMonth) {
+            $globalSnap = DB::table('assets_depr_ledger_monthly')
+                ->whereRaw("date_trunc('month', period) = ?", [$globalLastMonth])
+                ->selectRaw("COALESCE(SUM(accumulated_depr_end), 0) AS total_depr")
+                ->selectRaw("COALESCE(SUM(ending_balance), 0) AS total_nbv")
+                ->first();
+
+            $globalDeprAll = (float) ($globalSnap->total_depr ?? 0);
+            $globalNbvAll  = (float) ($globalSnap->total_nbv ?? 0);
+        }
+
+        return response()->json([
+            'years'           => $years,
+            'year_ctx'        => $yearCtx,
+            'total_depr_year' => $totalDeprYear,
+            'total_nbv_year'  => $totalNbvYear,
+            'total_depr_all'       => $globalDeprAll,
+            'total_nbv_all'        => $globalNbvAll,
+        ]);
+    }
+
+    // ownerStatus tetap (tidak pakai month/year).
     public function ownerStatus(Request $request)
     {
         $owner      = $request->input('owner');
@@ -196,9 +461,7 @@ class DashboardController
 
         $byOwner = [];
         foreach ($rows as $r) {
-            $key   = $r->owner_code ?: '-';
-            $label = ($r->owner_code ?: '-') . ' - ' . ($r->owner_name ?: 'Unknown');
-
+            $key = $r->owner_code ?: '-';
             if (!isset($byOwner[$key])) {
                 $byOwner[$key] = ['owner' => $key, 'dis' => 0, 'idl' => 0, 'ope' => 0, 'rpr' => 0];
             }

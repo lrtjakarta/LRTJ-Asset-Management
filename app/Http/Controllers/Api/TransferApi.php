@@ -16,6 +16,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Carbon\Carbon;
 
 class TransferApi extends Controller
@@ -92,8 +93,10 @@ class TransferApi extends Controller
                 DB::raw('a.kode_asset_class  as asset_kode_asset_class'),
                 DB::raw('a.kode_status       as asset_kode_status'),
                 DB::raw('a.kode_sumber       as asset_kode_sumber'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
 
-                // ðŸ”¹ NEW: assignment fields from assets_assignment
                 DB::raw('g.asset_owner       as asset_owner'),
                 DB::raw('g.asset_user        as asset_user'),
                 DB::raw('g.asset_maintenance as asset_maintenance'),
@@ -104,13 +107,17 @@ class TransferApi extends Controller
                 DB::raw("CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber     || ' - ' || msrc.name END AS asset_kode_sumber_label"),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_transfers.asset_uuid')
-            // ðŸ”¹ NEW: join assignment so we can expose asset owner/user/maintenance
             ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
             ->leftJoin('master_location     as ml',   'ml.kode',   '=', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  '=', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   '=', 'a.kode_status')
             ->leftJoin('master_sumber       as msrc', 'msrc.kode', '=', 'a.kode_sumber')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_transfers.project_uuid')
             ->with(['status:uuid,kode,name'])
+            ->when(
+                !$request->filled('uuid') && !$request->filled('uuids'),
+                fn($x) => $x->whereNull('assets_transfers.project_uuid')
+            )
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_transfers.asset_uuid', $assetUuids))
             ->when($uuidSet->isNotEmpty(),   fn($x) => $x->whereIn('assets_transfers.uuid', $uuidSet))
@@ -458,7 +465,6 @@ class TransferApi extends Controller
                 }
             }
 
-            // ðŸ”¹ NEW: include current asset owner/user/maintenance codes into lookup pool
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -478,8 +484,8 @@ class TransferApi extends Controller
 
         $mapStatus = $setStatus->isNotEmpty()
             ? MasterStatus::whereIn('kode', $setStatus)
-                ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
-                ->pluck('name', 'kode')->all()
+            ->where(fn($q) => $q->where('type', 'Asset')->orWhereNull('type'))
+            ->pluck('name', 'kode')->all()
             : [];
 
         $mapLoc = $setLoc->isNotEmpty()
@@ -497,7 +503,7 @@ class TransferApi extends Controller
                 ? ($t->kode_status . ' - ' . $t->status->name)
                 : $t->kode_status;
 
-            // ðŸ”¹ Build asset owner/user/maintenance label from mapUser
+            // current assignment labels
             $assetOwner = $t->getAttribute('asset_owner');
             $assetUser  = $t->getAttribute('asset_user');
             $assetMaint = $t->getAttribute('asset_maintenance');
@@ -514,6 +520,19 @@ class TransferApi extends Controller
                 ? (isset($mapUser[$assetMaint]) ? "{$assetMaint} - {$mapUser[$assetMaint]}" : $assetMaint)
                 : '(empty)';
 
+            $projectUuid   = $t->getAttribute('project_uuid');
+            $projectName   = $t->getAttribute('project_name');
+            $projectStatus = $t->getAttribute('project_status');
+
+            $project = null;
+            if ($projectUuid) {
+                $project = [
+                    'uuid'   => $projectUuid,
+                    'name'   => $projectName,
+                    'status' => $projectStatus, // OPEN / CLOSED
+                ];
+            }
+
             $asset = [
                 'asset_uuid'                    => $t->asset_uuid,
                 'asset_code'                    => $t->getAttribute('asset_code'),
@@ -527,7 +546,6 @@ class TransferApi extends Controller
                 'asset_kode_status_label'       => $t->getAttribute('asset_kode_status_label'),
                 'asset_kode_sumber_label'       => $t->getAttribute('asset_kode_sumber_label'),
 
-                // ðŸ”¹ NEW: current assignment info
                 'asset_owner'                   => $assetOwner,
                 'asset_owner_label'             => $assetOwnerLabel,
                 'asset_user'                    => $assetUser,
@@ -536,6 +554,7 @@ class TransferApi extends Controller
                 'asset_maintenance_label'       => $assetMaintLabel,
             ];
 
+            // file object
             $fileObj = null;
             if ($t->file_path) {
                 $disk   = 'public';
@@ -557,6 +576,7 @@ class TransferApi extends Controller
                 ];
             }
 
+            // flow file object
             $flowFileObj = null;
             if ($t->flow_file_path) {
                 $disk   = 'public';
@@ -601,6 +621,13 @@ class TransferApi extends Controller
                 'after_display'     => $afterDisplay,
                 'note'              => $t->note,
 
+                'project'           => $project,
+                'project_uuid'      => $projectUuid,
+                'project_name'      => $projectName,
+                'project_status'    => $projectStatus,
+                'pic_request_uid'   => $t->pic_request_uid,
+                'pic_approve_uid'   => $t->pic_approve_uid,
+
                 'asset'             => $asset,
 
                 'file'              => $fileObj,
@@ -615,6 +642,7 @@ class TransferApi extends Controller
             ];
         });
     }
+
 
     protected function buildFlowTemplate(string $type, ?string $creatorName = null): array
     {
@@ -801,85 +829,81 @@ class TransferApi extends Controller
         return $code;
     }
 
-    public function downloadForms(Request $request, Transfer $transfer): StreamedResponse
+
+    public function downloadForm(Request $request): BinaryFileResponse|StreamedResponse
     {
-        // Authorization (API style, still fine)
         abort_unless($request->user()?->hasAction('MOVEMENT', 'R'), 403);
 
-        $transfer->load([
+        $v = $request->validate([
+            'uuid' => ['required', 'uuid', 'exists:assets_transfers,uuid'],
+        ]);
+
+        $transfer = Transfer::with([
+            'asset.value',
+            'asset.location',
             'asset.assignment.owner.division',
             'asset.assignment.user.division',
             'asset.assignment.maintenance.division',
-            'asset.location',
-        ]);
+        ])->where('uuid', $v['uuid'])->firstOrFail();
 
-        $asset      = $transfer->asset;
-        $tfNote     = $transfer->note;
-        $assign     = $asset?->assignment;
-        $beforeVal  = data_get($transfer->before, 'value');
-        $afterVal   = data_get($transfer->after,  'value');
-        $createdAt  = $transfer->created_at?->timezone('Asia/Jakarta');
+        $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
+        abort_unless(is_file($templatePath), 404, 'Template XLSX not found');
 
+        $asset     = $transfer->asset;
+        $assign    = $asset?->assignment;
+        $tfNote    = $transfer->note ?? '';
+        $createdAt = $transfer->created_at?->timezone('Asia/Jakarta');
+
+        $type      = (string) $transfer->type;
+        $beforeVal = (string) data_get($transfer->before, 'value');
+        $afterVal  = (string) data_get($transfer->after,  'value');
+
+        // Resolve before/after department labels (mirip logic lama kamu)
         $beforeUc = null;
-
-        switch ($transfer->type) {
-            case 'owner':
-                $beforeUc = $assign?->owner;
-                break;
-            case 'user':
-                $beforeUc = $assign?->user;
-                break;
-            case 'maintenance':
-                $beforeUc = $assign?->maintenance;
-                break;
+        if (in_array($type, ['owner', 'user', 'maintenance'], true)) {
+            $beforeUc = match ($type) {
+                'owner'       => $assign?->owner,
+                'user'        => $assign?->user,
+                'maintenance' => $assign?->maintenance,
+                default       => null,
+            };
         }
 
-        $afterUc = $afterVal
-            ? MasterUserCode::with('division')->where('kode', $afterVal)->first()
-            : null;
+        $afterUc = null;
+        if (in_array($type, ['owner', 'user', 'maintenance'], true) && $afterVal !== '') {
+            $afterUc = MasterUserCode::with('division')->where('kode', $afterVal)->first();
+        }
 
         $fromDeptLabel = '';
         $fromDivLabel  = '';
-        $fromLocLabel  = '';
-
         $toDeptLabel   = '';
         $toDivLabel    = '';
-        $toLocLabel    = '';
 
         if ($beforeUc) {
-            $fromDeptLabel = trim($beforeUc->kode . ' - ' . $beforeUc->department);
+            $fromDeptLabel = trim(($beforeUc->kode ?? '') . ' - ' . ($beforeUc->department ?? ''));
             if ($beforeUc->division) {
-                $fromDivLabel = trim($beforeUc->division->kode . ' - ' . $beforeUc->division->name);
+                $fromDivLabel = trim(($beforeUc->division->kode ?? '') . ' - ' . ($beforeUc->division->name ?? ''));
             }
-        } elseif ($beforeVal !== null && $beforeVal !== '') {
+        } elseif ($beforeVal !== '') {
             $fromDeptLabel = $beforeVal;
         }
 
         if ($afterUc) {
-            $toDeptLabel = trim($afterUc->kode . ' - ' . $afterUc->department);
+            $toDeptLabel = trim(($afterUc->kode ?? '') . ' - ' . ($afterUc->department ?? ''));
             if ($afterUc->division) {
-                $toDivLabel = trim($afterUc->division->kode . ' - ' . $afterUc->division->name);
+                $toDivLabel = trim(($afterUc->division->kode ?? '') . ' - ' . ($afterUc->division->name ?? ''));
             }
-        } elseif ($afterVal !== null && $afterVal !== '') {
+        } elseif ($afterVal !== '') {
             $toDeptLabel = $afterVal;
         }
 
+        // Location label (current asset location)
         $loc = $asset?->location;
-        $locLabel = $loc ? trim($loc->kode . ' - ' . $loc->name) : '';
-        $fromLocLabel = $locLabel;
-        $toLocLabel   = $locLabel;
+        $locLabel = $loc ? trim(($loc->kode ?? '') . ' - ' . ($loc->name ?? '')) : '';
 
+        // Flow text
         $flowRaw   = $transfer->flow ?? null;
-        $flowArray = null;
-
-        if (is_string($flowRaw) && $flowRaw !== '') {
-            $decoded = json_decode($flowRaw, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $flowArray = $decoded;
-            }
-        } elseif (is_array($flowRaw)) {
-            $flowArray = $flowRaw;
-        }
+        $flowArray = is_array($flowRaw) ? $flowRaw : (is_string($flowRaw) ? json_decode($flowRaw, true) : null);
 
         $doneLines = [];
         if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
@@ -891,44 +915,33 @@ class TransferApi extends Controller
                     $atRaw = $st['approved_at'];
 
                     try {
-                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')
-                            ->timezone('Asia/Jakarta')
-                            ->format('d-m-Y H:i');
+                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')->timezone('Asia/Jakarta')->format('d-m-Y H:i');
                     } catch (\Throwable $e) {
                         $at = $atRaw;
                     }
 
-                    $line = trim(
-                        ($label ?: '') .
-                        ($role ? ' (' . $role . ')' : '') .
-                        ($at ? ' - ' . $at : '') .
-                        ($by ? ' - ' . $by : '')
-                    );
-
-                    if ($line !== '') {
-                        $doneLines[] = $line;
-                    }
+                    $line = trim(($label ?: '') . ($role ? " ($role)" : '') . ($at ? " - $at" : '') . ($by ? " - $by" : ''));
+                    if ($line !== '') $doneLines[] = $line;
                 }
             }
         }
-
         $flowText = implode("\n", $doneLines);
 
-        $templatePath = storage_path('app/public/template/form_transfer_asset.xlsx');
-        $spreadsheet  = IOFactory::load($templatePath);
+        // Load XLSX template
+        $spreadsheet = IOFactory::load($templatePath);
+        $sheet       = $spreadsheet->getSheetByName('Form Transfer') ?: $spreadsheet->getActiveSheet();
 
-        $sheet = $spreadsheet->getSheetByName('Form Transfer');
-
+        // Fill cells (sesuaikan sel kalau template kamu beda)
         $sheet->setCellValue('V11', $transfer->transfer_code ?? '');
 
         $sheet->setCellValue('G15', $fromDeptLabel);
         $sheet->setCellValue('G16', $fromDivLabel);
-        $sheet->setCellValue('G17', $fromLocLabel);
+        $sheet->setCellValue('G17', $locLabel);
         $sheet->setCellValue('G18', $createdAt ? $createdAt->format('d-m-Y') : '');
 
         $sheet->setCellValue('S15', $toDeptLabel);
         $sheet->setCellValue('S16', $toDivLabel);
-        $sheet->setCellValue('S17', $toLocLabel);
+        $sheet->setCellValue('S17', $locLabel);
         $sheet->setCellValue('S18', $createdAt ? $createdAt->format('d-m-Y') : '');
 
         $sheet->setCellValue('C23', $asset?->asset_code ?? '');
@@ -937,13 +950,10 @@ class TransferApi extends Controller
         $qty = $asset?->value?->quantity;
         $sheet->setCellValue('L23', $qty !== null ? $qty : '');
 
-        $uomText = $asset?->value?->uom?->name
-            ?? $asset?->value?->kode_uom
-            ?? '';
+        $uomText = $asset?->value?->uom?->name ?? $asset?->value?->kode_uom ?? '';
         $sheet->setCellValue('N23', $uomText);
 
         $sheet->setCellValue('P23', $asset?->notes ?? '');
-
         $sheet->setCellValue('C30', $tfNote ?? '');
 
         $sheet->setCellValue('C34', $flowText);
@@ -954,11 +964,13 @@ class TransferApi extends Controller
 
         $fileName = 'Form Transfer Asset - ' . ($transfer->transfer_code ?? 'MOV') . '.xlsx';
 
+        // Stream download (no temp file)
         return response()->streamDownload(function () use ($spreadsheet) {
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
             $writer->save('php://output');
         }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type'  => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store',
         ]);
     }
 

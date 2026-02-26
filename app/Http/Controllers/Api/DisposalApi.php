@@ -17,6 +17,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpWord\TemplateProcessor;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Carbon\Carbon;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DisposalApi extends Controller
 {
@@ -42,7 +43,7 @@ class DisposalApi extends Controller
             'created_from' => ['nullable', 'date'],
             'created_to'   => ['nullable', 'date'],
             'asset_q'      => ['nullable', 'string', 'max:200'],
-
+            'project_uuid' => ['nullable', 'uuid'],
             'sort_by'      => ['nullable', Rule::in(['created_at', 'updated_at', 'kode_status', 'target_status', 'asset_code'])],
             'sort_dir'     => ['nullable', Rule::in(['asc', 'desc'])],
             'per_page'     => ['nullable', 'integer', 'min:1', 'max:100'],
@@ -93,12 +94,16 @@ class DisposalApi extends Controller
                 'assets_disposals.*',
                 DB::raw('a.asset_code as asset_code'),
                 DB::raw('a.description as asset_description'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
             ])
             ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_disposals.project_uuid')
+
             ->with([
                 'status:uuid,kode,name',
                 'target:uuid,kode,name',
-                // asset + relations we need for location/status/owner/user/maintenance + value
                 'asset.value',
                 'asset.location',
                 'asset.status',
@@ -106,11 +111,17 @@ class DisposalApi extends Controller
                 'asset.assignment.user',
                 'asset.assignment.maintenance',
             ])
+
+            ->when(
+                !$request->filled('uuid') && !$request->filled('uuids'),
+                fn($x) => $x->whereNull('assets_disposals.project_uuid')
+            )
             ->when($request->boolean('with_trashed'), fn($x) => $x->withTrashed())
             ->when($uuidSet->isNotEmpty(),    fn($x) => $x->whereIn('assets_disposals.uuid', $uuidSet))
             ->when($assetUuids->isNotEmpty(), fn($x) => $x->whereIn('assets_disposals.asset_uuid', $assetUuids))
             // keep old "target"
             ->when(!empty($v['target']),      fn($x) => $x->where('assets_disposals.target_status', $v['target']));
+
 
 
         // === workflow / status logic (match datatable_all) ===
@@ -262,16 +273,29 @@ class DisposalApi extends Controller
     {
         $tz = config('app.timezone', 'UTC');
 
-        $row = Disposal::with([
-            'status:id,kode,name',
-            'target:id,kode,name',
-            'asset.value',
-            'asset.location',
-            'asset.status',
-            'asset.assignment.owner',
-            'asset.assignment.user',
-            'asset.assignment.maintenance',
-        ])->where('uuid', $uuid)->firstOrFail();
+        $row = Disposal::query()
+            ->select([
+                'assets_disposals.*',
+                DB::raw('a.asset_code as asset_code'),
+                DB::raw('a.description as asset_description'),
+                DB::raw('ap.uuid   as project_uuid'),
+                DB::raw('ap.name   as project_name'),
+                DB::raw('ap.status as project_status'),
+            ])
+            ->leftJoin('assets as a', 'a.uuid', '=', 'assets_disposals.asset_uuid')
+            ->leftJoin('asset_projects as ap', 'ap.uuid', '=', 'assets_disposals.project_uuid')
+            ->with([
+                'status:uuid,kode,name',
+                'target:uuid,kode,name',
+                'asset.value',
+                'asset.location',
+                'asset.status',
+                'asset.assignment.owner',
+                'asset.assignment.user',
+                'asset.assignment.maintenance',
+            ])
+            ->where('assets_disposals.uuid', $uuid)
+            ->firstOrFail();
 
         $data = $this->mapRows(collect([$row]), $tz)->first();
 
@@ -519,16 +543,23 @@ class DisposalApi extends Controller
 
         $ledgerMap = [];
         if ($assetUuids->isNotEmpty()) {
-            $ledgerRows = DB::table('assets_depr_ledger_monthly')
-                ->selectRaw('asset_uuid, COALESCE(SUM(accumulated_depr_end),0) as acc_sum, COALESCE(SUM(ending_balance),0) as nbv_sum')
-                ->whereIn('asset_uuid', $assetUuids)
-                ->groupBy('asset_uuid')
+            $ledgerRows = DB::table(DB::raw("(
+                SELECT DISTINCT ON (asset_uuid)
+                    asset_uuid,
+                    period,
+                    ending_balance,
+                    accumulated_depr_end
+                FROM assets_depr_ledger_monthly
+                ORDER BY asset_uuid, period DESC
+            ) as ld"))
+                ->whereIn('ld.asset_uuid', $assetUuids)
                 ->get();
 
             $ledgerMap = $ledgerRows->keyBy('asset_uuid')->map(function ($r) {
                 return [
-                    'acc_sum' => (float) $r->acc_sum,
-                    'nbv_sum' => (float) $r->nbv_sum,
+                    'period'    => $r->period,
+                    'acc_end'   => (float) ($r->accumulated_depr_end ?? 0),
+                    'end_bal'   => (float) ($r->ending_balance ?? 0),
                 ];
             })->all();
         }
@@ -595,9 +626,11 @@ class DisposalApi extends Controller
             }
 
             // Ledger sums (Commercial Accumulated Depreciation + NBV)
-            $ledger = $ledgerMap[$t->asset_uuid] ?? null;
-            $accSum = $ledger['acc_sum'] ?? 0;
-            $nbvSum = $ledger['nbv_sum'] ?? 0;
+            $ledger  = $ledgerMap[$t->asset_uuid] ?? null;
+            $accEnd  = (float) ($ledger['acc_end'] ?? 0);                     // latest accumulated_depr_end
+            $comCost = (float) ($value?->total ?? 0);                         // v.total
+            $comNbv  = $comCost - $accEnd;                                    // match detail
+            $comNbv  = $comNbv < 0 ? 0 : $comNbv;                              // optional guard
 
             // Build asset block (same spirit as AssetsApi)
             $assetArr = [
@@ -623,20 +656,31 @@ class DisposalApi extends Controller
                 'asset_maintenance_label' => $maintLabel,
 
                 // value fields (from AssetsApi)
-                'price'             => $value?->price,
-                'quantity'          => $value?->quantity,
+                'price'             => $this->formatIdr($value?->price),
+                'quantity'          => intval($value?->quantity ?? 0),
                 'vat_in'            => $value?->vat_in,
-                'total'             => $value?->total,
+                'total'             => $this->formatIdr($value?->total),
                 'kode_uom'          => $value?->kode_uom,
                 'useful_life_month' => $value?->useful_life_month,
 
                 // NEW: depreciation / NBV (same meaning as AssetsApi)
                 'acquisition_date'       => $acqDateFmt,        // Acquisition Date
-                'commercial_acq_cost'    => intval($value?->total),     // Commercial Acquisition Cost (IDR)
-                'commercial_accum_depr'  => intval($accSum),            // Commercial Accumulated Depreciation (IDR)
-                'commercial_nbv'         => intval($nbvSum),            // Commercial Net Book Value (IDR)
-            ];
+                'commercial_acq_cost'       => $this->formatIdr($comCost),
+                'commercial_accum_depr'     => $this->formatIdr($accEnd),
+                'commercial_nbv'            => $this->formatIdr($comNbv),
 
+            ];
+            $projectUuid   = $t->getAttribute('project_uuid');
+            $projectName   = $t->getAttribute('project_name');
+            $projectStatus = $t->getAttribute('project_status');
+            $project = null;
+            if ($projectUuid) {
+                $project = [
+                    'uuid'   => $projectUuid,
+                    'name'   => $projectName,
+                    'status' => $projectStatus, // OPEN / CLOSED
+                ];
+            }
             // main attachment (original file)
             $fileObj = null;
             if ($t->file_path) {
@@ -733,6 +777,11 @@ class DisposalApi extends Controller
 
                 'note'              => $t->note,
                 'file'              => $fileObj,
+
+                'project'        => $project,
+                'project_uuid'   => $projectUuid,
+                'project_name'   => $projectName,
+                'project_status' => $projectStatus,
 
                 'form_file'         => $formFileObj,
                 'ba_file'           => $baFileObj,
@@ -989,9 +1038,9 @@ class DisposalApi extends Controller
             throw new \RuntimeException('MIME not allowed: ' . $mime);
         }
     }
-    public function downloadBa(Request $request): StreamedResponse
+
+    public function downloadBa(Request $request): BinaryFileResponse|StreamedResponse
     {
-        // inline the permission check for API
         abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
 
         $v = $request->validate([
@@ -1003,59 +1052,57 @@ class DisposalApi extends Controller
             'asset.assignment.owner',
         ])->where('uuid', $v['uuid'])->firstOrFail();
 
+        $templatePath = storage_path('app/public/template/berita_acara_disposal_asset_tetap.docx');
+        abort_unless(is_file($templatePath), 404, 'Template DOCX not found');
+
         $asset    = $disposal->asset;
         $location = $asset?->location;
-        $owner    = $asset?->assignment?->owner;
 
         $assetName   = $asset?->asset_name ?? $asset?->description ?? '';
         $assetCode   = $asset?->asset_code ?? '';
         $formNumber  = $disposal->disposal_code ?? '';
-        $locationLbl = $location
-            ? trim(($location->kode ?? '') . ' ' . ($location->name ?? ''))
-            : '';
-
+        $locationLbl = $location ? trim(($location->kode ?? '') . ' ' . ($location->name ?? '')) : '';
         $keterangan  = $disposal->note ?? '';
 
-        // tanggal BA: pakai updated_at jika sudah ACC, kalau tidak pakai now()
         $date = $disposal->updated_at
             ? $disposal->updated_at->copy()->timezone('Asia/Jakarta')
             : now('Asia/Jakarta');
 
-        Carbon::setLocale('id'); // so translatedFormat uses Indonesian
+        Carbon::setLocale('id');
+        $hari  = $date->translatedFormat('l');
+        $tglBT = $date->translatedFormat('d F Y');
 
-        $hari   = $date->translatedFormat('l');        // Senin, Selasa, ...
-        $tglBT  = $date->translatedFormat('d F Y');    // 17 November 2025
-
-        $templatePath = storage_path('app/public/template/berita_acara_disposal_asset_tetap.docx');
-        $template     = new TemplateProcessor($templatePath);
-
-        // these KEYS must match the placeholders inside the DOCX (without ${})
+        $template = new TemplateProcessor($templatePath);
         $template->setValues([
-            'HARI'                        => $hari,
-            'TANGGAL_BULAN_TAHUN'         => $tglBT,
-            'TANGGAL_BULAN_TAHUN_FOOTER'  => $tglBT,
-            'NAMA_ASET'                   => $assetName,
-            'NOMOR_ASET'                  => $assetCode,
-            'NOMOR_FORM'                  => $formNumber,
-            'LOKASI'                      => $locationLbl,
-            'KETERANGAN'                  => $keterangan,
+            'HARI'                       => $hari,
+            'TANGGAL_BULAN_TAHUN'        => $tglBT,
+            'TANGGAL_BULAN_TAHUN_FOOTER' => $tglBT,
+            'NAMA_ASET'                  => $assetName,
+            'NOMOR_ASET'                 => $assetCode,
+            'NOMOR_FORM'                 => $formNumber,
+            'LOKASI'                     => $locationLbl,
+            'KETERANGAN'                 => $keterangan,
         ]);
 
         $fileName = 'BA Disposal - ' . ($disposal->disposal_code ?? 'DSP') . '.docx';
 
-        return response()->streamDownload(function () use ($template) {
-            $template->saveAs('php://output');
-        }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ]);
+        $tmpDir = storage_path('app/tmp');
+        if (!is_dir($tmpDir)) @mkdir($tmpDir, 0775, true);
+
+        $tmpPath = $tmpDir . '/ba-disposal-' . $disposal->uuid . '-' . now()->format('YmdHis') . '.docx';
+        $template->saveAs($tmpPath);
+
+        return response()->download($tmpPath, $fileName, [
+            'Content-Type'  => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'Cache-Control' => 'no-store',
+        ])->deleteFileAfterSend(true);
     }
     /**
      * GET /api/v1/disposals/form?uuid=...
      * Return Disposal Form XLSX as download.
      */
-    public function downloadForm(Request $request): StreamedResponse
+    public function downloadForm(Request $request): BinaryFileResponse|StreamedResponse
     {
-        // inline the permission check for API
         abort_unless($request->user()?->hasAction('DISPOSAL', 'R'), 403);
 
         $v = $request->validate([
@@ -1067,6 +1114,9 @@ class DisposalApi extends Controller
             'asset.location',
             'asset.assignment.owner.division',
         ])->where('uuid', $v['uuid'])->firstOrFail();
+
+        $templatePath = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
+        abort_unless(is_file($templatePath), 404, 'Template XLSX not found');
 
         $asset    = $disposal->asset;
         $reason   = $disposal->reason ?? '';
@@ -1097,25 +1147,15 @@ class DisposalApi extends Controller
             ->where('asset_uuid', $asset?->uuid)
             ->first();
 
-        $comAcc = $ledger?->acc_sum ?? 0; // Commercial Accumulated Depreciation (IDR)
-        $comNbv = $ledger?->nbv_sum ?? 0; // Commercial Net Book Value (IDR)
-
+        $comAcc = $ledger?->acc_sum ?? 0;
+        $comNbv = $ledger?->nbv_sum ?? 0;
         $taxNbv = $asset?->value?->tax_nbv ?? 0;
 
         $justification = $disposal->note ?? '';
 
-        // ========= build "done" flow steps text =========
+        // Flow text (yang sudah kamu bikin)
         $flowRaw   = $disposal->flow ?? null;
-        $flowArray = null;
-
-        if (is_string($flowRaw) && $flowRaw !== '') {
-            $decoded = json_decode($flowRaw, true);
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $flowArray = $decoded;
-            }
-        } elseif (is_array($flowRaw)) {
-            $flowArray = $flowRaw;
-        }
+        $flowArray = is_array($flowRaw) ? $flowRaw : (is_string($flowRaw) ? json_decode($flowRaw, true) : null);
 
         $doneLines = [];
         if (!empty($flowArray['steps']) && is_array($flowArray['steps'])) {
@@ -1125,36 +1165,20 @@ class DisposalApi extends Controller
                     $role  = $st['role'] ?? '';
                     $by    = $st['approved_by'] ?? '';
                     $atRaw = $st['approved_at'];
-
                     try {
-                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')
-                            ->timezone('Asia/Jakarta')
-                            ->format('d-m-Y H:i');
+                        $at = Carbon::parse($atRaw, 'Asia/Jakarta')->timezone('Asia/Jakarta')->format('d-m-Y H:i');
                     } catch (\Throwable $e) {
                         $at = $atRaw;
                     }
-
-                    $line = trim(
-                        ($label ?: '') .
-                            ($role ? ' (' . $role . ')' : '') .
-                            ($at ? ' - ' . $at : '') .
-                            ($by ? ' - ' . $by : '')
-                    );
-
-                    if ($line !== '') {
-                        $doneLines[] = $line;
-                    }
+                    $line = trim(($label ?: '') . ($role ? " ($role)" : '') . ($at ? " - $at" : '') . ($by ? " - $by" : ''));
+                    if ($line !== '') $doneLines[] = $line;
                 }
             }
         }
-
         $flowText = implode("\n", $doneLines);
-        // ========= END flow text =========
 
-        $templatePath = storage_path('app/public/template/form_disposal_asset_tetap.xlsx');
-        $spreadsheet  = IOFactory::load($templatePath);
-        $sheet        = $spreadsheet->getSheetByName('Form Disposal Aset Tetap')
-            ?: $spreadsheet->getActiveSheet();
+        $spreadsheet = IOFactory::load($templatePath);
+        $sheet       = $spreadsheet->getSheetByName('Form Disposal Aset Tetap') ?: $spreadsheet->getActiveSheet();
 
         $sheet->setCellValue('H7',  $companyName);
         $sheet->setCellValue('H8',  $disposal->disposal_code ?? '');
@@ -1168,13 +1192,10 @@ class DisposalApi extends Controller
         $sheet->setCellValue('H16', $assetName);
         $sheet->setCellValue('H17', $acqDate ? $acqDate->format('d-m-Y') : '');
 
-        $sheet->setCellValue('H18', $comCost); // Commercial Acquisition Cost (IDR)
-        $sheet->setCellValue('H19', $comAcc);  // Commercial Accumulated Depreciation (IDR)
-        $sheet->setCellValue('H20', $comNbv);  // Commercial Net Book Value (IDR)
-        $sheet->setCellValue('H21', $taxNbv);  // Tax Net Book Value (IDR)
-
-        $sheet->setCellValue('H22', '');
-        $sheet->setCellValue('H23', '');
+        $sheet->setCellValue('H18', $comCost);
+        $sheet->setCellValue('H19', $comAcc);
+        $sheet->setCellValue('H20', $comNbv);
+        $sheet->setCellValue('H21', $taxNbv);
 
         $sheet->setCellValue('H24', $justification);
 
@@ -1187,7 +1208,8 @@ class DisposalApi extends Controller
             $writer = IOFactory::createWriter($spreadsheet, 'Xlsx');
             $writer->save('php://output');
         }, $fileName, [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type'  => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'no-store',
         ]);
     }
 
@@ -1484,5 +1506,20 @@ class DisposalApi extends Controller
             'batch'   => true,
             'results' => $results,
         ]);
+    }
+    protected function formatIdr($value): string
+    {
+        $n = (float) ($value ?? 0);
+
+        // Prefer intl if installed
+        if (class_exists(\NumberFormatter::class)) {
+            $fmt = new \NumberFormatter('id_ID', \NumberFormatter::CURRENCY);
+            $fmt->setAttribute(\NumberFormatter::FRACTION_DIGITS, 0);
+            $out = $fmt->formatCurrency($n, 'IDR');
+            if (is_string($out) && $out !== '') return $out;
+        }
+
+        // Fallback (no intl)
+        return 'Rp ' . number_format($n, 0, ',', '.');
     }
 }

@@ -71,13 +71,13 @@
                         return `${dateStr} ${timeStr}`;
                     }
                 },
-                {
-                    data: 'actions',
-                    name: 'actions',
-                    orderable: false,
-                    searchable: false,
-                    defaultContent: ''
-                }
+                // {
+                //     data: 'actions',
+                //     name: 'actions',
+                //     orderable: false,
+                //     searchable: false,
+                //     defaultContent: ''
+                // }
             ]
         });
 

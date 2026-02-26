@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Asset Management - LRT JAKARTA</title>
+    <title>ENTERPRISE ASSET MANAGEMENT SYSTEM - LRT JAKARTA</title>
     <link rel="shortcut icon" href="{{ asset('metronic/demo1/assets/media/logos/logo-lrtj-icon-color-large.png') }}" />
     <link href='https://fonts.googleapis.com/css?family=Montserrat' rel='stylesheet'>
 
