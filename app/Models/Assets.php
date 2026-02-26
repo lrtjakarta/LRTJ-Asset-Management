@@ -64,18 +64,20 @@ class Assets extends Model
 
         // Restore the children too
         static::restored(function (self $asset) {
-            foreach ([
-                'identifiers',
-                'classification',
-                'assignment',
-                'value',
-                'documents',
-                'qrs',
-                'rfids',
-                'transfer',
-                'disposal',
-                'return_history'
-            ] as $rel) {
+            foreach (
+                [
+                    'identifiers',
+                    'classification',
+                    'assignment',
+                    'value',
+                    'documents',
+                    'qrs',
+                    'rfids',
+                    'transfer',
+                    'disposal',
+                    'return_history'
+                ] as $rel
+            ) {
                 $asset->{$rel}()->withTrashed()->restore();
             }
         });
@@ -208,5 +210,26 @@ class Assets extends Model
     {
         return $this->hasOne(AssetsRfid::class, 'asset_uuid')->where('is_active', true);
     }
-    
+    public function getLocationLabelAttribute(): string
+    {
+        $kode = (string) ($this->kode_location ?? '');
+        $name = (string) ($this->location?->name ?? '');
+
+        if ($kode !== '' && $name !== '') return "{$kode} - {$name}";
+        return $kode !== '' ? $kode : $name;
+    }
+
+    public function getOwnerLabelAttribute(): string
+    {
+        $kode = (string) ($this->assignment?->asset_owner ?? '');
+        $dept = (string) ($this->assignment?->owner?->department ?? '');
+
+        // fallback kalau department kosong, pakai description
+        if ($dept === '') {
+            $dept = (string) ($this->assignment?->owner?->description ?? '');
+        }
+
+        if ($kode !== '' && $dept !== '') return "{$kode} - {$dept}";
+        return $kode !== '' ? $kode : $dept;
+    }
 }

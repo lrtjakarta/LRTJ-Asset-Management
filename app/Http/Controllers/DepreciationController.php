@@ -19,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 use Yajra\DataTables\Facades\DataTables;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use App\Models\AssetDeprMonthClosing;
+use App\Models\AssetDeprYearClosing;
 
 class DepreciationController extends Controller
 {
@@ -27,17 +29,467 @@ class DepreciationController extends Controller
     private const STATUS_APR = 'APR';
     private const STATUS_ACC = 'ACC';
     private const STATUS_REJ = 'REJ';
+    /**
+     * Guard semua operasi yang menulis ledger untuk suatu period.
+     *
+     * @param Carbon $period   startOfMonth
+     * @param string $context  e.g. 'runMonth', 'adjDepr', 'approveTransfer'
+     * @param array $opt       options:
+     *   - require_prev_month: bool (default true)
+     *   - enforce_first_run_min_eligible: bool (default true)
+     *   - allow_when_no_closing: bool (default false) -> jika true, skip NO_CLOSING_YET check (jarang dipakai)
+     *
+     * @return array { year:int, period:string }
+     * @throws \RuntimeException with coded message:
+     *   YEAR_LOCKED|{year}|{context}
+     *   PREV_YEAR_NOT_BUILT|{prev}|{year}|{context}
+     *   PREV_MONTH_NOT_PROCESSED|{needPeriod}
+     *   FIRST_RUN_MUST_START_AT_MIN_ELIGIBLE|{needPeriod}
+     *   NO_CLOSING_YET|{context}
+     */
+    private function guardWritablePeriod(Carbon $period, string $context, array $opt = []): array
+    {
+        $period = $period->copy()->startOfMonth();
+        $year   = (int) $period->year;
+
+        $requirePrevMonth   = (bool) ($opt['require_prev_month'] ?? true);
+        $enforceFirstRunMin = (bool) ($opt['enforce_first_run_min_eligible'] ?? true);
+
+        // 1) year locked
+        if ($this->isYearLocked($year)) {
+            throw new \RuntimeException("YEAR_LOCKED|{$year}|{$context}");
+        }
+
+        // 2) chain gate prev-year (skip kalau prev-year kosong)
+        $this->assertPrevYearBuiltUnlessEmpty($year, $context);
+
+        // 3) prev-month gate / first-run gate
+        $hasAnyClosing = AssetDeprMonthClosing::query()->limit(1)->exists();
+
+        if (! $hasAnyClosing) {
+            if ($enforceFirstRunMin) {
+                $minEligible = DB::table('assets as a')
+                    ->join('assets_value as av', 'av.asset_uuid', '=', 'a.uuid')
+                    ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'a.uuid')
+                    ->where('a.kode_status', '!=', 'DIS')
+                    ->whereNotNull('av.capitalization_date')
+                    ->selectRaw("
+                    MIN(
+                        CASE
+                            WHEN EXTRACT(DAY FROM av.capitalization_date) <= COALESCE(p.cutoff_day, 15)
+                                THEN (date_trunc('month', av.capitalization_date) + INTERVAL '0 month')::date
+                            ELSE (date_trunc('month', av.capitalization_date) + INTERVAL '1 month')::date
+                        END
+                    ) as min_eligible
+                ")
+                    ->value('min_eligible');
+
+                if ($minEligible) {
+                    $first = Carbon::parse($minEligible)->startOfMonth()->toDateString();
+                    if ($period->toDateString() !== $first) {
+                        throw new \RuntimeException("FIRST_RUN_MUST_START_AT_MIN_ELIGIBLE|{$first}");
+                    }
+                }
+            }
+
+            return ['year' => $year, 'period' => $period->toDateString()];
+        }
+
+        if ($requirePrevMonth) {
+            $this->ensurePrevMonthProcessed($period); // <-- sudah fixed (skip kalau prev-month kosong)
+        }
+
+        return ['year' => $year, 'period' => $period->toDateString()];
+    }
+
+    private function renderGuardError(\Throwable $e)
+    {
+        $msg = (string) $e->getMessage();
+
+        if (str_starts_with($msg, 'YEAR_LOCKED|')) {
+            [$_, $year] = array_pad(explode('|', $msg), 3, null);
+            $year = (int) $year;
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'YEAR_LOCKED',
+                'message' => "Year {$year} already built & locked. Rollback Build Year to reopen.",
+                'year' => $year,
+            ], 422);
+        }
+
+        if (str_starts_with($msg, 'PREV_YEAR_NOT_BUILT|')) {
+            [$_, $needPrev, $targetYear] = array_pad(explode('|', $msg), 4, null);
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'PREV_YEAR_NOT_BUILT',
+                'message' => "Year {$targetYear} cannot be processed before Build Year {$needPrev}.",
+                'need_build_year' => (int) $needPrev,
+                'target_year' => (int) $targetYear,
+            ], 422);
+        }
+
+        if (str_starts_with($msg, 'PREV_MONTH_NOT_PROCESSED|')) {
+            $need = explode('|', $msg)[1] ?? null;
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'PREV_MONTH_NOT_PROCESSED',
+                'message' => 'Previous month depreciation must be processed first.',
+                'need_period' => $need,
+                'need_period_text' => $need ? Carbon::parse($need)->isoFormat('MMMM YYYY') : null,
+            ], 422);
+        }
+
+        if (str_starts_with($msg, 'FIRST_RUN_MUST_START_AT_MIN_ELIGIBLE|')) {
+            $need = explode('|', $msg)[1] ?? null;
+
+            return response()->json([
+                'ok' => false,
+                'code' => 'FIRST_RUN_MUST_START_AT_MIN_ELIGIBLE',
+                'message' => 'Data bulan ini belum tersedia. Silakan proses periode eligible pertama dulu.',
+                'need_period' => $need,
+                'need_period_text' => $need ? Carbon::parse($need)->isoFormat('MMMM YYYY') : null,
+            ], 422);
+        }
+
+        return null;
+    }
+
+    private function monthHasEligibleAssets(Carbon $monthStart): bool
+    {
+        $m = $monthStart->copy()->startOfMonth()->toDateString(); // YYYY-MM-01
+
+        // eligible_start <= monthStart => berarti bulan ini ada aset yang "sudah mulai eligible"
+        return DB::table('assets as a')
+            ->join('assets_value as av', 'av.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'a.uuid')
+            ->where('a.kode_status', '!=', 'DIS')
+            ->whereNotNull('av.capitalization_date')
+            ->whereRaw("
+            (
+                CASE
+                    WHEN EXTRACT(DAY FROM COALESCE(p.depr_start_date, av.capitalization_date)) <= COALESCE(p.cutoff_day, 15)
+                        THEN date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date))::date
+                    ELSE (date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date)) + INTERVAL '1 month')::date
+                END
+            ) <= ?::date
+        ", [$m])
+            ->limit(1)
+            ->exists();
+    }
 
     protected function canReadDepr(): bool
     {
         $user = auth()->user();
         return $user && $user->hasAction('DEPRECIATION', 'R');
     }
+    private function isYearLocked(int $year): bool
+    {
+        return AssetDeprYearClosing::query()
+            ->where('fiscal_year', $year)
+            ->where('is_locked', true)
+            ->exists();
+    }
+
+    private function assertYearOpen(int $year, string $context = 'operation'): void
+    {
+        if ($this->isYearLocked($year)) {
+            throw new \RuntimeException("YEAR_LOCKED|{$year}|{$context}");
+        }
+    }
+
+    private function assertBuildYearAllowedNow(): void
+    {
+        // Build Year hanya boleh bulan Desember
+        if ((int) now()->month !== 12) {
+            throw new \RuntimeException("BUILD_YEAR_ONLY_DECEMBER");
+        }
+    }
+
+    private function assertDecemberProcessed(int $year): void
+    {
+        // If the year has no eligible periods at all, allow build-year (it will lock empty yearly summary)
+        if (! $this->yearHasEligiblePeriods($year)) {
+            return;
+        }
+
+        $dec = Carbon::create($year, 12, 1)->startOfMonth()->toDateString();
+
+        $ok = AssetDeprMonthClosing::query()
+            ->whereDate('period', $dec)
+            ->exists();
+
+        if (! $ok) {
+            throw new \RuntimeException("DECEMBER_NOT_PROCESSED|{$dec}");
+        }
+    }
+
+    private function yearHasEligiblePeriods(int $year): bool
+    {
+        $start = Carbon::create($year, 1, 1)->startOfMonth()->toDateString();   // YYYY-01-01
+        $end   = Carbon::create($year, 12, 1)->startOfMonth()->toDateString();  // YYYY-12-01
+
+        // Eligible start month mengikuti rule cutoff & depr_start_date/policy
+        return DB::table('assets as a')
+            ->join('assets_value as av', 'av.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'a.uuid')
+            ->where('a.kode_status', '!=', 'DIS')
+            ->whereNotNull('av.capitalization_date')
+            ->whereRaw("
+            (
+                CASE
+                    WHEN EXTRACT(DAY FROM COALESCE(p.depr_start_date, av.capitalization_date)) <= COALESCE(p.cutoff_day, 15)
+                        THEN date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date))::date
+                    ELSE (date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date)) + INTERVAL '1 month')::date
+                END
+            ) BETWEEN ?::date AND ?::date
+        ", [$start, $end])
+            ->limit(1)
+            ->exists();
+    }
+    private function isYearBuiltLocked(int $year): bool
+    {
+        return AssetDeprYearClosing::query()
+            ->where('fiscal_year', $year)
+            ->where('is_locked', true)
+            ->exists();
+    }
+
+    private function assertPrevYearBuiltUnlessEmpty(int $year, string $context = 'operation'): void
+    {
+        $prev = $year - 1;
+        if ($prev < 1900) return;
+
+        if (! $this->yearHasEligiblePeriods($prev)) {
+            return;
+        }
+
+        if (! $this->isYearBuiltLocked($prev)) {
+            throw new \RuntimeException("PREV_YEAR_NOT_BUILT|{$prev}|{$year}|{$context}");
+        }
+    }
+
+    private function canBuildYearNowForTarget(int $targetYear): bool
+    {
+        $now = now();
+        $nowYear = (int) $now->year;
+        $nowMonth = (int) $now->month;
+
+        // Window build:
+        // - Desember tahun target (misal Des 2026 build 2026)
+        // - Januari tahun berikutnya (misal Jan 2027 build 2026)
+        if ($nowMonth === 12 && $nowYear === $targetYear) return true;
+        if ($nowMonth === 1 && $nowYear === ($targetYear + 1)) return true;
+
+        return false;
+    }
+
+    private function assertBuildYearAllowedForTarget(int $targetYear): void
+    {
+        $now = now();
+        $nowYear  = (int) $now->year;
+        $nowMonth = (int) $now->month;
+
+        $allowed = ($nowMonth === 12 && $nowYear === $targetYear)
+            || ($nowMonth === 1 && $nowYear === ($targetYear + 1));
+
+        if (! $allowed) {
+            throw new \RuntimeException("BUILD_YEAR_WINDOW_CLOSED|{$targetYear}");
+        }
+    }
+
+    /**
+     * Rollback tidak boleh loncat:
+     * - hanya boleh rollback "tahun yang tepat sebelum tahun sekarang" (nowYear-1)
+     * - dan harus jadi locked year paling terakhir (max fiscal_year locked)
+     */
+    private function assertSequentialRollback(int $year): void
+    {
+        $maxLocked = AssetDeprYearClosing::query()
+            ->where('is_locked', true)
+            ->max('fiscal_year');
+
+        if ($maxLocked === null) {
+            throw new \RuntimeException("ROLLBACK_NO_LOCKED_YEAR");
+        }
+
+        if ((int) $maxLocked !== (int) $year) {
+            throw new \RuntimeException("ROLLBACK_MUST_BE_LATEST_LOCKED|{$maxLocked}");
+        }
+    }
 
     public function index()
     {
         return view('depreciation.depreciation');
     }
+
+    public function periodIndex(Request $r)
+    {
+        abort_unless($this->canReadDepr(), 403);
+
+        // ambil range tahun dari capitalization_date yang benar-benar ada
+        $range = DB::table('assets_value as av')
+            ->join('assets as a', 'a.uuid', '=', 'av.asset_uuid')
+            ->where('a.kode_status', '!=', 'DIS')
+            ->whereNotNull('av.capitalization_date')
+            ->selectRaw('MIN(EXTRACT(YEAR FROM av.capitalization_date))::int as min_year')
+            ->selectRaw('MAX(EXTRACT(YEAR FROM av.capitalization_date))::int as max_year')
+            ->first();
+
+        $nowYear = (int) now()->year;
+
+        // range from data (cap_date)
+        $dataMin = $range->min_year !== null ? (int) $range->min_year : $nowYear;
+        $dataMax = $range->max_year !== null ? (int) $range->max_year : $nowYear;
+
+        // always include current year in dropdown
+        $minYear = min($dataMin, $nowYear);
+        $maxYear = max($dataMax, $nowYear);
+
+        // year yang dipilih user, fallback ke year terbaru yang ada data (atau current year)
+        $year = (int) ($r->input('year') ?: $maxYear);
+
+        // clamp biar ga keluar range
+        if ($year < $minYear) $year = $minYear;
+        if ($year > $maxYear) $year = $maxYear;
+
+        $isEmpty = !DB::table('assets_depr_month_closings')->limit(1)->exists()
+            && !DB::table('assets_depr_ledger_monthly')->limit(1)->exists();
+
+        return view('depreciation.period', [
+            'year' => $year,
+            'minYear' => $minYear,
+            'maxYear' => $maxYear,
+            'isLedgerEmpty' => $isEmpty,
+            'isDecember' => now()->month === 12,
+            'nowYear' => now()->year,
+        ]);
+    }
+    public function dtPeriod(Request $r)
+    {
+        if (! $this->canReadDepr()) {
+            return DataTables::of(collect())->toJson();
+        }
+
+        $year = (int) ($r->input('year') ?: now()->year);
+
+        $start = Carbon::create($year, 1, 1)->startOfMonth()->toDateString();  // YYYY-01-01
+        $end   = Carbon::create($year, 12, 1)->startOfMonth()->toDateString(); // YYYY-12-01
+
+        $currentMonth = now()->startOfMonth()->toDateString(); // YYYY-MM-01
+
+        $agg = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            date_trunc('month', m.period)::date as period,
+            MAX(m.depr_code) as depr_code,
+            COUNT(DISTINCT m.asset_uuid) as asset_count,
+            COALESCE(SUM(m.depr_expense),0) as total_depr
+        ")
+            ->whereBetween('m.period', [$start, $end])
+            ->groupByRaw("date_trunc('month', m.period)::date");
+
+        $monthsSql = "(select generate_series(?::date, ?::date, interval '1 month')::date as period) as gs";
+
+        $q = DB::query()
+            ->fromRaw($monthsSql, [$start, $end])
+            ->leftJoinSub($agg, 'a', fn($j) => $j->on('a.period', '=', 'gs.period'))
+            ->leftJoin('assets_depr_month_closings as c', 'c.period', '=', 'gs.period')
+            ->leftJoin('assets_depr_month_closings as pc', function ($j) {
+                $j->on('pc.period', '=', DB::raw("(gs.period - interval '1 month')::date"));
+            })
+            ->selectRaw("
+            gs.period as period,
+            COALESCE(a.depr_code,'') as depr_code,
+            COALESCE(a.asset_count,0) as asset_count,
+            COALESCE(a.total_depr,0) as total_depr,
+
+            (c.period IS NOT NULL) as is_processed,
+            (pc.period IS NOT NULL) as prev_processed,
+
+            (gs.period = ?::date) as is_current,
+            (gs.period <= ?::date) as is_past_or_current
+        ", [$currentMonth, $currentMonth])
+            ->orderBy('gs.period', 'asc');
+
+        return DataTables::of($q)
+            ->addColumn('period_ym', fn($row) => Carbon::parse($row->period)->format('Y-m'))
+            ->addColumn('depr_code_display', function ($row) {
+                $d = Carbon::parse($row->period);
+                $generated = 'DEP' . $d->format('ym') . '0001';
+                return $row->depr_code ?: $generated;
+            })
+            ->addColumn('can_click', function ($row) {
+                $isProcessed      = (bool) $row->is_processed;
+                $prevProcessed    = (bool) $row->prev_processed;
+                $pastOrCurrent    = (bool) $row->is_past_or_current;
+
+                // ✅ boleh click kalau:
+                // - sudah processed, atau
+                // - bulan itu tidak future (<= current month) DAN prev month sudah processed
+                return $isProcessed || ($pastOrCurrent && $prevProcessed);
+            })
+            ->toJson();
+    }
+
+    public function initFirstRun(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+
+        $already = DB::table('assets_depr_month_closings')->limit(1)->exists()
+            || DB::table('assets_depr_ledger_monthly')->limit(1)->exists();
+
+        if ($already) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Initialize disabled: depreciation data already exists.',
+            ], 409);
+        }
+
+        $minEligible = DB::table('assets as a')
+            ->join('assets_value as av', 'av.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_depr_policy as p', 'p.asset_uuid', '=', 'a.uuid')
+            ->where('a.kode_status', '!=', 'DIS')
+            ->whereNotNull('av.capitalization_date')
+            ->selectRaw("
+            MIN(
+                CASE
+                    WHEN EXTRACT(DAY FROM av.capitalization_date) <= COALESCE(p.cutoff_day, 15)
+                        THEN (date_trunc('month', av.capitalization_date) + INTERVAL '0 month')::date
+                    ELSE (date_trunc('month', av.capitalization_date) + INTERVAL '1 month')::date
+                END
+            ) as min_eligible
+        ")
+            ->value('min_eligible');
+
+        if (!$minEligible) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Cannot initialize: no capitalization_date found in assets_value.',
+            ], 422);
+        }
+
+        $firstPeriod = Carbon::parse($minEligible)->startOfMonth();
+
+        try {
+            $this->processMonthlyDepr($firstPeriod);
+
+            return response()->json([
+                'ok' => true,
+                'period' => $firstPeriod->toDateString(),
+                'period_month' => $firstPeriod->format('Y-m'),
+                'message' => 'Initialized depreciation first run successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage() ?: 'Initialize failed.',
+            ], 500);
+        }
+    }
+
 
     public function dtPolicies(Request $r)
     {
@@ -67,16 +519,38 @@ class DepreciationController extends Controller
         if (!$this->canReadDepr()) {
             return DataTables::of(collect())->toJson();
         }
-        $period = $r->period
-            ? Carbon::parse($r->period)->startOfMonth()->toDateString()
-            : now()->startOfMonth()->toDateString();
 
-        $periodYear = (int)Carbon::parse($period)->year;
+        // =========================
+        // NEW: PERIOD RANGE FILTER
+        // =========================
+        // Expect: period_from=YYYY-MM, period_to=YYYY-MM
+        $periodFromMonth = trim((string) $r->input('period_from', '')); // ex: 2026-01
+        $periodToMonth   = trim((string) $r->input('period_to', ''));   // ex: 2026-03
+
+        // Default: current month only
+        $from = $periodFromMonth !== ''
+            ? Carbon::createFromFormat('Y-m', $periodFromMonth)->startOfMonth()
+            : now()->startOfMonth();
+
+        $to = $periodToMonth !== ''
+            ? Carbon::createFromFormat('Y-m', $periodToMonth)->startOfMonth()
+            : $from->copy();
+
+        // Normalize if reversed
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $fromDate = $from->toDateString(); // YYYY-MM-01
+        $toDate   = $to->toDateString();   // YYYY-MM-01
+
+        // For "Ending Balance prev year" join (single year reference)
+        $periodYear = (int) $to->year;
         $prevYear   = $periodYear - 1;
-        $periodDepr = $r->filled('period_depr')
-            ? Carbon::parse($r->period_depr)->startOfMonth()->toDateString()
-            : null;
 
+        // =========================
+        // QUERY
+        // =========================
         $q = AssetDeprMonthly::query()
             ->with('asset:uuid,asset_code,description,kode_status')
             ->leftJoin('assets_value as av', 'av.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
@@ -85,7 +559,8 @@ class DepreciationController extends Controller
                 $j->on('y.asset_uuid', '=', 'assets_depr_ledger_monthly.asset_uuid')
                     ->where('y.fiscal_year', '=', $prevYear);
             })
-            ->whereDate('assets_depr_ledger_monthly.period', $period)
+            // RANGE FILTER
+            ->whereBetween('assets_depr_ledger_monthly.period', [$fromDate, $toDate])
             ->select([
                 'assets_depr_ledger_monthly.uuid',
                 'assets_depr_ledger_monthly.asset_uuid',
@@ -106,81 +581,68 @@ class DepreciationController extends Controller
                 'y.ending_balance_year as ending_balance_prev_year',
                 DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
                 DB::raw("
-                    CASE
-                        WHEN av.capitalization_date IS NULL THEN NULL
-                        ELSE
-                        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date
-                    END AS period_depr
-                "),
-                DB::raw("
-                    COALESCE(
-                        NULLIF(p.useful_life_months, 0),
-                        NULLIF(av.useful_life_month, 0),
-                        CASE WHEN av.useful_life_year IS NOT NULL
-                            THEN (av.useful_life_year * 12)::int
-                            ELSE 0 END,
-                        0
-                    ) AS useful_life_months
-                "),
-                DB::raw("
-                GREATEST(
-                  COALESCE(
-                    (
-                      -- total life in months
-                      COALESCE(
-                        NULLIF(p.useful_life_months, 0),
-                        NULLIF(av.useful_life_month, 0),
-                        CASE WHEN av.useful_life_year IS NOT NULL
-                             THEN (av.useful_life_year * 12)::int
-                             ELSE 0 END,
-                        0
-                      )
-                      -
-                      (
-                        CASE
-                          -- compute eligible start: month after cutoff window
-                          WHEN p.depr_start_date IS NULL THEN 0
-                          ELSE
-                            CASE
-                              WHEN date_trunc('month', assets_depr_ledger_monthly.period) <
-                                (
-                                  CASE
-                                    WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
-                                      THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                    ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                  END
-                                )
-                              THEN 0
-                              ELSE
-                                -- INCLUSIVE elapsed months from eligibleStart to period: diff + 1
-                                (
-                                  (DATE_PART('year', AGE(
-                                      date_trunc('month', assets_depr_ledger_monthly.period),
-                                      CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
-                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                      END
-                                  ))::int * 12)
-                                  +
-                                  DATE_PART('month', AGE(
-                                      date_trunc('month', assets_depr_ledger_monthly.period),
-                                      CASE
-                                        WHEN EXTRACT(DAY FROM p.depr_start_date) <= COALESCE(p.cutoff_day,16)
-                                          THEN (date_trunc('month', p.depr_start_date) + INTERVAL '1 month')::date
-                                        ELSE (date_trunc('month', p.depr_start_date) + INTERVAL '2 month')::date
-                                      END
-                                  ))::int
-                                  + 1
-                                )
-                            END
-                        END
-                      )
-                    ),
-                    0
-                  ),
-                0) AS remaining_useful_life_months
+                CASE
+                    WHEN av.capitalization_date IS NULL THEN NULL
+                    ELSE
+                    (date_trunc('month', assets_depr_ledger_monthly.period))::date
+                END AS period_depr
             "),
+                DB::raw("
+                COALESCE(
+                    NULLIF(p.useful_life_months, 0),
+                    NULLIF(av.useful_life_month, 0),
+                    CASE WHEN av.useful_life_year IS NOT NULL
+                        THEN (av.useful_life_year * 12)::int
+                        ELSE 0 END,
+                    0
+                ) AS useful_life_months
+            "),
+                DB::raw("
+CASE
+  WHEN COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at) IS NULL
+    THEN 0
+  ELSE
+    GREATEST(
+      (
+        COALESCE(
+          NULLIF(p.useful_life_months, 0),
+          NULLIF(av.useful_life_month, 0),
+          CASE WHEN av.useful_life_year IS NOT NULL THEN (av.useful_life_year * 12)::int ELSE 0 END,
+          60
+        )
+        -
+        SUM(
+          CASE
+            -- sebelum eligible start: jangan dihitung
+            WHEN date_trunc('month', assets_depr_ledger_monthly.period)::date <
+              CASE
+                WHEN EXTRACT(DAY FROM COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) <= COALESCE(p.cutoff_day, 15)
+                  THEN date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at))::date
+                ELSE (date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) + INTERVAL '1 month')::date
+              END
+              THEN 0
+
+            -- eligible tapi belum ada posting depresiasi: jangan mengurangi RUL
+            WHEN (
+              COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) = 0
+              AND COALESCE(assets_depr_ledger_monthly.depr_expense, 0) = 0
+              AND COALESCE(assets_depr_ledger_monthly.adjustment_depreciation, 0) = 0
+            ) THEN 0
+
+            -- bulan yang benar-benar “kepakai” (posted)
+            ELSE 1
+          END
+        ) OVER (
+          PARTITION BY assets_depr_ledger_monthly.asset_uuid
+          ORDER BY assets_depr_ledger_monthly.period
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )
+      ),
+      0
+    )
+END
+AS remaining_useful_life_months
+")
             ]);
 
         if ($status = $r->get('asset_status')) {
@@ -196,13 +658,6 @@ class DepreciationController extends Controller
             $q->whereDate('av.capitalization_date', '<=', $capTo);
         }
 
-        if ($periodDepr) {
-            $q->whereNotNull('av.capitalization_date')
-                ->whereRaw("
-        (date_trunc('month', assets_depr_ledger_monthly.period) - INTERVAL '1 month')::date = ?
-      ", [$periodDepr]);
-        }
-
         if ($assetQ = trim((string) $r->get('asset_q', ''))) {
             $q->whereHas('asset', function ($qa) use ($assetQ) {
                 $qa->where('asset_code', 'ilike', "%{$assetQ}%")
@@ -210,7 +665,9 @@ class DepreciationController extends Controller
             });
         }
 
+        // Total depreciation for current filtered range
         $totalDepr = (clone $q)->sum('assets_depr_ledger_monthly.depr_expense');
+
         return DataTables::of($q)
             ->addColumn('asset_code', fn($row) => $row->asset?->asset_code)
             ->addColumn('asset_name', fn($row) => $row->asset?->description)
@@ -256,6 +713,7 @@ class DepreciationController extends Controller
             ->with('total_depr', (float) $totalDepr)
             ->toJson();
     }
+
 
     public function dtYearly(Request $r)
     {
@@ -318,12 +776,16 @@ class DepreciationController extends Controller
     //         $from->addMonth();
     //     }
     // }
-    private function ensurePrevMonthProcessed(\Carbon\Carbon $period): void
+    private function ensurePrevMonthProcessed(Carbon $period): void
     {
         $prev = $period->copy()->subMonth()->startOfMonth();
 
-        // kalau prev month belum ada record sama sekali => belum diproses
-        $exists = \App\Models\AssetDeprMonthly::query()
+        // Kalau bulan sebelumnya memang tidak ada aset eligible, jangan dipaksa ada closing.
+        if (! $this->monthHasEligibleAssets($prev)) {
+            return;
+        }
+
+        $exists = AssetDeprMonthClosing::query()
             ->whereDate('period', $prev->toDateString())
             ->exists();
 
@@ -337,38 +799,30 @@ class DepreciationController extends Controller
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
 
         $periodInput = $request->input('period');
-
         $period = $periodInput
-            ? \Carbon\Carbon::parse($periodInput)->startOfMonth()
+            ? Carbon::parse($periodInput)->startOfMonth()
             : now()->startOfMonth();
 
         try {
-            // blokir jika prev month belum diproses
-            $this->ensurePrevMonthProcessed($period);
+            $this->guardWritablePeriod($period, 'runMonth', [
+                'require_prev_month' => true,
+                'enforce_first_run_min_eligible' => true,
+            ]);
 
             $this->processMonthlyDepr($period);
 
             return response()->json([
-                'ok'     => true,
+                'ok' => true,
                 'period' => $period->toDateString(),
             ]);
         } catch (\Throwable $e) {
-            // khusus error prev-month
-            if (str_starts_with($e->getMessage(), 'PREV_MONTH_NOT_PROCESSED|')) {
-                $need = explode('|', $e->getMessage())[1] ?? null;
+            if ($resp = $this->renderGuardError($e)) return $resp;
 
-                return response()->json([
-                    'ok'               => false,
-                    'code'             => 'PREV_MONTH_NOT_PROCESSED',
-                    'message'          => 'Previous month depreciation must be processed first.',
-                    'need_period'      => $need, // "YYYY-MM-01"
-                    'need_period_text' => $need ? \Carbon\Carbon::parse($need)->isoFormat('MMMM YYYY') : null,
-                ], 422);
-            }
-
+            report($e);
             return response()->json([
-                'ok'      => false,
-                'message' => $e->getMessage(),
+                'ok' => false,
+                'code' => 'SERVER_ERROR',
+                'message' => $e->getMessage() ?: 'Failed to process depreciation.',
             ], 500);
         }
     }
@@ -420,7 +874,7 @@ class DepreciationController extends Controller
                         'salvage_value'      => 0,
                         'depr_start_date'    => Carbon::parse($startFromAv)->toDateString(),
                         'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                        'cutoff_day'         => 16,
+                        'cutoff_day'         => 15,
                         'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
                         'is_active'          => true,
                     ]);
@@ -506,7 +960,7 @@ class DepreciationController extends Controller
 
                 $eligibleStart = $startBase
                     ? Carbon::parse($startBase)->startOfMonth()->addMonths(
-                        (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 16)) ? 1 : 2
+                        (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 15)) ? 0 : 1
                     )
                     : $period;
 
@@ -539,15 +993,7 @@ class DepreciationController extends Controller
                     + $adjDepr;
 
                 $accEnd = $accPrev + $deprExpense + $adjDepr;
-                $prefix = 'DEP' . $period->format('ym');
-
-                $last = AssetDeprMonthly::whereNotNull('depr_code')
-                    ->where('depr_code', 'like', $prefix . '%')
-                    ->orderBy('depr_code', 'desc')
-                    ->first();
-
-                $seq = $last ? ((int) substr($last->depr_code, -4) + 1) : 1;
-                $txCode = $prefix . str_pad($seq, 4, '0', STR_PAD_LEFT);
+                $txCode = 'DEP' . $period->format('ym') . '0001';
 
                 AssetDeprMonthly::updateOrCreate(
                     [
@@ -569,9 +1015,26 @@ class DepreciationController extends Controller
                     ]
                 );
             }
+
+            $rowCount = AssetDeprMonthly::query()
+                ->whereDate('period', $period->toDateString())
+                ->count();
+
+            AssetDeprMonthClosing::updateOrCreate(
+                ['period' => $period->toDateString()],
+                [
+                    'row_count' => (int) $rowCount,
+                    'processed_by' => auth()->user()?->name,
+                    'processed_at' => now(),
+                ]
+            );
         });
     }
-
+    private function canForceBuildYear(): bool
+    {
+        $u = auth()->user();
+        return $u && $u->hasAction('DEPRECIATION', 'FORCE_BUILD_YEAR');
+    }
     public function buildYear(Request $request)
     {
         abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
@@ -581,6 +1044,86 @@ class DepreciationController extends Controller
         ]);
 
         $year = (int) $data['year'];
+        $nowYear = (int) now()->year;
+        $nowMonth = (int) now()->month;
+
+        try {
+            // 1) year must be open
+            $this->assertYearOpen($year, 'buildYear');
+
+            // 2) chain gate: prev year must be built unless empty eligible
+            $this->assertPrevYearBuiltUnlessEmpty($year, 'buildYear');
+
+            // 3) must have Dec processed (or skip if year has no eligible assets per your helper)
+            $this->assertDecemberProcessed($year);
+
+            // 4) time rule: only applies when building CURRENT year
+            if ($year === $nowYear && $nowMonth !== 12) {
+                throw new \RuntimeException("BUILD_YEAR_ONLY_DECEMBER_CURRENT|{$year}");
+            }
+
+            // (optional) block future year
+            if ($year > $nowYear) {
+                throw new \RuntimeException("BUILD_YEAR_FUTURE_NOT_ALLOWED|{$year}");
+            }
+        } catch (\Throwable $e) {
+
+            if (str_starts_with($e->getMessage(), 'BUILD_YEAR_ONLY_DECEMBER_CURRENT|')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'BUILD_YEAR_ONLY_DECEMBER_CURRENT',
+                    'message' => "Build Year {$year} hanya boleh dilakukan di bulan Desember untuk tahun berjalan.",
+                    'year' => $year,
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'PREV_YEAR_NOT_BUILT|')) {
+                [$_, $needPrev, $targetYear] = array_pad(explode('|', $e->getMessage()), 4, null);
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'PREV_YEAR_NOT_BUILT',
+                    'message' => "Year {$targetYear} tidak bisa dibuild sebelum Build Year {$needPrev}.",
+                    'need_build_year' => (int) $needPrev,
+                    'target_year' => (int) $targetYear,
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'YEAR_LOCKED|')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'YEAR_LOCKED',
+                    'message' => "Year {$year} sudah di-build & dikunci. Rollback dulu kalau mau ubah.",
+                    'year' => $year,
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'DECEMBER_NOT_PROCESSED|')) {
+                $need = explode('|', $e->getMessage())[1] ?? null;
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'DECEMBER_NOT_PROCESSED',
+                    'message' => 'Build Year butuh periode Desember sudah diproses dulu.',
+                    'need_period' => $need,
+                    'need_period_text' => $need ? Carbon::parse($need)->isoFormat('MMMM YYYY') : null,
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'BUILD_YEAR_FUTURE_NOT_ALLOWED|')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'BUILD_YEAR_FUTURE_NOT_ALLOWED',
+                    'message' => "Tidak bisa Build Year untuk tahun masa depan.",
+                    'year' => $year,
+                ], 422);
+            }
+
+            report($e);
+            return response()->json([
+                'ok' => false,
+                'code' => 'SERVER_ERROR',
+                'message' => $e->getMessage() ?: 'Build year failed.',
+            ], 500);
+        }
 
         DB::transaction(function () use ($year) {
             $start = "{$year}-01-01";
@@ -616,14 +1159,134 @@ class DepreciationController extends Controller
                     ]
                 );
             }
+
+            AssetDeprYearClosing::updateOrCreate(
+                ['fiscal_year' => $year],
+                [
+                    'is_locked' => true,
+                    'built_by'  => auth()->user()?->name,
+                    'built_at'  => now(),
+                ]
+            );
         });
 
         return response()->json([
             'ok'      => true,
-            'message' => "Yearly summary built for {$year}",
+            'message' => "Year {$year} built & locked.",
             'year'    => $year,
         ]);
     }
+    public function yearStatus(Request $r)
+    {
+        abort_unless($this->canReadDepr(), 403);
+
+        $year = (int) ($r->input('year') ?: now()->year);
+        $nowYear = (int) now()->year;
+        $nowMonth = (int) now()->month;
+
+        $locked = AssetDeprYearClosing::query()
+            ->where('fiscal_year', $year)
+            ->where('is_locked', true)
+            ->exists();
+
+        // Dec processed? (or year has no eligible assets -> treat as OK)
+        $dec = Carbon::create($year, 12, 1)->startOfMonth()->toDateString();
+        $hasEligible = $this->yearHasEligiblePeriods($year);
+        $decProcessed = !$hasEligible ? true : AssetDeprMonthClosing::query()->whereDate('period', $dec)->exists();
+
+        // Chain gate ok?
+        $prevOk = true;
+        try {
+            $this->assertPrevYearBuiltUnlessEmpty($year, 'yearStatus');
+        } catch (\Throwable $e) {
+            $prevOk = false;
+        }
+
+        // Time rule: only for current year
+        $timeOk = true;
+        if ($year === $nowYear) {
+            $timeOk = ($nowMonth === 12);
+        }
+        if ($year > $nowYear) {
+            $timeOk = false;
+        }
+
+        $canBuildNow = (!$locked) && $decProcessed && $prevOk && $timeOk;
+
+        return response()->json([
+            'ok' => true,
+            'year' => $year,
+            'locked' => $locked,
+            'december_processed' => $decProcessed,
+            'need_dec_period' => $dec,
+            'prev_year_ok' => $prevOk,
+            'time_ok' => $timeOk,
+            'can_build_now' => $canBuildNow,
+            'now_year' => $nowYear,
+            'now_month' => $nowMonth,
+        ]);
+    }
+
+
+    public function rollbackYear(Request $request)
+    {
+        abort_unless($request->user()?->hasAction('DEPRECIATION', 'C'), 403);
+
+        $data = $request->validate([
+            'year' => ['required', 'integer', 'min:1900', 'max:3000'],
+        ]);
+
+        $year = (int) $data['year'];
+
+        try {
+            $this->assertSequentialRollback($year);
+        } catch (\Throwable $e) {
+
+            if (str_starts_with($e->getMessage(), 'ROLLBACK_NO_LOCKED_YEAR')) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'ROLLBACK_NO_LOCKED_YEAR',
+                    'message' => "Tidak ada year yang sedang LOCKED untuk di-rollback.",
+                ], 422);
+            }
+
+            if (str_starts_with($e->getMessage(), 'ROLLBACK_MUST_BE_LATEST_LOCKED|')) {
+                $need = explode('|', $e->getMessage())[1] ?? null;
+
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'ROLLBACK_MUST_BE_LATEST_LOCKED',
+                    'message' => "Rollback tidak boleh loncat. Harus rollback locked year paling terakhir: {$need}.",
+                    'latest_locked_year' => $need !== null ? (int) $need : null,
+                ], 422);
+            }
+
+            throw $e;
+        }
+
+        DB::transaction(function () use ($year) {
+            AssetDeprYearly::query()
+                ->where('fiscal_year', $year)
+                ->delete();
+
+            AssetDeprYearClosing::updateOrCreate(
+                ['fiscal_year' => $year],
+                [
+                    'is_locked' => false,
+                    'rolled_back_by' => auth()->user()?->name,
+                    'rolled_back_at' => now(),
+                ]
+            );
+        });
+
+        return response()->json([
+            'ok' => true,
+            'message' => "Year {$year} unlocked (rollback build year).",
+            'year' => $year,
+        ]);
+    }
+
+
 
     public function recordAddition(Request $r)
     {
@@ -705,36 +1368,89 @@ class DepreciationController extends Controller
 
     public function recordAdjustmentDepreciation(Request $r)
     {
+        abort_unless($r->user()?->hasAction('DEPRECIATION', 'C'), 403);
+
         $data = $r->validate([
             'asset_uuid'  => ['required', 'uuid'],
-            'amount'      => ['required', 'numeric', 'not_in:0'], // allow + / -, disallow 0
+            'amount'      => ['required', 'numeric', 'not_in:0'],
             'actual_date' => ['required', 'date'],
             'note'        => ['nullable', 'string', 'max:300'],
         ]);
 
-        $period = Carbon::parse($data['actual_date'])->startOfMonth();
+        $actual  = Carbon::parse($data['actual_date']);
+        $period  = $actual->copy()->startOfMonth();
+        $current = now()->startOfMonth();
 
-        AssetDeprMovement::create([
-            'asset_uuid'        => $data['asset_uuid'],
-            'period'            => $period,
-            'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-            'amount'            => (float) $data['amount'],
-            'depr_start_period' => $period,
-            'source_type'       => 'manual',
-            'note'              => $data['note'] ?? null,
-        ]);
+        // Rule: hanya periode berjalan
+        if (! $period->equalTo($current)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'ADJ_ONLY_CURRENT_PERIOD',
+                'message' => 'Adjustment Depreciation hanya bisa dilakukan di periode berjalan.',
+                'need_period' => $current->toDateString(),
+                'need_period_text' => $current->isoFormat('MMMM YYYY'),
+            ], 422);
+        }
 
-        // Recompute depreciation for the affected month
-        $this->processMonthlyDepr($period);
+        try {
+            // optional: pastikan current month sudah pernah diproses
+            $currentClosingExists = AssetDeprMonthClosing::query()
+                ->whereDate('period', $period->toDateString())
+                ->exists();
 
-        return response()->json(['ok' => true, 'message' => 'Depreciation adjustment recorded']);
+            if (! $currentClosingExists) {
+                return response()->json([
+                    'ok' => false,
+                    'code' => 'CURRENT_MONTH_NOT_PROCESSED',
+                    'message' => 'Periode berjalan belum diproses. Jalankan "Process Depreciation Month" dulu.',
+                    'need_period' => $period->toDateString(),
+                    'need_period_text' => $period->isoFormat('MMMM YYYY'),
+                ], 422);
+            }
+
+            // Guard: year lock + chain gate + prev-month processed (skip kalau prev-month kosong)
+            $this->guardWritablePeriod($period, 'adjDepr', [
+                'require_prev_month' => true,
+                'enforce_first_run_min_eligible' => false,
+            ]);
+
+            AssetDeprMovement::create([
+                'asset_uuid'        => $data['asset_uuid'],
+                'period'            => $period,
+                'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                'amount'            => (float) $data['amount'],
+                'depr_start_period' => $period,
+                'source_type'       => 'manual',
+                'note'              => $data['note'] ?? null,
+            ]);
+
+            // recompute month
+            $this->processMonthlyDepr($period);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Depreciation adjustment recorded (current period).',
+                'period' => $period->toDateString(),
+            ]);
+        } catch (\Throwable $e) {
+            if ($resp = $this->renderGuardError($e)) return $resp;
+
+            report($e);
+            return response()->json([
+                'ok' => false,
+                'code' => 'SERVER_ERROR',
+                'message' => $e->getMessage() ?: 'Failed to save adjustment.',
+            ], 500);
+        }
     }
+
+
     private function writeMovementWithCutoff(array $data, string $category)
     {
         $period = Carbon::parse($data['actual_date'])->startOfMonth();
         $policy = AssetDeprPolicy::where('asset_uuid', $data['asset_uuid'])->where('is_active', true)->first();
 
-        $deprStart = $this->calcDeprStartPeriod($data['actual_date'], $policy?->cutoff_day ?? 16);
+        $deprStart = $this->calcDeprStartPeriod($data['actual_date'], $policy?->cutoff_day ?? 15);
 
         AssetDeprMovement::create([
             'asset_uuid'        => $data['asset_uuid'],
@@ -751,13 +1467,14 @@ class DepreciationController extends Controller
         return response()->json(['ok' => true, 'message' => "{$category} recorded"]);
     }
 
-    private function calcDeprStartPeriod(string|\DateTimeInterface $startDate, ?int $cutoffDay = 16): string
+    private function calcDeprStartPeriod(string|\DateTimeInterface $startDate, ?int $cutoffDay = 15): string
     {
-        $cutoffDay = $cutoffDay ?: 16;
+        $cutoffDay = $cutoffDay ?: 15;
         $d = Carbon::parse($startDate);
-        $addMonths = ($d->day <= $cutoffDay) ? 1 : 2;
+        $addMonths = ($d->day <= $cutoffDay) ? 0 : 1;
         return $d->copy()->startOfMonth()->addMonths($addMonths)->toDateString();
     }
+
 
     private function monthsElapsed(string|\DateTimeInterface $startDate, Carbon $period, string $convention): int
     {
@@ -897,9 +1614,9 @@ class DepreciationController extends Controller
         }
 
         $startDate = Carbon::parse($policy->depr_start_date);
-        $cutoff    = $policy->cutoff_day ?? 16;
+        $cutoff    = $policy->cutoff_day ?? 15;
 
-        $addMonths     = ($startDate->day <= $cutoff) ? 1 : 2;
+        $addMonths = ($startDate->day <= $cutoff) ? 0 : 1;
         $eligibleStart = $startDate->copy()->startOfMonth()->addMonths($addMonths);
 
         $effectiveStart = $eligibleStart->gt($yearStart) ? $eligibleStart : $yearStart;
@@ -911,6 +1628,13 @@ class DepreciationController extends Controller
         return $effectiveStart->diffInMonths($monthBefore) + 1;
     }
 
+    // ============================================================
+    // applyTransfer() – rewritten based on Excel formulas
+    // Rumus 1 (AP col) = tf-val
+    // Rumus 2 (AU col) = acq-fix
+    // Rumus 3 (AY col) = carry_over_gross_accum
+    // ============================================================
+
     private function applyTransfer(array $data): string
     {
         $type   = $data['transfer_type'] ?? 'tf-val';
@@ -919,59 +1643,210 @@ class DepreciationController extends Controller
 
         $fromPolicy = AssetDeprPolicy::where('asset_uuid', $data['from_asset_uuid'])->where('is_active', true)->first();
         $toPolicy   = AssetDeprPolicy::where('asset_uuid', $data['to_asset_uuid'])->where('is_active', true)->first();
-        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 16);
-        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 16);
+        $fromStart  = $this->calcDeprStartPeriod($data['actual_date'], $fromPolicy?->cutoff_day ?? 15);
+        $toStart    = $this->calcDeprStartPeriod($data['actual_date'], $toPolicy?->cutoff_day ?? 15);
 
-        // === Case 2: Acquisition Fix (acq_fix) ===
-        if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
+        // ============================================================
+        // RUMUS 1 (AP): tf-val  – transfer nilai gross saja
+        // ============================================================
+        // Variabel:
+        //   UpdateAcquisitionA = AcquisitionA + Transfer
+        //   UpdateAcquisitionB = AcquisitionB - Transfer
+        //   AD_A = AccumulatedDepreciation bulan sebelum transfer (positif)
+        //   AD_B = AccumulatedDepreciation bulan sebelum transfer (positif)
+        //   RUL_A = Remaining Usefull Life bulan sebelum transfer
+        //   RUL_B = Remaining Usefull Life bulan sebelum transfer
+        //
+        // Tidak ada AdjustmentDepreciation (AP = 0).
+        //
+        // Update Depreciation Bulanan (dipakai periode transfer dan seterusnya):
+        //   if (RUL_A > 0) DepresiasiBulananA = (UpdateAcquisitionA - AD_A) / RUL_A
+        //   else           DepresiasiBulananA = 0
+        //   if (RUL_B > 0) DepresiasiBulananB = (UpdateAcquisitionB - AD_B) / RUL_B
+        //   else           DepresiasiBulananB = 0
+        //
+        // Update Acquisition:
+        //   UpdateAcquisitionA = AcquisitionA + Transfer  → update assets_value A
+        //   UpdateAcquisitionB = AcquisitionB - Transfer  → update assets_value B
+        //
+        // Update Price & PPN (jika ada):
+        //   if VatInA: VatInA = transfer*11%; NewPrice = transfer - VatInA + OldPriceA; NewVatInA = VatInOldA + VatInA
+        //   else:      NewPriceA = PriceA + Transfer
+        //   if VatInB: VatInB = transfer*11%; NewPriceB = transfer - VatInB - OldPriceB; NewVatInB = VatInOldB - VatInB
+        //   else:      NewPriceB = PriceB - Transfer
+        // ============================================================
+        if ($type === 'tf-val') {
 
-            $amount = (float) $data['amount'];
+            $transfer = (float) $data['amount'];
 
-            $fromTotal = (float) DB::table('assets_value')
-                ->where('asset_uuid', $data['from_asset_uuid'])
-                ->value('total');
+            // Ambil data prev month untuk A dan B
+            $prevA = $this->lastClosedRowBeforeMonth($data['to_asset_uuid'], $period);   // A = penerima
+            $prevB = $this->lastClosedRowBeforeMonth($data['from_asset_uuid'], $period); // B = pemberi
 
-            if ($amount > $fromTotal) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Amount exceeds gross value of the source asset.',
-                ]);
-            }
+            $adA  = (float) ($prevA?->accumulated_depr_end ?? 0); // AD_A positif
+            $adB  = (float) ($prevB?->accumulated_depr_end ?? 0); // AD_B positif
+            $rulA = (float) ($prevA?->remaining_useful_life_months
+                ?? $toPolicy?->useful_life_months
+                ?? 0);
+            $rulB = (float) ($prevB?->remaining_useful_life_months
+                ?? $fromPolicy?->useful_life_months
+                ?? 0);
 
-            if (!$fromPolicy || !$toPolicy) {
-                throw ValidationException::withMessages([
-                    'from_asset_uuid' => 'Both assets must have active depreciation policies for acquisition correction.',
-                ]);
-            }
+            // Gross acquisition saat ini
+            $acqA = (float) DB::table('assets_value')->where('asset_uuid', $data['to_asset_uuid'])->value('total');
+            $acqB = (float) DB::table('assets_value')->where('asset_uuid', $data['from_asset_uuid'])->value('total');
 
-            $fromLife = (int) ($fromPolicy->useful_life_months ?: 0);
-            $toLife   = (int) ($toPolicy->useful_life_months   ?: 0);
+            $updateAcqA = $acqA + $transfer;
+            $updateAcqB = $acqB - $transfer;
 
-            if ($fromLife <= 0 || $toLife <= 0) {
-                throw ValidationException::withMessages([
-                    'amount' => 'Useful life (months) must be set for both assets for acquisition correction.',
-                ]);
-            }
+            // Depreciation bulanan baru (dihitung, disimpan ke policy/ledger di processMonthlyDepr)
+            $deprBulananA = ($rulA > 0) ? ($updateAcqA - $adA) / $rulA : 0.0;
+            $deprBulananB = ($rulB > 0) ? ($updateAcqB - $adB) / $rulB : 0.0;
 
-            $fromRate = $amount / $fromLife;
-            $toRate   = $amount / $toLife;
-
-            $monthsFromYtd = $this->componentMonthsYtd($fromPolicy, $period);
-            $monthsToYtd   = $this->componentMonthsYtd($toPolicy, $period);
-
-            $depFromYtd = $fromRate * $monthsFromYtd;
-            $depToYtd   = $toRate   * $monthsToYtd;
-
-            $adjDepA = $depToYtd;
-            $adjDepB = -$depFromYtd;
-
-            DB::transaction(function () use ($data, $period, $group, $amount, $fromStart, $toStart, $adjDepA, $adjDepB) {
-
-                // Gross out FROM
+            DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart, $transfer) {
+                // Gross OUT dari B (pemberi)
                 AssetDeprMovement::create([
                     'asset_uuid'        => $data['from_asset_uuid'],
                     'period'            => $period,
                     'category'          => AssetDeprMovement::TRANSFER_OUT,
-                    'amount'            => $amount,
+                    'amount'            => $transfer,
+                    'depr_start_period' => $fromStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => $data['note'] ?? null,
+                ]);
+
+                // Gross IN ke A (penerima)
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['to_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_IN,
+                    'amount'            => $transfer,
+                    'depr_start_period' => $toStart,
+                    'group_uuid'        => $group,
+                    'source_type'       => $data['source_type'] ?? 'manual',
+                    'source_uuid'       => $data['source_uuid'] ?? null,
+                    'note'              => $data['note'] ?? null,
+                ]);
+
+                // Tidak ada AdjustmentDepreciation untuk tf-val (AP = 0)
+
+                // Update Acquisition di assets_value
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['to_asset_uuid'])
+                    ->increment('total', $transfer);
+
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['from_asset_uuid'])
+                    ->decrement('total', $transfer);
+            });
+
+            return 'Transfer (tf-val) recorded';
+        }
+
+
+        // ============================================================
+        // RUMUS 2 (AU): acq-fix  – transfer nilai + koreksi accumulated depreciation
+        // ============================================================
+        // Variabel:
+        //   A = asset penerima (to_asset), B = asset pemberi (from_asset)
+        //   UL_A = useful life A,  UL_B = useful life B
+        //   RUL_A = remaining useful life A bulan sebelumnya (prev month)
+        //   RUL_B = remaining useful life B bulan sebelumnya (prev month)
+        //   X = UL_A - RUL_A
+        //   Y = UL_B - RUL_B
+        //   gaplife = X - Y
+        //
+        // if gaplife >= 0:
+        //   AdjMonthA   = UL_A - gaplife          (= AO_A + Y)
+        //   CurrentUL_B = UL_B
+        //   CurrentY    = Y
+        //   CurrentGapLife = gaplife
+        // else:
+        //   CurrentUL_B    = UL_B + gaplife
+        //   CurrentY       = CurrentUL_B - RUL_B
+        //   CurrentGapLife = X - CurrentY
+        //   AdjMonthA      = UL_A - CurrentGapLife
+        //
+        // AdjDepresiasiA = (Transfer / AdjMonthA) * (X - CurrentGapLife)
+        //   → positif: menambah accumulated A  [PHP: amount = +adjA]
+        // AdjDepresiasiB = -(Transfer / CurrentUL_B) * CurrentY
+        //   → negatif: mengurangi accumulated B [PHP: amount = adjB (negatif)]
+        //
+        // Depreciation Bulanan baru:
+        //   if RUL_A > 0: DepresiasiBulananA = (Transfer / AdjMonthA) + (AcquisitionA / UL_A)
+        //   else:         DepresiasiBulananA = 0
+        //   if RUL_B > 0: DepresiasiBulananB = UpdateAcquisitionB / CurrentUL_B
+        //   else:         DepresiasiBulananB = 0
+        //
+        // Update Acquisition:
+        //   UpdateAcquisitionA = AcquisitionA + Transfer
+        //   UpdateAcquisitionB = AcquisitionB - Transfer
+        // ============================================================
+        if ($type === self::TRANSFER_TYPE_ACQ_FIX) {
+
+            $transfer = (float) $data['amount'];
+
+            if (!$toPolicy || !$fromPolicy) {
+                throw ValidationException::withMessages([
+                    'from_asset_uuid' => 'Both assets must have active depreciation policies for acq-fix.',
+                ]);
+            }
+
+            $ulA = (int) ($toPolicy->useful_life_months   ?: 60);
+            $ulB = (int) ($fromPolicy->useful_life_months ?: 60);
+
+            // RUL dari ledger bulan sebelumnya
+            $rulA = $this->remainingUsefulLifePrevMonth($data['to_asset_uuid'],   $toPolicy,   $period);
+            $rulB = $this->remainingUsefulLifePrevMonth($data['from_asset_uuid'], $fromPolicy, $period);
+
+            // Expired life
+            $X = $ulA - $rulA;
+            $Y = $ulB - $rulB;
+            $gaplife = $X - $Y;
+
+            if ($gaplife >= 0) {
+                $adjMonthA      = $ulA - $gaplife;   // = RUL_A + Y
+                $currentULB     = $ulB;
+                $currentY       = $Y;
+                $currentGapLife = $gaplife;
+            } else {
+                $currentULB     = $ulB + $gaplife;
+                $currentY       = $currentULB - $rulB;
+                $currentGapLife = $X - $currentY;
+                $adjMonthA      = $ulA - $currentGapLife;
+            }
+
+            if ($adjMonthA <= 0 || $currentULB <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Invalid acq-fix: AdjMonthA atau CurrentULB <= 0.',
+                ]);
+            }
+
+            // Adj depreciation
+            $adjDeprA = ($transfer / $adjMonthA) * ($X - $currentGapLife);  // positif → tambah accum A
+            $adjDeprB = - ($transfer / $currentULB) * $currentY;             // negatif → kurangi accum B
+
+            // Acquisisi terbaru
+            $acqA = (float) DB::table('assets_value')->where('asset_uuid', $data['to_asset_uuid'])->value('total');
+
+            DB::transaction(function () use (
+                $data,
+                $period,
+                $group,
+                $fromStart,
+                $toStart,
+                $transfer,
+                $adjDeprA,
+                $adjDeprB
+            ) {
+                // Gross OUT dari B
+                AssetDeprMovement::create([
+                    'asset_uuid'        => $data['from_asset_uuid'],
+                    'period'            => $period,
+                    'category'          => AssetDeprMovement::TRANSFER_OUT,
+                    'amount'            => $transfer,
                     'depr_start_period' => $fromStart,
                     'group_uuid'        => $group,
                     'source_type'       => $data['source_type'] ?? 'manual',
@@ -979,11 +1854,12 @@ class DepreciationController extends Controller
                     'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross OUT'),
                 ]);
 
+                // Gross IN ke A
                 AssetDeprMovement::create([
                     'asset_uuid'        => $data['to_asset_uuid'],
                     'period'            => $period,
                     'category'          => AssetDeprMovement::TRANSFER_IN,
-                    'amount'            => $amount,
+                    'amount'            => $transfer,
                     'depr_start_period' => $toStart,
                     'group_uuid'        => $group,
                     'source_type'       => $data['source_type'] ?? 'manual',
@@ -991,149 +1867,209 @@ class DepreciationController extends Controller
                     'note'              => trim(($data['note'] ?? '') . ' | acq-fix gross IN'),
                 ]);
 
-                if (abs($adjDepB) > 0.0001) {
-                    AssetDeprMovement::create([
-                        'asset_uuid'        => $data['from_asset_uuid'],
-                        'period'            => $period,
-                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepB,
-                        'depr_start_period' => $period,
-                        'group_uuid'        => $group,
-                        'source_type'       => $data['source_type'] ?? 'manual',
-                        'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix reverse YTD'),
-                    ]);
-                }
-
-                if (abs($adjDepA) > 0.0001) {
+                // AdjDepresiasiA → tambah accumulated A (positif)
+                if (abs($adjDeprA) > 0.001) {
                     AssetDeprMovement::create([
                         'asset_uuid'        => $data['to_asset_uuid'],
                         'period'            => $period,
                         'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                        'amount'            => $adjDepA,
+                        'amount'            => round($adjDeprA, 2),
                         'depr_start_period' => $period,
                         'group_uuid'        => $group,
                         'source_type'       => $data['source_type'] ?? 'manual',
                         'source_uuid'       => $data['source_uuid'] ?? null,
-                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix add YTD'),
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix adj accum A'),
                     ]);
                 }
+
+                // AdjDepresiasiB → kurangi accumulated B (negatif)
+                if (abs($adjDeprB) > 0.001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['from_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => round($adjDeprB, 2),
+                        'depr_start_period' => $period,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | acq-fix adj accum B'),
+                    ]);
+                }
+
+                // Update Acquisition di assets_value
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['to_asset_uuid'])
+                    ->increment('total', $transfer);
+
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['from_asset_uuid'])
+                    ->decrement('total', $transfer);
             });
 
-            return 'Acquisition correction transfer recorded';
+            return 'Acquisition-fix transfer recorded';
         }
 
-        // === Case 3: Carry-over (gross + accum) ===
-        if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
-            $info = $this->computeCarryOver($data['from_asset_uuid'], Carbon::parse($data['actual_date']), (float)$data['amount']);
-            if ((float)$data['amount'] > $info['cap_remaining']) {
-                throw ValidationException::withMessages([
-                    'amount' => sprintf(
-                        'Amount exceeds gross remaining. Total: %s, Lifetime transferred: %s, Remaining: %s.',
-                        number_format($info['total_gross'], 2),
-                        number_format($info['total_gross'] - $info['cap_remaining'], 2),
-                        number_format($info['cap_remaining'], 2)
-                    )
-                ]);
-            }
 
-            DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart, $info) {
-                // FROM
+        // ============================================================
+        // RUMUS 3 (AY): carry_over_gross_accum
+        // ============================================================
+        // Variabel:
+        //   A = asset penerima (to_asset), B = asset pemberi (from_asset)
+        //   UL_A, UL_B = useful life (months)
+        //   RUL_A_DesLastYear = remaining useful life akhir Desember tahun lalu  (= H col / field di policy/yearly)
+        //   RUL_A_LastMonth   = remaining useful life bulan sebelum transfer
+        //   RUL_B_DesLastYear = idem untuk B
+        //   RUL_B_LastMonth   = idem untuk B
+        //   AD_A = AccumulatedDepreciation akhir Desember tahun lalu (positif)
+        //   AD_B = idem untuk B
+        //   X = RUL_A_DesLastYear - RUL_A_LastMonth   (expired months A dalam tahun berjalan)
+        //   Y = RUL_B_DesLastYear - RUL_B_LastMonth   (expired months B dalam tahun berjalan)
+        //
+        // Update Acquisition:
+        //   UpdateAcquisitionA = AcquisitionA + Transfer
+        //   UpdateAcquisitionB = AcquisitionB - Transfer
+        //
+        // Update Depreciation Bulanan:
+        //   if RUL_A_LastMonth > 0: DepresiasiBulananA = (UpdateAcquisitionA - AD_A) / RUL_A_LastMonth
+        //   else:                   DepresiasiBulananA = 0
+        //   if RUL_B_LastMonth > 0: DepresiasiBulananB = (UpdateAcquisitionB - AD_B) / RUL_B_LastMonth
+        //   else:                   DepresiasiBulananB = 0
+        //
+        // Update Adjustment Depreciation:
+        //   AdjDepresiasiA = DepresiasiBulananA * X    → positif: tambah accum A
+        //   AdjDepresiasiB = -DepresiasiBulananB * Y   → negatif: kurangi accum B
+        // ============================================================
+        if ($type === self::TRANSFER_TYPE_CARRY_OVER) {
+
+            $transfer = (float) $data['amount'];
+
+            // RUL bulan sebelum transfer
+            $prevA = $this->lastClosedRowBeforeMonth($data['to_asset_uuid'],   $period);
+            $prevB = $this->lastClosedRowBeforeMonth($data['from_asset_uuid'], $period);
+
+            $rulALastMonth = (float) ($prevA?->remaining_useful_life_months ?? $toPolicy?->useful_life_months   ?? 0);
+            $rulBLastMonth = (float) ($prevB?->remaining_useful_life_months ?? $fromPolicy?->useful_life_months ?? 0);
+
+            // AD = accumulated depreciation akhir Desember tahun lalu (dari yearly closing)
+            $transferYear = (int) $period->year;
+            $prevYearA = AssetDeprYearly::where('asset_uuid', $data['to_asset_uuid'])
+                ->where('fiscal_year', $transferYear - 1)
+                ->first();
+            $prevYearB = AssetDeprYearly::where('asset_uuid', $data['from_asset_uuid'])
+                ->where('fiscal_year', $transferYear - 1)
+                ->first();
+
+            $adA = (float) ($prevYearA?->accumulated_depr_end ?? 0); // positif
+            $adB = (float) ($prevYearB?->accumulated_depr_end ?? 0); // positif
+
+            // RUL akhir Desember tahun lalu
+            // Didapat dari: useful_life - elapsed_months_at_end_of_prev_year
+            // Atau bisa disimpan langsung; gunakan field remaining di yearly jika ada,
+            // atau hitung dari policy + capitalization_date.
+            // Untuk sementara hitung dari selisih useful_life - bulan_terpakai_sampai_Desember_lalu.
+            $rulADesLastYear = $this->remainingUsefulLifeAtYearEnd($data['to_asset_uuid'],   $toPolicy,   $transferYear - 1);
+            $rulBDesLastYear = $this->remainingUsefulLifeAtYearEnd($data['from_asset_uuid'], $fromPolicy, $transferYear - 1);
+
+            // X dan Y = expired months dalam tahun berjalan s/d bulan sebelum transfer
+            $X = $rulADesLastYear - $rulALastMonth;
+            $Y = $rulBDesLastYear - $rulBLastMonth;
+
+            // Gross acquisition saat ini
+            $acqA = (float) DB::table('assets_value')->where('asset_uuid', $data['to_asset_uuid'])->value('total');
+            $acqB = (float) DB::table('assets_value')->where('asset_uuid', $data['from_asset_uuid'])->value('total');
+
+            $updateAcqA = $acqA + $transfer;
+            $updateAcqB = $acqB - $transfer;
+
+            // Depreciation bulanan baru
+            $deprBulananA = ($rulALastMonth > 0) ? ($updateAcqA - $adA) / $rulALastMonth : 0.0;
+            $deprBulananB = ($rulBLastMonth > 0) ? ($updateAcqB - $adB) / $rulBLastMonth : 0.0;
+
+            // Adjustment depreciation
+            $adjDeprA =  $deprBulananA * $X;   // positif → tambah accum A
+            $adjDeprB = -$deprBulananB * $Y;   // negatif → kurangi accum B
+
+            DB::transaction(function () use (
+                $data,
+                $period,
+                $group,
+                $fromStart,
+                $toStart,
+                $transfer,
+                $adjDeprA,
+                $adjDeprB
+            ) {
+                // Gross OUT dari B
                 AssetDeprMovement::create([
                     'asset_uuid'        => $data['from_asset_uuid'],
                     'period'            => $period,
                     'category'          => AssetDeprMovement::TRANSFER_OUT,
-                    'amount'            => $data['amount'],
+                    'amount'            => $transfer,
                     'depr_start_period' => $fromStart,
                     'group_uuid'        => $group,
                     'source_type'       => $data['source_type'] ?? 'manual',
                     'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross out'),
-                ]);
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['from_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                    'amount'            => -$info['acc_move'],
-                    'depr_start_period' => $fromStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum -FROM'),
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross OUT'),
                 ]);
 
-                // TO
+                // Gross IN ke A
                 AssetDeprMovement::create([
                     'asset_uuid'        => $data['to_asset_uuid'],
                     'period'            => $period,
                     'category'          => AssetDeprMovement::TRANSFER_IN,
-                    'amount'            => $data['amount'],
+                    'amount'            => $transfer,
                     'depr_start_period' => $toStart,
                     'group_uuid'        => $group,
                     'source_type'       => $data['source_type'] ?? 'manual',
                     'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross in'),
+                    'note'              => trim(($data['note'] ?? '') . ' | carry-over gross IN'),
                 ]);
-                AssetDeprMovement::create([
-                    'asset_uuid'        => $data['to_asset_uuid'],
-                    'period'            => $period,
-                    'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
-                    'amount'            => +$info['acc_move'],
-                    'depr_start_period' => $toStart,
-                    'group_uuid'        => $group,
-                    'source_type'       => $data['source_type'] ?? 'manual',
-                    'source_uuid'       => $data['source_uuid'] ?? null,
-                    'note'              => trim(($data['note'] ?? '') . ' | carry-over accum +TO'),
-                ]);
+
+                // AdjDepresiasiA → tambah accumulated A
+                if (abs($adjDeprA) > 0.001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['to_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => round($adjDeprA, 2),
+                        'depr_start_period' => $toStart,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | carry-over adj accum A'),
+                    ]);
+                }
+
+                // AdjDepresiasiB → kurangi accumulated B
+                if (abs($adjDeprB) > 0.001) {
+                    AssetDeprMovement::create([
+                        'asset_uuid'        => $data['from_asset_uuid'],
+                        'period'            => $period,
+                        'category'          => AssetDeprMovement::ADJUSTMENT_DEPRECIATION,
+                        'amount'            => round($adjDeprB, 2),
+                        'depr_start_period' => $fromStart,
+                        'group_uuid'        => $group,
+                        'source_type'       => $data['source_type'] ?? 'manual',
+                        'source_uuid'       => $data['source_uuid'] ?? null,
+                        'note'              => trim(($data['note'] ?? '') . ' | carry-over adj accum B'),
+                    ]);
+                }
+
+                // Update Acquisition di assets_value
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['to_asset_uuid'])
+                    ->increment('total', $transfer);
+
+                DB::table('assets_value')
+                    ->where('asset_uuid', $data['from_asset_uuid'])
+                    ->decrement('total', $transfer);
             });
 
             return 'Carry-Over transfer recorded';
         }
 
-        // === Case 1: tf-val (gross only, with NBV cap per month) ===
-        $cap = $this->computeMaxTransfer($data['from_asset_uuid'], Carbon::parse($data['actual_date']));
-        if ((float)$data['amount'] > $cap['remaining']) {
-            throw ValidationException::withMessages([
-                'amount' => sprintf(
-                    'Amount exceeds max allowed for %s. Beginning Value: %s, Last NBV (%s): %s, Max: %s, Already transferred this month: %s, Remaining: %s.',
-                    Carbon::parse($data['actual_date'])->toDateString(),
-                    number_format($cap['begin_total'], 2),
-                    optional($cap['last_closed_period'])->format('Y-m-d') ?? '-',
-                    number_format($cap['last_nbv'], 2),
-                    number_format($cap['max'], 2),
-                    number_format($cap['already_out'], 2),
-                    number_format($cap['remaining'], 2),
-                )
-            ]);
-        }
-
-        DB::transaction(function () use ($data, $period, $group, $fromStart, $toStart) {
-            AssetDeprMovement::create([
-                'asset_uuid'        => $data['from_asset_uuid'],
-                'period'            => $period,
-                'category'          => AssetDeprMovement::TRANSFER_OUT,
-                'amount'            => $data['amount'],
-                'depr_start_period' => $fromStart,
-                'group_uuid'        => $group,
-                'source_type'       => $data['source_type'] ?? 'manual',
-                'source_uuid'       => $data['source_uuid'] ?? null,
-                'note'              => $data['note'] ?? null,
-            ]);
-
-            AssetDeprMovement::create([
-                'asset_uuid'        => $data['to_asset_uuid'],
-                'period'            => $period,
-                'category'          => AssetDeprMovement::TRANSFER_IN,
-                'amount'            => $data['amount'],
-                'depr_start_period' => $toStart,
-                'group_uuid'        => $group,
-                'source_type'       => $data['source_type'] ?? 'manual',
-                'source_uuid'       => $data['source_uuid'] ?? null,
-                'note'              => $data['note'] ?? null,
-            ]);
-        });
-
-        return 'Transfer recorded';
+        throw new \InvalidArgumentException("Unknown transfer type: {$type}");
     }
 
     /* ============================================================
@@ -1243,6 +2179,9 @@ class DepreciationController extends Controller
             'note'            => ['nullable', 'string', 'max:300'],
             'attachment'      => ['nullable', 'file', 'max:5120'],
         ]);
+        $this->assertActualDateIsCurrentMonth($data['actual_date'], 'Add New');
+        $this->assertAssetsHaveAcquisition($data['from_asset_uuid'], $data['to_asset_uuid']);
+
 
         $type = $data['transfer_type'] ?? 'tf-val';
         $uid = auth()->user()?->name;
@@ -1309,6 +2248,8 @@ class DepreciationController extends Controller
 
         $uid = auth()->user()?->name;
         abort_if(!$uid, 401, 'No session UID.');
+
+        $this->assertAssetsHaveAcquisition($req->from_asset_uuid, $req->to_asset_uuid);
 
         DB::transaction(function () use ($req, $uid) {
             $this->applyTransfer([
@@ -1419,6 +2360,7 @@ class DepreciationController extends Controller
             'note'          => ['nullable', 'string', 'max:300'],
             'attachment'    => ['nullable', 'file', 'max:5120'],
         ]);
+        $this->assertActualDateIsCurrentMonth($data['actual_date'], 'Edit');
 
         $type = $data['transfer_type'] ?? $req->transfer_type;
 
@@ -1483,5 +2425,158 @@ class DepreciationController extends Controller
     {
         $u = auth()->user();
         return $u && $u->hasAction('TRANSFER', 'D');
+    }
+    private function assertAssetsHaveAcquisition(string $fromUuid, string $toUuid): void
+    {
+        $rows = DB::table('assets_value')
+            ->select('asset_uuid', 'capitalization_date')
+            ->whereIn('asset_uuid', [$fromUuid, $toUuid])
+            ->get()
+            ->keyBy('asset_uuid');
+
+        $errors = [];
+
+        foreach (
+            [
+                'from_asset_uuid' => $fromUuid,
+                'to_asset_uuid'   => $toUuid,
+            ] as $field => $uuid
+        ) {
+
+            $av = $rows->get($uuid);
+
+            if (!$av) {
+                $errors[$field] = 'Asset belum punya assets_value (belum dilakukan acquisition).';
+                continue;
+            }
+
+            if (empty($av->capitalization_date)) {
+                $errors[$field] = 'Asset belum punya capitalization_date (belum dilakukan acquisition).';
+            }
+        }
+
+        if (!empty($errors)) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function assertActualDateIsCurrentMonth(string|\DateTimeInterface $actualDate, string $context = 'transfer_request'): void
+    {
+        $d = Carbon::parse($actualDate);
+        $now = now();
+
+        if ($d->format('Y-m') !== $now->format('Y-m')) {
+            throw ValidationException::withMessages([
+                'actual_date' => "Actual Date for {$context} must be within current month ({$now->isoFormat('MMMM YYYY')}).",
+            ]);
+        }
+    }
+    private function remainingUsefulLifePrevMonth(string $assetUuid, AssetDeprPolicy $policy, Carbon $transferPeriod): int
+    {
+        $life = (int) ($policy->useful_life_months ?: 60);
+        if ($life <= 0) $life = 60;
+
+        $prev = $transferPeriod->copy()->subMonth()->startOfMonth();
+
+        // wajib ada row ledger bulan sebelumnya untuk asset tsb (tetap rule kamu)
+        $row = AssetDeprMonthly::query()
+            ->where('asset_uuid', $assetUuid)
+            ->whereDate('period', $prev->toDateString())
+            ->first();
+
+        if (! $row) {
+            throw ValidationException::withMessages([
+                'actual_date' => "acq-fix butuh ledger bulan sebelumnya. Jalankan Process Depreciation Month untuk {$prev->format('Y-m')} dulu.",
+            ]);
+        }
+
+        // eligibleStart mengikuti cutoff & depr_start_date
+        $startDate = $policy->depr_start_date ? Carbon::parse($policy->depr_start_date) : null;
+        $cutoff    = (int) ($policy->cutoff_day ?: 15);
+
+        // kalau depr_start_date null, anggap belum eligible -> RUL=life
+        if (! $startDate) {
+            return $life;
+        }
+
+        $eligibleStart = $startDate->copy()->startOfMonth()->addMonths(
+            ($startDate->day <= $cutoff) ? 0 : 1
+        );
+
+        // kalau prev < eligibleStart -> belum mulai eligible
+        if ($prev->lt($eligibleStart)) {
+            return $life;
+        }
+
+        // =====================================================
+        // FIX: used months = jumlah bulan "posted" (bukan diffInMonths)
+        // =====================================================
+        $used = (int) DB::table('assets_depr_ledger_monthly as m')
+            ->where('m.asset_uuid', $assetUuid)
+            ->whereDate('m.period', '>=', $eligibleStart->toDateString())
+            ->whereDate('m.period', '<=', $prev->toDateString())
+            ->where(function ($q) {
+                $q->whereRaw('COALESCE(m.depr_expense,0) <> 0')
+                    ->orWhereRaw('COALESCE(m.adjustment_depreciation,0) <> 0')
+                    ->orWhereRaw('COALESCE(m.accumulated_depr_end,0) <> 0');
+            })
+            ->count();
+
+        return max(0, $life - $used);
+    }
+    private function remainingUsefulLifeAtYearEnd(string $assetUuid, ?AssetDeprPolicy $policy, int $year): int
+    {
+        if (!$policy) return 0;
+
+        $life = (int) ($policy->useful_life_months ?: 60);
+        if ($life <= 0) $life = 60;
+
+        $dec = Carbon::create($year, 12, 1)->startOfMonth();
+
+        $startDate = $policy->depr_start_date ? Carbon::parse($policy->depr_start_date) : null;
+        if (! $startDate) {
+            return $life;
+        }
+
+        $cutoff = (int) ($policy->cutoff_day ?: 15);
+        $eligibleStart = $startDate->copy()->startOfMonth()->addMonths(
+            ($startDate->day <= $cutoff) ? 0 : 1
+        );
+
+        if ($dec->lt($eligibleStart)) {
+            return $life;
+        }
+
+        // cari bulan ledger terakhir yang sudah ada row (<= Dec)
+        $lastLedgerPeriod = DB::table('assets_depr_ledger_monthly')
+            ->where('asset_uuid', $assetUuid)
+            ->whereDate('period', '<=', $dec->toDateString())
+            ->max('period');
+
+        // kalau belum ada ledger sama sekali sampai Dec, berarti belum pernah posting -> life
+        if (! $lastLedgerPeriod) {
+            return $life;
+        }
+
+        $until = Carbon::parse($lastLedgerPeriod)->startOfMonth();
+        if ($until->lt($eligibleStart)) {
+            return $life;
+        }
+
+        // =====================================================
+        // FIX: used months = jumlah bulan "posted" sampai bulan terakhir ledger
+        // =====================================================
+        $used = (int) DB::table('assets_depr_ledger_monthly as m')
+            ->where('m.asset_uuid', $assetUuid)
+            ->whereDate('m.period', '>=', $eligibleStart->toDateString())
+            ->whereDate('m.period', '<=', $until->toDateString())
+            ->where(function ($q) {
+                $q->whereRaw('COALESCE(m.depr_expense,0) <> 0')
+                    ->orWhereRaw('COALESCE(m.adjustment_depreciation,0) <> 0')
+                    ->orWhereRaw('COALESCE(m.accumulated_depr_end,0) <> 0');
+            })
+            ->count();
+
+        return max(0, $life - $used);
     }
 }

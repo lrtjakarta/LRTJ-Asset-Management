@@ -77,6 +77,7 @@ class TransferController extends Controller
                 'a.description',
             ])
             ->whereNull('assets_transfers.deleted_at')
+            ->whereNull('assets_transfers.project_uuid')
             ->orderByDesc('assets_transfers.updated_at');
 
         if ($type !== '') {
@@ -192,7 +193,7 @@ class TransferController extends Controller
                 }
 
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
                 }
 
                 $btns .= '</div>';
@@ -556,6 +557,7 @@ class TransferController extends Controller
 
         $q = Transfer::query()
             ->where('asset_uuid', $assetUuid)
+            ->whereNull('project_uuid')
             ->with('status')
             ->orderByDesc('created_at');
 
@@ -619,7 +621,7 @@ class TransferController extends Controller
                 }
 
                 if ($canDelete) {
-                    $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
+                    // $btns .= '<button class="btn btn-light-danger btn-tf-delete" data-id="' . $id . '">Delete</button>';
                 }
 
                 $btns .= '</div>';

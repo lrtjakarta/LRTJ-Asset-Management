@@ -337,9 +337,9 @@ class ReturnController extends Controller
             })
             ->addColumn('actions', function (ReturnHistory $r)  use ($canDelete) {
                 if ($canDelete) {
-                    return '<div class="btn-group btn-group-sm">
-                        <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
-                    </div>';
+                    // return '<div class="btn-group btn-group-sm">
+                    //     <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
+                    // </div>';
                 } else {
                     return '-';
                 }
@@ -450,9 +450,9 @@ class ReturnController extends Controller
             })
             ->addColumn('actions', function (ReturnHistory $r) use ($canDelete) {
                 if ($canDelete) {
-                    return '<div class="btn-group btn-group-sm">
-                    <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
-                </div>';
+                //     return '<div class="btn-group btn-group-sm">
+                //     <button class="btn btn-light-danger btn-ret-delete" data-id="' . $r->uuid . '">Delete</button>
+                // </div>';
                 }
                 return '-';
             })

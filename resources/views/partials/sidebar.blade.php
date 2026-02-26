@@ -26,18 +26,53 @@
                 <div class="menu menu-column menu-rounded menu-sub-indention fw-semibold fs-6" id="#kt_app_sidebar_menu"
                     data-kt-menu="true" data-kt-menu-expand="false">
                     <!--begin:Menu item-->
-                    <div class="menu-item">
+
+                    <!--begin:Menu item-->
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'dashboard' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
-                        <a class="menu-link {{ request()->segment(1) == 'dashboard' ? 'active' : '' }}"
-                            href="{{ route('dashboard') }}">
+                        <span class="menu-link">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-home fs-2">
                                 </i>
                             </span>
                             <span class="menu-title">Dashboard</span>
-                        </a>
+                            <span class="menu-arrow"></span>
+                        </span>
                         <!--end:Menu link-->
+                        <!--begin:Menu sub-->
+                        <div class="menu-sub menu-sub-accordion">
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'dashboard' && request()->segment(2) == 'monthly' ? 'active' : '' }} "
+                                    href="{{ route('dashboard.monthly') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Monthly</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'dashboard' && request()->segment(2) == 'yearly' ? 'active' : '' }} "
+                                    href="{{ route('dashboard.yearly') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Yearly</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                        </div>
+                        <!--end:Menu sub-->
                     </div>
+                    <!--end:Menu item-->
+
                     <!--end:Menu item-->
                     @canAction('MASTER_DATA','R')
                     <!--begin:Menu item-->
@@ -297,7 +332,7 @@
                     <div class="menu-item">
                         <!--begin:Menu link-->
                         <a class="menu-link  {{ request()->segment(1) == 'depreciation' ? 'active' : '' }}"
-                            href="{{ route('depreciation.index') }}">
+                            href="{{ route('depreciation.period.index') }}">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-chart-line-down fs-2">
                                     <span class="path1"></span>
@@ -449,11 +484,10 @@
                     @endif
 
                     @canAction('STOCK_OPN','R')
-                    <!--begin:Menu item-->
-                    <div class="menu-item">
+                    <div data-kt-menu-trigger="click"
+                        class="menu-item {{ request()->segment(1) == 'stock-opname' ? 'show here' : '' }} menu-accordion">
                         <!--begin:Menu link-->
-                        <a class="menu-link  {{ request()->segment(1) == 'stock-opname' ? 'active' : '' }}"
-                            href="{{ route('stockopname.index') }}">
+                        <span class="menu-link">
                             <span class="menu-icon">
                                 <i class="ki-duotone ki-notepad-edit fs-2">
                                     <span class="path1"></span>
@@ -461,8 +495,55 @@
                                 </i>
                             </span>
                             <span class="menu-title">Stock Opname</span>
-                        </a>
+                            <span class="menu-arrow"></span>
+                        </span>
                         <!--end:Menu link-->
+                        <!--begin:Menu sub-->
+                        <div class="menu-sub menu-sub-accordion">
+                            <!--begin:Menu item-->
+
+                            @canAction('STOCK_OPN','C')
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'create-projects' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.assets.select.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Create Projects</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            @endcanAction
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'projects' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.asset_projects.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">List Projects</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                            <!--begin:Menu item-->
+                            <div class="menu-item">
+                                <!--begin:Menu link-->
+                                <a class="menu-link {{ request()->segment(1) == 'stock-opname' && request()->segment(2) == 'correction' ? 'active' : '' }} "
+                                    href="{{ route('stockopname.index') }}">
+                                    <span class="menu-bullet">
+                                        <span class="bullet bullet-dot"></span>
+                                    </span>
+                                    <span class="menu-title">Correction</span>
+                                </a>
+                                <!--end:Menu link-->
+                            </div>
+                            <!--end:Menu item-->
+                        </div>
+                        <!--end:Menu sub-->
                     </div>
                     <!--end:Menu item-->
                     @endcanAction

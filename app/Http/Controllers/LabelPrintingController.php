@@ -97,14 +97,18 @@ class LabelPrintingController extends Controller
             return back()->with('error', 'Tidak ada asset yang dipilih untuk print RFID.');
         }
 
-        try {
-            $printer->printByAssetUuids($uuids);
+        $size = $request->input('label_size', '100x40');
+        if (!in_array($size, ['100x40', '60x25'], true)) {
+            $size = '100x40';
+        }
 
-            // optional: update encoded_at semua tag
+        try {
+            $printer->printByAssetUuids($uuids, $size);
+
             \App\Models\AssetsRfid::whereIn('asset_uuid', $uuids)
                 ->update(['encoded_at' => now()]);
 
-            return back()->with('success', 'Perintah print RFID sudah dikirim ke printer.');
+            return back()->with('success', "Perintah print RFID ($size) sudah dikirim ke printer.");
         } catch (\Throwable $e) {
             report($e);
             return back()->with('error', 'Gagal mengirim ke printer: ' . $e->getMessage());

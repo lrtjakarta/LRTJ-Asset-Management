@@ -4,9 +4,15 @@
     <div class="app-toolbar py-3 py-lg-6 mb-10">
         <div class="app-container container-fluid d-flex flex-stack">
             <div class="page-title d-flex flex-column justify-content-center flex-wrap me-3">
-                <h1 class="page-heading text-gray-900 fw-bold fs-3 my-0">Stock Opname</h1>
+                <h1 class="page-heading d-flex text-gray-900 fw-bold fs-3 flex-column justify-content-center my-0">
+                    Stock Opname
+                </h1>
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <li class="breadcrumb-item text-muted">Stock Opname</li>
+                    <li class="breadcrumb-item">
+                        <span class="bullet bg-gray-500 w-5px h-2px"></span>
+                    </li>
+                    <li class="breadcrumb-item text-muted">Correction</li>
                 </ul>
             </div>
         </div>
@@ -51,6 +57,10 @@
                             <select id="f-users" class="form-select">
                             </select>
                         </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Project</label>
+                            <select id="f-project" class="form-select"></select>
+                        </div>
                         <div class="col-md-4">
                             <label class="form-label">Asset (code / description)</label>
                             <input type="text" id="f-asset" class="form-control"
@@ -93,6 +103,7 @@
                                 <th class="min-w-200px">Transaction Number</th>
                                 <th class="min-w-200px">Asset</th>
                                 <th class="min-w-300px">Asset Description</th>
+                                <th class="min-w-250px">Project</th>
                                 <th class="min-w-250px">Location</th>
                                 <th class="min-w-250px">Owner</th>
                                 <th class="min-w-250px">User</th>
@@ -133,6 +144,11 @@
                     <div class="modal-body">
                         <div class="row g-5">
                             <input type="hidden" name="is_same" id="tf-is-same" value="0">
+                            <div class="col-md-12">
+                                <label class="form-label required">Project</label>
+                                <select id="tf-project" class="form-select" required></select>
+                                <div class="form-text">Select project (OPEN) first.</div>
+                            </div>
                             <div class="col-md-12">
                                 <label class="form-label required">Asset</label>
                                 <select id="tf-asset" class="form-select" required></select>
@@ -187,7 +203,7 @@
                                 <label class="form-label required">Move To</label>
                                 <div class="d-flex gap-2">
                                     <select id="tf-target" class="form-select" required></select>
-                                    <button type="button" id="btn-tf-sesuai" class="btn btn-light-danger btn-sm">
+                                    <button type="button" id="btn-tf-sesuai" class="btn btn-light-danger btn-sm d-none">
                                         Sesuai
                                     </button>
                                 </div>
@@ -242,6 +258,11 @@
 
                     <div class="modal-body">
                         <div class="row g-5">
+                            <div class="col-md-12">
+                                <label class="form-label required">Project</label>
+                                <select id="ds-project" class="form-select" required></select>
+                                <div class="form-text">Select project (OPEN) first.</div>
+                            </div>
                             <div class="col-md-12">
                                 <label class="form-label required">Asset</label>
                                 <select id="ds-asset" class="form-select" required></select>
@@ -386,6 +407,34 @@
 @push('scripts')
     <script>
         (function() {
+            $("#f-project").select2({
+                placeholder: 'Select project',
+                width: '100%',
+                allowClear: true,
+                ajax: {
+                    url: '{{ route('stockopname.asset_projects.options') }}',
+                    dataType: 'json',
+                    delay: 150,
+                    data: params => ({
+                        q: params.term || '',
+                        page: params.page || 1,
+                        flag: 1,
+                    }),
+                    processResults: function(data) {
+                        const items = (data.results || []).map(x => ({
+                            id: x.uuid ?? x.id,
+                            text: x.text ?? x.name
+                        }));
+                        return {
+                            results: items,
+                            pagination: data.pagination || {
+                                more: false
+                            }
+                        };
+                    }
+                }
+            });
+
             $("#f-users").select2({
                 placeholder: 'Select requester',
                 width: '100%',
@@ -418,9 +467,9 @@
                     date_from: $('#f-from').val() || '',
                     date_to: $('#f-to').val() || '',
                     asset: $('#f-asset').val() || '',
-                    users: $('#f-users').val() || ''
+                    users: $('#f-users').val() || '',
+                    project_uuid: $('#f-project').val() || ''
                 });
-
                 Swal.fire({
                     title: 'Export Excel?',
                     text: 'Export stock opname data with current filters.',
@@ -459,11 +508,12 @@
                         d.date_to = $('#f-to').val();
                         d.asset = $('#f-asset').val();
                         d.users = $('#f-users').val();
+                        d.project_uuid = $('#f-project').val() || '';
                     }
                 },
                 // Updated column index because we added 6 new columns before "Updated"
                 order: [
-                    [15, 'desc']
+                    [16, 'desc']
                 ],
                 dom: "<'row mb-2'<'col-sm-6 d-flex align-items-center justify-conten-start dt-toolbar'l>" +
                     "<'col-sm-6 d-flex align-items-center justify-content-end dt-toolbar'f>>" +
@@ -493,6 +543,12 @@
                     {
                         data: 'asset_description',
                         name: 'asset_description',
+                        searchable: true,
+                        render: d => d ? $('<div>').text(d).html() : ''
+                    },
+                    {
+                        data: 'project',
+                        name: 'project',
                         searchable: true,
                         render: d => d ? $('<div>').text(d).html() : ''
                     },
@@ -630,6 +686,7 @@
                 $('#f-to').val('');
                 $('#f-asset').val('');
                 $('#f-users').val(null).trigger('change');
+                $('#f-project').val(null).trigger('change');
                 dt.ajax.reload();
             });
         })();
@@ -639,6 +696,8 @@
         (function() {
             const TF_PREVIEW_URL_TPL = @json(route('stockopname.transfer.preview.form', '__UUID__'));
 
+            const PROJECT_OPTIONS_URL = @json(route('stockopname.asset_projects.options'));
+            const PROJECT_ASSETS_URL = @json(route('stockopname.asset_projects.assets.options'));
             const R_TF = {
                 create: '{{ route('stockopname.transfer.store') }}',
                 assets: '{{ route('assets.options') }}',
@@ -654,6 +713,40 @@
                 }
             });
 
+            function initProjectSelectTf() {
+                $('#tf-project').select2({
+                    dropdownParent: $('#modal-transfer'), // PENTING biar bisa di-click
+                    placeholder: '— Select project —',
+                    width: '100%',
+                    allowClear: true,
+                    ajax: {
+                        url: PROJECT_OPTIONS_URL,
+                        dataType: 'json',
+                        delay: 150,
+                        data: params => ({
+                            q: params.term || '',
+                            page: params.page || 1
+                        }),
+                        processResults: d => d
+                    }
+                }).on('select2:select', function() {
+                    // enable asset select after project picked
+                    $('#tf-asset').prop('disabled', false).empty();
+
+                    // destroy old select2 if any
+                    if ($('#tf-asset').data('select2')) $('#tf-asset').select2('destroy');
+
+                    initSelect2Tf('#tf-asset', PROJECT_ASSETS_URL, () => ({
+                        project_uuid: $('#tf-project').val()
+                    }));
+                }).on('select2:clear', function() {
+                    // disable asset if project cleared
+                    $('#tf-asset').val(null).empty().prop('disabled', true);
+                    $('#tf-asset-uuid').val('');
+                    clearSnapshot();
+                    $('#tf-downloads').hide();
+                });
+            }
             let lastSnapshot = null;
 
             function parseKodeFromLabel(label) {
@@ -832,20 +925,36 @@
 
             $('#btnOpenTf').on('click', function(e) {
                 e.preventDefault();
+
                 resetTransferFormToCreate();
+
                 $('#tf-asset-uuid').val('');
                 $('#tf-target-hidden').val('');
                 $('#tf-type').val('owner');
                 $('#tf-edit-id').val('');
-                $('.modal-title', '#modal-transfer').text('New Transfer');
+                $('.modal-title', '#modal-transfer').text('New Movement');
 
-                initSelect2Tf('#tf-asset', R_TF.assets);
+                // --- project select2 ---
+                if ($('#tf-project').data('select2')) $('#tf-project').select2('destroy');
+                $('#tf-project').empty();
+                initProjectSelectTf();
+
+                // --- asset MUST be disabled until project picked ---
+                if ($('#tf-asset').data('select2')) $('#tf-asset').select2('destroy');
+                $('#tf-asset').empty().prop('disabled', true);
+                $('#tf-asset-uuid').val('');
+
+                // target select (independent)
+                if ($('#tf-target').data('select2')) $('#tf-target').select2('destroy');
+                $('#tf-target').empty();
                 initTargetSelect('owner');
 
-                $('#tf-asset').prop('disabled', false);
+                clearSnapshot();
+                $('#tf-downloads').hide();
 
                 $('#modal-transfer').modal('show');
             });
+
 
             $('#tf-type').on('change', function() {
                 const type = this.value;
@@ -872,6 +981,7 @@
                 const hasAnyFile = hasFile || hasFlowFile;
 
                 const base = {
+                    project_uuid: $('#tf-project').val() || null,
                     type: $('#tf-type').val(),
                     'after[value]': $('#tf-target-hidden').val(),
                     note: $('textarea[name="note"]').val() || '',
@@ -885,6 +995,11 @@
                 }
                 if (!base.asset_uuid) {
                     Swal.fire('Asset required', 'Please choose an asset.', 'warning');
+                    return;
+                }
+
+                if (!base.project_uuid) {
+                    Swal.fire('Project required', 'Please select a project first.', 'warning');
                     return;
                 }
 
@@ -985,6 +1100,9 @@
         (function() {
             const DISP_PREVIEW_FORM_URL_TPL = @json(route('stockopname.disposal.preview.form', '__UUID__'));
             const DISP_PREVIEW_BA_URL_TPL = @json(route('stockopname.disposal.preview.ba', '__UUID__'));
+
+            const PROJECT_OPTIONS_URL = @json(route('stockopname.asset_projects.options'));
+            const PROJECT_ASSETS_URL = @json(route('stockopname.asset_projects.assets.options'));
 
             const DIS = {
                 create: '{{ route('stockopname.disposal.store') }}',
@@ -1123,9 +1241,43 @@
                 $('#ds-downloads').hide();
             }
 
+            function initProjectSelectDs() {
+                $('#ds-project').select2({
+                    dropdownParent: $('#modal-disposal'),
+                    placeholder: '— Select project —',
+                    width: '100%',
+                    allowClear: true,
+                    ajax: {
+                        url: PROJECT_OPTIONS_URL,
+                        dataType: 'json',
+                        delay: 150,
+                        data: params => ({
+                            q: params.term || '',
+                            page: params.page || 1
+                        }),
+                        processResults: d => d
+                    }
+                }).on('select2:select', function() {
+                    $('#ds-asset').prop('disabled', false).empty();
+                    if ($('#ds-asset').data('select2')) $('#ds-asset').select2('destroy');
+
+                    initSelect2Dis('#ds-asset', PROJECT_ASSETS_URL, () => ({
+                        project_uuid: $('#ds-project').val()
+                    }));
+                }).on('select2:clear', function() {
+                    $('#ds-asset').val(null).empty().prop('disabled', true);
+                    $('#ds-asset-uuid').val('');
+                    clearSnapshot();
+                    $('#ds-downloads').hide();
+                });
+            }
             $('#btnOpenDis').on('click', function(e) {
                 e.preventDefault();
                 resetFormToCreate();
+                if ($('#ds-project').data('select2')) $('#ds-project').select2('destroy');
+                $('#ds-project').empty();
+                initProjectSelectDs();
+                $('#ds-asset').prop('disabled', true).empty();
                 $('.modal-title', '#modal-disposal').text('New Disposal');
                 $('#modal-disposal').modal('show');
             });
@@ -1144,6 +1296,7 @@
                 const hasAnyFile = hasFile || hasFlowFile || hasBaFile;
 
                 const base = {
+                    project_uuid: $('#ds-project').val() || null,
                     asset_uuid: $('#ds-asset-uuid').val() || null,
                     note: $('#ds-note').val() || '',
                     remove_file: $('#ds-remove-file').val() || 0,
