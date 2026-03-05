@@ -21,12 +21,10 @@ class SatoRfidPrinter
         $sbplAll = '';
 
         foreach ($assets as $asset) {
-            $rfid = $asset->rfids; // hasOne
+            $rfid = $asset->rfids;
 
-            // kalau belum punya tag, generate dari UUID (32 hex)
             if (! $rfid) {
                 $epc = strtoupper(str_replace('-', '', $asset->uuid));
-                // pastikan hanya HEX
                 $epc = preg_replace('/[^0-9A-F]/', '', $epc);
 
                 $rfid = AssetsRfid::create([
@@ -40,7 +38,13 @@ class SatoRfidPrinter
             $sbplAll .= $this->buildLabelCommand($asset, $rfid);
         }
 
-        $this->sendToPrinter($sbplAll);
+        try {
+            $this->sendToPrinter($sbplAll);
+        } catch (\Throwable $e) {
+            Log::error('RFID printer failed', [
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
