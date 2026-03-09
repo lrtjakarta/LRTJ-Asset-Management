@@ -190,7 +190,7 @@ class ReportingController extends Controller
         }
 
         // === Select columns ===
-        $q->select([
+        $q->addSelect([
             'a.uuid',
             'a.asset_code',
             'a.description',
