@@ -320,7 +320,9 @@
                 ],
                 ajax: {
                     url: R.datatable,
+                    type: 'POST',
                     data: function(d) {
+                        d._token = '{{ csrf_token() }}';
                         return Object.assign(d, buildFilters());
                     }
                 },

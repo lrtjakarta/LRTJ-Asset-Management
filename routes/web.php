@@ -492,7 +492,7 @@ Route::middleware('ldap.session')->group(function () {
     });
 
     Route::get('/reporting', [ReportingController::class, 'index'])->name('reporting.index')->middleware('role.action:REPORTING,R');
-    Route::get('/reporting/asset-depr/datatable', [ReportingController::class, 'datatableAssetDepr'])->name('reporting.asset_depr.datatable');
+    Route::post('/reporting/asset-depr/datatable', [ReportingController::class, 'datatableAssetDepr'])->name('reporting.asset_depr.datatable');
     Route::get('/reporting/asset-depr/export', [ReportingController::class, 'exportAssetDepr'])->name('reporting.asset_depr.export');
 
     Route::get('users/select-user', [UserManagementController::class, 'select_users'])->name('users.options');
