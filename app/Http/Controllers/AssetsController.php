@@ -118,13 +118,13 @@ class AssetsController extends Controller
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
 
-            ->leftJoin(DB::raw('LATERAL (
-                SELECT period, accumulated_depr_end, ending_balance
-                FROM assets_depr_ledger_monthly m
-                WHERE m.asset_uuid = a.uuid
-                ORDER BY m.period DESC
-                LIMIT 1
-            ) as dm'), DB::raw('true'), '=', DB::raw('true'))
+            ->leftJoin('assets_depr_ledger_monthly as dm', 'dm.asset_uuid', '=', 'a.uuid')
+            ->where(function ($query) {
+                // Ensure we only join the LATEST record per asset or none at all.
+                // This approach does not use LATERAL JOIN which breaks Yajra's DataTables COUNT(*).
+                $query->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
+                      ->orWhereNull('dm.uuid');
+            })
 
             // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')

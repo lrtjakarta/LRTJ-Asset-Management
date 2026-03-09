@@ -328,13 +328,11 @@ class ExportController
             ->leftJoin('master_user_code    as uu',   'uu.kode',    'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
 
-            ->leftJoin(DB::raw('LATERAL (
-                SELECT period, accumulated_depr_end, ending_balance
-                FROM assets_depr_ledger_monthly m
-                WHERE m.asset_uuid = a.uuid
-                ORDER BY m.period DESC
-                LIMIT 1
-            ) as dm'), DB::raw('true'), '=', DB::raw('true'))
+            ->leftJoin('assets_depr_ledger_monthly as dm', 'dm.asset_uuid', '=', 'a.uuid')
+            ->where(function ($query) {
+                $query->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
+                      ->orWhereNull('dm.uuid');
+            })
 
             ->whereNull('a.deleted_at')
             ->select(
