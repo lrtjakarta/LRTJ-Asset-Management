@@ -112,12 +112,11 @@ class ReportingController extends Controller
             ]);
             $q->addSelect([
                  'last_net_book_value' => DB::table('assets_depr_ledger_monthly as maxdmval')
-                    ->selectRaw("COALESCE(!assets_value!.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
+                    ->selectRaw("COALESCE(v.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
                     ->whereColumn('maxdmval.asset_uuid', 'a.uuid')
                     ->orderByDesc('maxdmval.period')
                     ->limit(1),
             ]);
-            $q->getQuery()->columns[count($q->getQuery()->columns) - 1] = str_replace('!assets_value!', 'v', end($q->getQuery()->columns));
         }
 
         $q->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
