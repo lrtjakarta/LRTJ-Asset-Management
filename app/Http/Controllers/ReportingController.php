@@ -34,23 +34,19 @@ class ReportingController extends Controller
     {
         $period = $request->input('period'); // 'YYYY-MM-01' or empty
 
-        $ledgerLatest = DB::table('assets_depr_ledger_monthly as l1')
-            ->selectRaw('DISTINCT ON (l1.asset_uuid) l1.*')
-            ->when($period, function ($qq) use ($period) {
-                $qq->whereDate('l1.period', $period);
-            })
-            ->orderBy('l1.asset_uuid')
-            ->orderBy('l1.period', 'desc')
-            ->orderBy('l1.updated_at', 'desc');
-
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
 
-            ->leftJoinSub($ledgerLatest, 'l', function ($join) {
+            ->leftJoin('assets_depr_ledger_monthly as l', function ($join) use ($period) {
                 $join->on('l.asset_uuid', '=', 'a.uuid');
+                if ($period) {
+                    $join->whereDate('l.period', $period);
+                } else {
+                    $join->whereRaw('l.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
+                }
             })
 
             // master lookups

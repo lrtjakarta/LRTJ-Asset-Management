@@ -1585,19 +1585,14 @@ class StockOpnameController extends Controller
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'R'), 403);
 
-        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
-            ->selectRaw("
-                DISTINCT ON (m.asset_uuid)
-                m.asset_uuid, m.period, m.accumulated_depr_end, m.ending_balance
-            ")
-            ->orderBy('m.asset_uuid')
-            ->orderByDesc('m.period');
-
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoinSub($lastDepr, 'dm', fn($j) => $j->on('dm.asset_uuid', '=', 'a.uuid'))
+            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
+                $join->on('dm.asset_uuid', '=', 'a.uuid')
+                     ->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
+            })
             ->leftJoin('master_location     as ml',   'ml.kode',   'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   'a.kode_status')
@@ -2044,21 +2039,15 @@ class StockOpnameController extends Controller
     {
         abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
 
-        // --- last depr subquery (same as datatable) ---
-        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
-            ->selectRaw("
-            DISTINCT ON (m.asset_uuid)
-            m.asset_uuid, m.period, m.accumulated_depr_end, m.ending_balance
-        ")
-            ->orderBy('m.asset_uuid')
-            ->orderByDesc('m.period');
-
         // --- base query (same as datatable) ---
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoinSub($lastDepr, 'dm', fn($j) => $j->on('dm.asset_uuid', '=', 'a.uuid'))
+            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
+                $join->on('dm.asset_uuid', '=', 'a.uuid')
+                     ->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
+            })
             ->leftJoin('master_location     as ml', 'ml.kode', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac', 'mac.kode', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms', 'ms.kode', 'a.kode_status')
