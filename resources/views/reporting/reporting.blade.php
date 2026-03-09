@@ -406,7 +406,7 @@
 
                     {
                         data: 'period',
-                        name: 'l.period',
+                        name: 'period',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -420,53 +420,53 @@
                     },
                     {
                         data: 'depr_code',
-                        name: 'l.depr_code'
+                        name: 'depr_code'
                     },
                     {
                         data: 'opening_balance',
-                        name: 'l.opening_balance',
+                        name: 'opening_balance',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'additions',
-                        name: 'l.additions',
+                        name: 'additions',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'transfers_in',
-                        name: 'l.transfers_in',
+                        name: 'transfers_in',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'transfers_out',
-                        name: 'l.transfers_out',
+                        name: 'transfers_out',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'disposals',
-                        name: 'l.disposals',
+                        name: 'disposals',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'adjustment_value',
-                        name: 'l.adjustment_value',
+                        name: 'adjustment_value',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'adjustment_depreciation',
-                        name: 'l.adjustment_depreciation',
+                        name: 'adjustment_depreciation',
                         render: formatNumber,
                         className: 'text-end'
                     },
                     {
                         data: 'accumulated_depr_end',
-                        name: 'l.accumulated_depr_end',
+                        name: 'accumulated_depr_end',
                         render: formatNumber,
                         className: 'text-end'
                     },
@@ -492,7 +492,7 @@
                         name: 'd.nota_referensi'
                     }, {
                         data: 'updated_at',
-                        name: 'l.updated_at', // atau disable order/search kalau mau
+                        name: 'depr_updated_at', // atau disable order/search kalau mau
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
