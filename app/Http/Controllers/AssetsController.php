@@ -117,15 +117,6 @@ class AssetsController extends Controller
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
-            // To bypass Yajra pagination timeout when using complex whereRaw or LATERAL joins,
-            // we join stringently against an aggregated subtable of max periods.
-            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
-                 $join->on('a.uuid', '=', 'max_depr.asset_uuid');
-            })
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
-                     ->on('dm.period', '=', 'max_depr.max_period');
-            })
 
             // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
@@ -172,10 +163,6 @@ class AssetsController extends Controller
                 'd.no_document',
 
                 'a.kode_sumber',
-
-                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
-                DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
-                DB::raw("dm.period as last_depr_period"),
 
                 DB::raw("
                 CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
@@ -236,6 +223,27 @@ class AssetsController extends Controller
                     ->orWhere('a.description', 'ilike', "%{$search}%");
             });
         }
+
+        $q->addSelect([
+            'last_accumulated_depr' => DB::table('assets_depr_ledger_monthly as maxdm')
+                ->select('maxdm.accumulated_depr_end')
+                ->whereColumn('maxdm.asset_uuid', 'a.uuid')
+                ->orderByDesc('maxdm.period')
+                ->limit(1),
+            'last_depr_period' => DB::table('assets_depr_ledger_monthly as maxdmp')
+                ->select('maxdmp.period')
+                ->whereColumn('maxdmp.asset_uuid', 'a.uuid')
+                ->orderByDesc('maxdmp.period')
+                ->limit(1)
+        ]);
+        $q->addSelect([
+            'last_net_book_value' => DB::table('assets_depr_ledger_monthly as maxdmval')
+                ->selectRaw("COALESCE(!assets_value!.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
+                ->whereColumn('maxdmval.asset_uuid', 'a.uuid')
+                ->orderByDesc('maxdmval.period')
+                ->limit(1)
+        ]);
+        $q->getQuery()->columns[count($q->getQuery()->columns) - 1] = str_replace('!assets_value!', 'v', end($q->getQuery()->columns));
 
         $dt = DataTables::of($q)
             ->filterColumn('last_accumulated_depr', function($query, $keyword) { })
