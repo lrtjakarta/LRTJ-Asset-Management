@@ -103,7 +103,9 @@
             processing: true,
             ajax: {
                 url: '{{ route('assets.datatable') }}',
+                type: 'POST',
                 data: function(d) {
+                    d._token = '{{ csrf_token() }}';
                     d.asset_class = $('#flt-asset-class').val() || '';
                     d.transaction = $('#flt-transaction').val() || '';
                     d.location = $('#flt-location').val() || '';
