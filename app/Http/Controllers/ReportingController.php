@@ -46,11 +46,13 @@ class ReportingController extends Controller
                      ->whereDate('l.period', $period);
             });
         } else {
-            $q->leftJoin('assets_depr_ledger_monthly as l', 'l.asset_uuid', '=', 'a.uuid')
-              ->where(function ($query) {
-                  $query->whereRaw('l.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
-                        ->orWhereNull('l.uuid');
-              });
+            $q->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
+                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
+            })
+            ->leftJoin('assets_depr_ledger_monthly as l', function ($join) {
+                $join->on('l.asset_uuid', '=', 'max_depr.asset_uuid')
+                     ->on('l.period', '=', 'max_depr.max_period');
+            });
         }
 
         $q->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')

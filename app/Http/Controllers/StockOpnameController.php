@@ -1589,10 +1589,12 @@ class StockOpnameController extends Controller
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_depr_ledger_monthly as dm', 'dm.asset_uuid', '=', 'a.uuid')
-            ->where(function ($query) {
-                $query->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
-                      ->orWhereNull('dm.uuid');
+            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
+                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
+            })
+            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
+                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
+                     ->on('dm.period', '=', 'max_depr.max_period');
             })
             ->leftJoin('master_location     as ml',   'ml.kode',   'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  'a.kode_asset_class')
@@ -2045,10 +2047,12 @@ class StockOpnameController extends Controller
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_depr_ledger_monthly as dm', 'dm.asset_uuid', '=', 'a.uuid')
-            ->where(function ($query) {
-                $query->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
-                      ->orWhereNull('dm.uuid');
+            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
+                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
+            })
+            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
+                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
+                     ->on('dm.period', '=', 'max_depr.max_period');
             })
             ->leftJoin('master_location     as ml', 'ml.kode', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac', 'mac.kode', 'a.kode_asset_class')

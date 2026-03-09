@@ -117,13 +117,14 @@ class AssetsController extends Controller
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
-
-            ->leftJoin('assets_depr_ledger_monthly as dm', 'dm.asset_uuid', '=', 'a.uuid')
-            ->where(function ($query) {
-                // Ensure we only join the LATEST record per asset or none at all.
-                // This approach does not use LATERAL JOIN which breaks Yajra's DataTables COUNT(*).
-                $query->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)')
-                      ->orWhereNull('dm.uuid');
+            // To bypass Yajra pagination timeout when using complex whereRaw or LATERAL joins,
+            // we join stringently against an aggregated subtable of max periods.
+            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
+                 $join->on('a.uuid', '=', 'max_depr.asset_uuid');
+            })
+            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
+                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
+                     ->on('dm.period', '=', 'max_depr.max_period');
             })
 
             // master lookups (names)
