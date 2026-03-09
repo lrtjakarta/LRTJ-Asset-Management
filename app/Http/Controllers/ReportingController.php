@@ -46,13 +46,78 @@ class ReportingController extends Controller
                      ->whereDate('l.period', $period);
             });
         } else {
-            $q->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
-                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
-            })
-            ->leftJoin('assets_depr_ledger_monthly as l', function ($join) {
-                $join->on('l.asset_uuid', '=', 'max_depr.asset_uuid')
-                     ->on('l.period', '=', 'max_depr.max_period');
-            });
+            // When no period is requested, we only want the most recent ledger row data as trailing columns.
+            // Using addSelect prevents DataTables from hanging on a full grouped internal sub-join scan.
+            $q->addSelect([
+                'l.period' => DB::table('assets_depr_ledger_monthly as ml1')
+                    ->select('ml1.period')
+                    ->whereColumn('ml1.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml1.period')
+                    ->limit(1),
+                'l.depr_code' => DB::table('assets_depr_ledger_monthly as ml2')
+                    ->select('ml2.depr_code')
+                    ->whereColumn('ml2.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml2.period')
+                    ->limit(1),
+                'l.opening_balance' => DB::table('assets_depr_ledger_monthly as ml3')
+                    ->select('ml3.opening_balance')
+                    ->whereColumn('ml3.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml3.period')
+                    ->limit(1),
+                'l.additions' => DB::table('assets_depr_ledger_monthly as ml4')
+                    ->select('ml4.additions')
+                    ->whereColumn('ml4.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml4.period')
+                    ->limit(1),
+                'l.transfers_in' => DB::table('assets_depr_ledger_monthly as ml5')
+                    ->select('ml5.transfers_in')
+                    ->whereColumn('ml5.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml5.period')
+                    ->limit(1),
+                'l.transfers_out' => DB::table('assets_depr_ledger_monthly as ml6')
+                    ->select('ml6.transfers_out')
+                    ->whereColumn('ml6.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml6.period')
+                    ->limit(1),
+                'l.disposals' => DB::table('assets_depr_ledger_monthly as ml7')
+                    ->select('ml7.disposals')
+                    ->whereColumn('ml7.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml7.period')
+                    ->limit(1),
+                'l.adjustment_value' => DB::table('assets_depr_ledger_monthly as ml8')
+                    ->select('ml8.adjustment_value')
+                    ->whereColumn('ml8.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml8.period')
+                    ->limit(1),
+                'l.adjustment_depreciation' => DB::table('assets_depr_ledger_monthly as ml9')
+                    ->select('ml9.adjustment_depreciation')
+                    ->whereColumn('ml9.asset_uuid', 'a.uuid')
+                    ->orderByDesc('ml9.period')
+                    ->limit(1),
+                'l.accumulated_depr_end' => DB::table('assets_depr_ledger_monthly as mla')
+                    ->select('mla.accumulated_depr_end')
+                    ->whereColumn('mla.asset_uuid', 'a.uuid')
+                    ->orderByDesc('mla.period')
+                    ->limit(1),
+                'l.depr_expense' => DB::table('assets_depr_ledger_monthly as mlb')
+                    ->select('mlb.depr_expense')
+                    ->whereColumn('mlb.asset_uuid', 'a.uuid')
+                    ->orderByDesc('mlb.period')
+                    ->limit(1),
+                'l.ending_balance' => DB::table('assets_depr_ledger_monthly as mlc')
+                    ->select('mlc.ending_balance')
+                    ->whereColumn('mlc.asset_uuid', 'a.uuid')
+                    ->orderByDesc('mlc.period')
+                    ->limit(1),
+            ]);
+            $q->addSelect([
+                 'last_net_book_value' => DB::table('assets_depr_ledger_monthly as maxdmval')
+                    ->selectRaw("COALESCE(!assets_value!.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
+                    ->whereColumn('maxdmval.asset_uuid', 'a.uuid')
+                    ->orderByDesc('maxdmval.period')
+                    ->limit(1),
+            ]);
+            $q->getQuery()->columns[count($q->getQuery()->columns) - 1] = str_replace('!assets_value!', 'v', end($q->getQuery()->columns));
         }
 
         $q->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
@@ -138,21 +203,28 @@ class ReportingController extends Controller
             'v.kode_uom',
             'v.total',
             'v.capitalization_date as cap_date',
+            // If period is NULL, we retrieve everything via addSelect bindings below, bypassing alias issues.
+        ]);
 
-            // from latest ledger (alias l)
-            'l.period',
-            'l.depr_code',
-            'l.opening_balance',
-            'l.additions',
-            'l.transfers_in',
-            'l.transfers_out',
-            'l.disposals',
-            'l.adjustment_value',
-            'l.adjustment_depreciation',
-            'l.accumulated_depr_end',
-            'l.depr_expense',
-            'l.ending_balance',
-            DB::raw("COALESCE(v.total, 0) - COALESCE(l.accumulated_depr_end, 0) as last_net_book_value"),
+        if ($period) {
+            $q->addSelect([
+                'l.period',
+                'l.depr_code',
+                'l.opening_balance',
+                'l.additions',
+                'l.transfers_in',
+                'l.transfers_out',
+                'l.disposals',
+                'l.adjustment_value',
+                'l.adjustment_depreciation',
+                'l.accumulated_depr_end',
+                'l.depr_expense',
+                'l.ending_balance',
+                DB::raw("COALESCE(v.total, 0) - COALESCE(l.accumulated_depr_end, 0) as last_net_book_value")
+            ]);
+        }
+
+        $q->addSelect([
 
             'd.no_po_perjanjian_spk',
             'd.nota_referensi',

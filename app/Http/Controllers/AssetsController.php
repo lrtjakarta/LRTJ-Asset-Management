@@ -237,7 +237,13 @@ class AssetsController extends Controller
             });
         }
 
-        $dt = DataTables::of($q);
+        $dt = DataTables::of($q)
+            ->filterColumn('last_accumulated_depr', function($query, $keyword) { })
+            ->orderColumn('last_accumulated_depr', function ($query, $order) { })
+            ->filterColumn('last_net_book_value', function($query, $keyword) { })
+            ->orderColumn('last_net_book_value', function ($query, $order) { })
+            ->filterColumn('last_depr_period', function($query, $keyword) { })
+            ->orderColumn('last_depr_period', function ($query, $order) { });
 
         $like = function ($keyword) {
             $k = trim((string)$keyword);
