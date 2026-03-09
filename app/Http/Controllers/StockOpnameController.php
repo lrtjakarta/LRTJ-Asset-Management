@@ -1589,10 +1589,13 @@ class StockOpnameController extends Controller
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'a.uuid')
-                     ->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
-            })
+            ->leftJoin(DB::raw('LATERAL (
+                SELECT period, accumulated_depr_end, ending_balance
+                FROM assets_depr_ledger_monthly m
+                WHERE m.asset_uuid = a.uuid
+                ORDER BY m.period DESC
+                LIMIT 1
+            ) as dm'), DB::raw('true'), '=', DB::raw('true'))
             ->leftJoin('master_location     as ml',   'ml.kode',   'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   'a.kode_status')
@@ -2044,10 +2047,13 @@ class StockOpnameController extends Controller
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'a.uuid')
-                     ->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
-            })
+            ->leftJoin(DB::raw('LATERAL (
+                SELECT period, accumulated_depr_end, ending_balance
+                FROM assets_depr_ledger_monthly m
+                WHERE m.asset_uuid = a.uuid
+                ORDER BY m.period DESC
+                LIMIT 1
+            ) as dm'), DB::raw('true'), '=', DB::raw('true'))
             ->leftJoin('master_location     as ml', 'ml.kode', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac', 'mac.kode', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms', 'ms.kode', 'a.kode_status')

@@ -118,10 +118,13 @@ class AssetsController extends Controller
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
 
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'a.uuid')
-                     ->whereRaw('dm.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
-            })
+            ->leftJoin(DB::raw('LATERAL (
+                SELECT period, accumulated_depr_end, ending_balance
+                FROM assets_depr_ledger_monthly m
+                WHERE m.asset_uuid = a.uuid
+                ORDER BY m.period DESC
+                LIMIT 1
+            ) as dm'), DB::raw('true'), '=', DB::raw('true'))
 
             // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')

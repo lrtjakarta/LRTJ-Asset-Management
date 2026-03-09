@@ -38,19 +38,24 @@ class ReportingController extends Controller
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
+            ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid');
 
-            ->leftJoin('assets_depr_ledger_monthly as l', function ($join) use ($period) {
-                $join->on('l.asset_uuid', '=', 'a.uuid');
-                if ($period) {
-                    $join->whereDate('l.period', $period);
-                } else {
-                    $join->whereRaw('l.period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = a.uuid)');
-                }
-            })
+        if ($period) {
+            $q->leftJoin('assets_depr_ledger_monthly as l', function ($join) use ($period) {
+                $join->on('l.asset_uuid', '=', 'a.uuid')
+                     ->whereDate('l.period', $period);
+            });
+        } else {
+            $q->leftJoin(DB::raw('LATERAL (
+                SELECT *
+                FROM assets_depr_ledger_monthly l
+                WHERE l.asset_uuid = a.uuid
+                ORDER BY l.period DESC
+                LIMIT 1
+            ) AS l'), DB::raw('true'), '=', DB::raw('true'));
+        }
 
-            // master lookups
-            ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
+        $q->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',   'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',    'a.kode_status')
             ->leftJoin('master_uom          as mu',   'mu.kode',    'v.kode_uom')
