@@ -350,102 +350,112 @@ class ReportingController extends Controller
     {
         abort_unless($this->canReadReporting(), 403);
 
-        $rows = $this->buildAssetDeprQuery($request)->get();
+        try {
+            $rows = $this->buildAssetDeprQuery($request)->get();
 
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Reporting');
-        $set = function ($colIndex, $rowIndex, $value) use ($sheet) {
-            $cell = Coordinate::stringFromColumnIndex($colIndex) . $rowIndex;
-            $sheet->setCellValue($cell, $value);
-        };
+            $spreadsheet = new Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Reporting');
+            $set = function ($colIndex, $rowIndex, $value) use ($sheet) {
+                $cell = Coordinate::stringFromColumnIndex($colIndex) . $rowIndex;
+                $sheet->setCellValue($cell, $value);
+            };
 
-        // Header row
-        $headers = [
-            'Asset Code',
-            'Asset Description',
-            'Asset Class',
-            'Location',
-            'Status',
-            'Owner',
-            'User',
-            'Price',
-            'Quantity',
-            'VAT In',
-            'UOM',
-            'Total',
+            // Header row
+            $headers = [
+                'Asset Code',
+                'Asset Description',
+                'Asset Class',
+                'Location',
+                'Status',
+                'Owner',
+                'User',
+                'Price',
+                'Quantity',
+                'VAT In',
+                'UOM',
+                'Total',
 
-            'Cap Date',
-            'Depr Date',
-            'Depr Code',
-            'Opening Balance',
-            'Additions',
-            'Transfer In',
-            'Transfer Out',
-            'Disposals',
-            'Adjustment Value',
-            'Adjustment Depr',
-            'Accumulated Depreciation',
-            'Net Book Value',
+                'Cap Date',
+                'Depr Date',
+                'Depr Code',
+                'Opening Balance',
+                'Additions',
+                'Transfer In',
+                'Transfer Out',
+                'Disposals',
+                'Adjustment Value',
+                'Adjustment Depr',
+                'Accumulated Depreciation',
+                'Net Book Value',
 
-            'No PO/Perjanjian/SPK',
-            'Note Reference',
-            'Updated At',
-        ];
+                'No PO/Perjanjian/SPK',
+                'Note Reference',
+                'Updated At',
+            ];
 
-        $col = 1;
-        foreach ($headers as $h) {
-            $set($col++, 1, $h);
-        }
-
-        // Data rows
-        $rowIdx = 2;
-        foreach ($rows as $r) {
             $col = 1;
+            foreach ($headers as $h) {
+                $set($col++, 1, $h);
+            }
 
-            $set($col++, $rowIdx, $r->asset_code);
-            $set($col++, $rowIdx, $r->description);
-            $set($col++, $rowIdx, $r->kode_asset_class_label);
-            $set($col++, $rowIdx, $r->kode_location_label);
-            $set($col++, $rowIdx, $r->kode_status_label);
-            $set($col++, $rowIdx, $r->asset_owner_label);
-            $set($col++, $rowIdx, $r->asset_user_label);
+            // Data rows
+            $rowIdx = 2;
+            foreach ($rows as $r) {
+                $col = 1;
 
-            $set($col++, $rowIdx, $r->price);
-            $set($col++, $rowIdx, $r->quantity);
-            $set($col++, $rowIdx, $r->vat_in);
-            $set($col++, $rowIdx, $r->kode_uom_label);
-            $set($col++, $rowIdx, $r->total);
+                $set($col++, $rowIdx, $r->asset_code ?? '');
+                $set($col++, $rowIdx, $r->description ?? '');
+                $set($col++, $rowIdx, $r->kode_asset_class_label ?? '');
+                $set($col++, $rowIdx, $r->kode_location_label ?? '');
+                $set($col++, $rowIdx, $r->kode_status_label ?? '');
+                $set($col++, $rowIdx, $r->asset_owner_label ?? '');
+                $set($col++, $rowIdx, $r->asset_user_label ?? '');
 
-            $set($col++, $rowIdx, $r->cap_date);
-            $set($col++, $rowIdx, $r->period);
-            $set($col++, $rowIdx, $r->depr_code);
-            $set($col++, $rowIdx, $r->opening_balance);
-            $set($col++, $rowIdx, $r->additions);
-            $set($col++, $rowIdx, $r->transfers_in);
-            $set($col++, $rowIdx, $r->transfers_out);
-            $set($col++, $rowIdx, $r->disposals);
-            $set($col++, $rowIdx, $r->adjustment_value);
-            $set($col++, $rowIdx, $r->adjustment_depreciation);
-            $set($col++, $rowIdx, $r->accumulated_depr_end);
-            $set($col++, $rowIdx, $r->last_net_book_value);
+                $set($col++, $rowIdx, $r->price ?? '');
+                $set($col++, $rowIdx, $r->quantity ?? '');
+                $set($col++, $rowIdx, $r->vat_in ?? '');
+                $set($col++, $rowIdx, $r->kode_uom_label ?? '');
+                $set($col++, $rowIdx, $r->total ?? '');
 
-            $set($col++, $rowIdx, $r->no_po_perjanjian_spk);
-            $set($col++, $rowIdx, $r->nota_referensi);
-            $set($col++, $rowIdx, $r->updated_at);
+                $set($col++, $rowIdx, $r->cap_date ?? '');
+                $set($col++, $rowIdx, $r->period ?? '');
+                $set($col++, $rowIdx, $r->depr_code ?? '');
+                $set($col++, $rowIdx, $r->opening_balance ?? '');
+                $set($col++, $rowIdx, $r->additions ?? '');
+                $set($col++, $rowIdx, $r->transfers_in ?? '');
+                $set($col++, $rowIdx, $r->transfers_out ?? '');
+                $set($col++, $rowIdx, $r->disposals ?? '');
+                $set($col++, $rowIdx, $r->adjustment_value ?? '');
+                $set($col++, $rowIdx, $r->adjustment_depreciation ?? '');
+                $set($col++, $rowIdx, $r->accumulated_depr_end ?? '');
+                $set($col++, $rowIdx, $r->last_net_book_value ?? '');
 
-            $rowIdx++;
+                $set($col++, $rowIdx, $r->no_po_perjanjian_spk ?? '');
+                $set($col++, $rowIdx, $r->nota_referensi ?? '');
+                $set($col++, $rowIdx, $r->depr_updated_at ?? $r->updated_at ?? '');
+
+                $rowIdx++;
+            }
+
+            $fileName = 'Reporting_Asset_Depr_' . now()->format('Ymd_His') . '.xlsx';
+
+            return new StreamedResponse(function () use ($spreadsheet) {
+                $writer = new Xlsx($spreadsheet);
+                $writer->save('php://output');
+            }, 200, [
+                'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => "attachment;filename=\"{$fileName}\"",
+                'Cache-Control'       => 'max-age=0',
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Reporting export error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'message' => 'Export failed: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $fileName = 'Reporting_Asset_Depr_' . now()->format('Ymd_His') . '.xlsx';
-
-        return new StreamedResponse(function () use ($spreadsheet) {
-            $writer = new Xlsx($spreadsheet);
-            $writer->save('php://output');
-        }, 200, [
-            'Content-Type'        => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => "attachment;filename=\"{$fileName}\"",
-            'Cache-Control'       => 'max-age=0',
-        ]);
     }
 }

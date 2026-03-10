@@ -329,6 +329,7 @@
                 columns: [{
                         data: 'asset_code',
                         name: 'a.asset_code',
+                        defaultContent: '',
                         render: function(data, type, row) {
                             if (type !== 'display') return data;
                             const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row.uuid));
@@ -337,59 +338,71 @@
                     },
                     {
                         data: 'description',
-                        name: 'a.description'
+                        name: 'a.description',
+                        defaultContent: ''
                     },
                     {
                         data: 'kode_asset_class_label',
-                        name: 'a.kode_asset_class'
+                        name: 'a.kode_asset_class',
+                        defaultContent: ''
                     },
                     {
                         data: 'kode_location_label',
-                        name: 'a.kode_location'
+                        name: 'a.kode_location',
+                        defaultContent: ''
                     },
                     {
                         data: 'kode_status_label',
-                        name: 'a.kode_status'
+                        name: 'a.kode_status',
+                        defaultContent: ''
                     },
                     {
                         data: 'asset_owner_label',
-                        name: 'g.asset_owner'
+                        name: 'g.asset_owner',
+                        defaultContent: ''
                     },
                     {
                         data: 'asset_user_label',
-                        name: 'g.asset_user'
+                        name: 'g.asset_user',
+                        defaultContent: ''
                     },
 
                     {
                         data: 'price',
                         name: 'v.price',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'quantity',
                         name: 'v.quantity',
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'vat_in',
                         name: 'v.vat_in',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'kode_uom_label',
-                        name: 'v.kode_uom'
+                        name: 'v.kode_uom',
+                        defaultContent: ''
                     },
                     {
                         data: 'total',
                         name: 'v.total',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'cap_date',
                         name: 'v.capitalization_date',
+                        defaultContent: '',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -407,6 +420,7 @@
                     {
                         data: 'period',
                         name: 'period',
+                        defaultContent: '',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -420,55 +434,64 @@
                     },
                     {
                         data: 'depr_code',
-                        name: 'depr_code'
+                        name: 'depr_code',
+                        defaultContent: ''
                     },
                     {
                         data: 'opening_balance',
                         name: 'opening_balance',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'additions',
                         name: 'additions',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'transfers_in',
                         name: 'transfers_in',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'transfers_out',
                         name: 'transfers_out',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'disposals',
                         name: 'disposals',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'adjustment_value',
                         name: 'adjustment_value',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'adjustment_depreciation',
                         name: 'adjustment_depreciation',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     {
                         data: 'accumulated_depr_end',
                         name: 'accumulated_depr_end',
                         render: formatNumber,
-                        className: 'text-end'
+                        className: 'text-end',
+                        defaultContent: ''
                     },
                     // {
                     //     data: 'ending_balance',
@@ -481,25 +504,29 @@
                         name: 'last_net_book_value',
                         render: formatNumber,
                         className: 'text-end',
-                        searchable: false
+                        searchable: false,
+                        defaultContent: ''
                     },
                     {
                         data: 'no_po_perjanjian_spk',
-                        name: 'd.no_po_perjanjian_spk'
+                        name: 'd.no_po_perjanjian_spk',
+                        defaultContent: ''
                     },
                     {
                         data: 'nota_referensi',
-                        name: 'd.nota_referensi'
+                        name: 'd.nota_referensi',
+                        defaultContent: ''
                     }, {
                         data: 'updated_at',
-                        name: 'depr_updated_at', // atau disable order/search kalau mau
+                        name: 'depr_updated_at',
+                        defaultContent: '',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
 
                             const d = new Date(iso);
                             if (isNaN(d.getTime()))
-                                return iso; // fallback kalau ada data lama formatnya beda
+                                return iso;
 
                             const dateStr = new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',
