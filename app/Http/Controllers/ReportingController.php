@@ -34,7 +34,26 @@ class ReportingController extends Controller
     {
         $period = $request->input('period'); // 'YYYY-MM-01' or empty
 
+        // Use explicit select() to prevent default * which causes PostgreSQL quoting issues
         $q = DB::table('assets as a')
+            ->select([
+                'a.uuid',
+                'a.asset_code',
+                'a.description',
+                'a.kode_asset_class',
+                'a.kode_location',
+                'a.kode_status',
+                'g.asset_owner',
+                'g.asset_user',
+                'g.asset_maintenance',
+
+                'v.price',
+                'v.quantity',
+                'v.vat_in',
+                'v.kode_uom',
+                'v.total',
+                'v.capitalization_date as cap_date',
+            ])
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
@@ -188,27 +207,6 @@ class ReportingController extends Controller
         if ($period) {
             $q->whereNotNull('l.period');
         }
-
-        // === Select columns ===
-        $q->addSelect([
-            'a.uuid',
-            'a.asset_code',
-            'a.description',
-            'a.kode_asset_class',
-            'a.kode_location',
-            'a.kode_status',
-            'g.asset_owner',
-            'g.asset_user',
-            'g.asset_maintenance',
-
-            'v.price',
-            'v.quantity',
-            'v.vat_in',
-            'v.kode_uom',
-            'v.total',
-            'v.capitalization_date as cap_date',
-            // If period is NULL, we retrieve everything via addSelect bindings below, bypassing alias issues.
-        ]);
 
         if ($period) {
             $q->addSelect([
