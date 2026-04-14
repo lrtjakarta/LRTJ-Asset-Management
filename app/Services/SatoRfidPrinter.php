@@ -130,7 +130,7 @@ class SatoRfidPrinter
                 'text_h_mm' => 4,
                 'text_v_mm' => 3,
                 'line_gap_mm' => 3,
-                'qr_h_mm' => 40,
+                'qr_h_mm' => 42,
                 'qr_v_mm' => 3,
                 'qr_cell_size' => 3,
                 'description_length' => 18,
