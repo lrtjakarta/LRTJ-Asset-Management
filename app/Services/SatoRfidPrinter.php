@@ -81,7 +81,7 @@ class SatoRfidPrinter
         $cmd .= $esc . "XM" . $desc . "\r\n";
 
         // EPC WRITE
-        $cmd .= $esc . "IP0" . $epc . "\r\n";
+        $cmd .= $esc . "IP0e:h,epc:" . $epc . ";";
 
         $cmd .= $esc . "Q1";
         $cmd .= $esc . "Z";
