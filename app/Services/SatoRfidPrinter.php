@@ -131,7 +131,7 @@ class SatoRfidPrinter
                 'text_v_mm' => 3,
                 'line_gap_mm' => 3,
                 'qr_h_mm' => 40,
-                'qr_v_mm' => 8,
+                'qr_v_mm' => 5,
                 'qr_cell_size' => 4,
                 'description_length' => 18,
                 'text_font' => 'M',
