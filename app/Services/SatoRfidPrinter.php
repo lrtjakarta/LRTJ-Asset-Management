@@ -11,7 +11,12 @@ class SatoRfidPrinter
     public function printByAssetUuids(array $assetUuids, string $labelSize = '100x40'): void
     {
         try {
-            $assets = Assets::with('rfids')
+            $assets = Assets::with([
+                'rfids',
+                'activeQr',
+                'assignment.owner',
+                'location',
+            ])
                 ->whereIn('uuid', $assetUuids)
                 ->get();
 
@@ -62,23 +67,23 @@ class SatoRfidPrinter
     {
         $esc = "\x1B";
         $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', $rfid->epc));
-        $assetCode = $this->cleanPrintableText($asset->asset_code ?? '');
-        $desc = $this->cleanPrintableText($asset->description ?? '');
-        $desc = mb_substr($desc, 0, $layout['description_length']);
+        $qrData = $this->cleanQrData($rfid->epc ?: $asset->uuid);
+        $lines = $this->labelLines($asset, $rfid, $layout);
 
         $cmd  = $esc . "A";
 
-        // Asset code
-        $cmd .= $esc . $this->h($layout['asset_code_h'])
-            . $esc . $this->v($layout['asset_code_v'])
-            . $esc . "L0202";
-        $cmd .= $esc . "XM" . $assetCode . "\r\n";
+        foreach ($lines as $line) {
+            $cmd .= $esc . $this->h($line['h'])
+                . $esc . $this->v($line['v'])
+                . $esc . "L" . $line['scale']
+                . $esc . $line['font'] . $line['text'];
+        }
 
-        // Description
-        $cmd .= $esc . $this->h($layout['description_h'])
-            . $esc . $this->v($layout['description_v'])
-            . $esc . "L0101";
-        $cmd .= $esc . "XM" . $desc . "\r\n";
+        if ($qrData !== '') {
+            $cmd .= $esc . $this->h($layout['qr_h'])
+                . $esc . $this->v($layout['qr_v'])
+                . $this->qrCommand($qrData, $layout);
+        }
 
         // EPC WRITE
         $cmd .= $esc . "IP0e:h,epc:" . $epc . ";";
@@ -107,20 +112,32 @@ class SatoRfidPrinter
             '100x40' => [
                 'width_mm' => 100,
                 'height_mm' => 40,
-                'asset_code_h_mm' => 4,
-                'asset_code_v_mm' => 8,
-                'description_h_mm' => 4,
-                'description_v_mm' => 18,
-                'description_length' => 34,
+                'text_h_mm' => 5,
+                'text_v_mm' => 5,
+                'line_gap_mm' => 5,
+                'qr_h_mm' => 68,
+                'qr_v_mm' => 6,
+                'qr_cell_size' => 6,
+                'description_length' => 28,
+                'text_font' => 'XS',
+                'title_font' => 'XM',
+                'title_scale' => '0101',
+                'text_scale' => '0101',
             ],
             '60x25' => [
                 'width_mm' => 60,
                 'height_mm' => 25,
-                'asset_code_h_mm' => 3,
-                'asset_code_v_mm' => 5,
-                'description_h_mm' => 3,
-                'description_v_mm' => 14,
-                'description_length' => 24,
+                'text_h_mm' => 4,
+                'text_v_mm' => 3,
+                'line_gap_mm' => 3,
+                'qr_h_mm' => 40,
+                'qr_v_mm' => 8,
+                'qr_cell_size' => 4,
+                'description_length' => 18,
+                'text_font' => 'XS',
+                'title_font' => 'XS',
+                'title_scale' => '0101',
+                'text_scale' => '0101',
             ],
         ];
 
@@ -129,12 +146,74 @@ class SatoRfidPrinter
         return [
             'width_dots' => $layout['width_mm'] * $dotsPerMm,
             'height_dots' => $layout['height_mm'] * $dotsPerMm,
-            'asset_code_h' => $layout['asset_code_h_mm'] * $dotsPerMm,
-            'asset_code_v' => $layout['asset_code_v_mm'] * $dotsPerMm,
-            'description_h' => $layout['description_h_mm'] * $dotsPerMm,
-            'description_v' => $layout['description_v_mm'] * $dotsPerMm,
+            'text_h' => $layout['text_h_mm'] * $dotsPerMm,
+            'text_v' => $layout['text_v_mm'] * $dotsPerMm,
+            'line_gap' => $layout['line_gap_mm'] * $dotsPerMm,
+            'qr_h' => $layout['qr_h_mm'] * $dotsPerMm,
+            'qr_v' => $layout['qr_v_mm'] * $dotsPerMm,
+            'qr_cell_size' => $layout['qr_cell_size'],
             'description_length' => $layout['description_length'],
+            'text_font' => $layout['text_font'],
+            'title_font' => $layout['title_font'],
+            'title_scale' => $layout['title_scale'],
+            'text_scale' => $layout['text_scale'],
         ];
+    }
+
+    protected function labelLines(Assets $asset, AssetsRfid $rfid, array $layout): array
+    {
+        $owner = $asset->assignment?->asset_owner
+            ?: $asset->assignment?->owner?->department
+            ?: $asset->assignment?->owner?->description
+            ?: '-';
+        $location = $asset->kode_location ?: $asset->location?->name ?: '-';
+        $epc = $this->shortRfidText($rfid->epc ?? '');
+
+        $texts = [
+            ['text' => 'PT. LRT JAKARTA', 'font' => $layout['title_font'], 'scale' => $layout['title_scale']],
+            ['text' => $asset->asset_code ?? '-', 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
+            ['text' => mb_substr($asset->description ?? '-', 0, $layout['description_length']), 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
+            ['text' => 'Owner: ' . $owner, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
+            ['text' => 'Lok: ' . $location, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
+            ['text' => 'RFID: ' . $epc, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
+        ];
+
+        $lines = [];
+        foreach ($texts as $index => $item) {
+            $lines[] = [
+                'h' => $layout['text_h'],
+                'v' => $layout['text_v'] + ($layout['line_gap'] * $index),
+                'font' => $item['font'],
+                'scale' => $item['scale'],
+                'text' => $this->cleanPrintableText($item['text']),
+            ];
+        }
+
+        return $lines;
+    }
+
+    protected function shortRfidText(string $epc): string
+    {
+        $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', $epc) ?? '');
+
+        if (strlen($epc) <= 18) {
+            return $epc !== '' ? $epc : '-';
+        }
+
+        return substr($epc, 0, 6) . '...' . substr($epc, -6);
+    }
+
+    protected function cleanQrData(string $text): string
+    {
+        return preg_replace('/[\x00-\x1F\x7F]/u', '', $text) ?? '';
+    }
+
+    protected function qrCommand(string $data, array $layout): string
+    {
+        $cellSize = str_pad((string) $layout['qr_cell_size'], 2, '0', STR_PAD_LEFT);
+        $length = str_pad((string) strlen($data), 4, '0', STR_PAD_LEFT);
+
+        return "\x1B" . "BQ20" . $cellSize . ",3" . $length . $data;
     }
 
     protected function cleanPrintableText(string $text): string
