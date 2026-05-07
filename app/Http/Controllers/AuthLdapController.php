@@ -508,4 +508,35 @@ class AuthLdapController extends Controller
 
         return $res;
     }
+
+    private function maskLdapDn(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (str_contains($value, '@')) {
+            [$local, $domain] = array_pad(explode('@', $value, 2), 2, '');
+
+            if ($local === '') {
+                return '***@' . $domain;
+            }
+
+            return substr($local, 0, 2) . '***@' . $domain;
+        }
+
+        if (str_contains($value, '\\')) {
+            [$prefix, $account] = array_pad(explode('\\', $value, 2), 2, '');
+
+            if ($account === '') {
+                return $prefix . '\\***';
+            }
+
+            return $prefix . '\\' . substr($account, 0, 2) . '***';
+        }
+
+        return preg_replace('/^(.{0,2}).*/', '$1***', $value) ?? '***';
+    }
 }
