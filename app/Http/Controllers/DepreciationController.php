@@ -911,18 +911,27 @@ AS remaining_useful_life_months
                 $assetUuid = $policy->asset_uuid;
 
                 $av = DB::table('assets_value')
-                    ->select('capitalization_date', 'actual_date', 'created_at', 'total')
+                    ->select(
+                        'capitalization_date',
+                        'actual_date',
+                        'created_at',
+                        'total',
+                        'useful_life_month',
+                        'useful_life_year'
+                    )
                     ->where('asset_uuid', $assetUuid)
                     ->first();
 
                 $capDate  = $av?->capitalization_date ?? $av?->actual_date ?? $av?->created_at;
                 $capTotal = (float) ($av?->total ?? 0);
 
-                if ($capDate) {
-                    $assetStartMonth = Carbon::parse($capDate)->startOfMonth();
-                    if ($period->lt($assetStartMonth)) {
-                        continue;
-                    }
+                if (!$capDate) {
+                    continue;
+                }
+
+                $assetStartMonth = Carbon::parse($capDate)->startOfMonth();
+                if ($period->lt($assetStartMonth)) {
+                    continue;
                 }
 
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
@@ -934,54 +943,107 @@ AS remaining_useful_life_months
                 $accPrev = (float) ($prev->accumulated_depr_end ?? 0.0);
 
                 $additions = 0.0;
-                $tin       = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+
+                $tin = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
                     ->whereDate('period', $period)
                     ->where('category', AssetDeprMovement::TRANSFER_IN)
                     ->sum('amount');
-                $tout      = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+
+                $tout = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
                     ->whereDate('period', $period)
                     ->where('category', AssetDeprMovement::TRANSFER_OUT)
                     ->sum('amount');
+
                 $disposals = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
                     ->whereDate('period', $period)
                     ->where('category', AssetDeprMovement::DISPOSAL)
                     ->sum('amount');
-                $adjValue  = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+
+                $adjValue = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
                     ->whereDate('period', $period)
                     ->where('category', AssetDeprMovement::ADJUSTMENT_VALUE)
                     ->sum('amount');
-                $adjDepr   = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
+
+                $adjDepr = (float) AssetDeprMovement::where('asset_uuid', $assetUuid)
                     ->whereDate('period', $period)
                     ->where('category', AssetDeprMovement::ADJUSTMENT_DEPRECIATION)
                     ->sum('amount');
 
                 $startBase = $policy->depr_start_date
-                    ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
+                    ?: Carbon::parse($capDate)->toDateString();
 
-                $eligibleStart = $startBase
-                    ? Carbon::parse($startBase)->startOfMonth()->addMonths(
-                        (Carbon::parse($startBase)->day <= ($policy->cutoff_day ?? 15)) ? 0 : 1
-                    )
-                    : $period;
+                $cutoffDay = (int) ($policy->cutoff_day ?? 15);
 
-                $eligible   = $eligibleStart->lte($period);
-                $lifeMonths = (int) ($policy->useful_life_months ?: 60);
-                if ($lifeMonths <= 0) $lifeMonths = 60;
+                $eligibleStart = Carbon::parse($startBase)->startOfMonth()->addMonths(
+                    Carbon::parse($startBase)->day <= $cutoffDay ? 0 : 1
+                );
 
-                $elapsed   = $eligible ? $eligibleStart->diffInMonths($period) : 0;
-                $remaining = $eligible ? max(0, $lifeMonths - $elapsed) : 0;
+                $eligible = $eligibleStart->lte($period);
 
-                $deprBase = $eligible
-                    ? max(
-                        ($opening + $adjValue + $tin - $tout - $disposals)
-                            - (float) $policy->salvage_value,
+                $lifeMonths = (int) ($policy->useful_life_months ?: 0);
+                if ($lifeMonths <= 0) {
+                    $lifeMonths = (int) ($av?->useful_life_month ?? 0);
+                }
+                if ($lifeMonths <= 0 && isset($av?->useful_life_year)) {
+                    $lifeMonths = (int) round(((float) $av->useful_life_year) * 12);
+                }
+                if ($lifeMonths <= 0) {
+                    $lifeMonths = 60;
+                }
+
+                // jumlah bulan yang benar-benar sudah terdepresiasi sebelum period ini
+                $usedMonths = 0;
+                if ($eligible) {
+                    $usedMonths = (int) DB::table('assets_depr_ledger_monthly as m')
+                        ->where('m.asset_uuid', $assetUuid)
+                        ->whereDate('m.period', '>=', $eligibleStart->toDateString())
+                        ->whereDate('m.period', '<', $period->toDateString())
+                        ->where(function ($q) {
+                            $q->whereRaw('COALESCE(m.depr_expense,0) <> 0')
+                                ->orWhereRaw('COALESCE(m.adjustment_depreciation,0) <> 0')
+                                ->orWhereRaw('COALESCE(m.accumulated_depr_end,0) <> 0');
+                        })
+                        ->count();
+                }
+
+                $remaining = $eligible ? max(0, $lifeMonths - $usedMonths) : 0;
+                $salvage   = (float) $policy->salvage_value;
+
+                // base tetap dari acquisition awal
+                $baseCost = max($capTotal - $salvage, 0.0);
+
+                // monthly depreciation flat
+                $monthlyFixed = $lifeMonths > 0
+                    ? floor($baseCost / $lifeMonths)
+                    : 0.0;
+
+                $hasBasisChangeThisMonth =
+                    abs($tin) > 0.00001 ||
+                    abs($tout) > 0.00001 ||
+                    abs($disposals) > 0.00001 ||
+                    abs($adjValue) > 0.00001;
+
+                if (!$eligible || $remaining <= 0) {
+                    $deprExpense = 0.0;
+                } else {
+                    if ($hasBasisChangeThisMonth) {
+                        $recalcBase = max(
+                            ($opening + $adjValue + $tin - $tout - $disposals) - $salvage,
+                            0.0
+                        );
+
+                        $deprExpense = floor($recalcBase / $remaining);
+                    } else {
+                        $deprExpense = $monthlyFixed;
+                    }
+
+                    $maxAllowed = max(
+                        ($opening + $adjValue + $tin - $tout - $disposals) - $salvage,
                         0.0
-                    )
-                    : 0.0;
+                    );
 
-                $deprExpense = ($eligible && $remaining > 0)
-                    ? floor($deprBase / $remaining)
-                    : 0.0;
+                    $deprExpense = min($deprExpense, $maxAllowed);
+                }
 
                 $ending = $opening
                     + $additions
@@ -1023,13 +1085,15 @@ AS remaining_useful_life_months
             AssetDeprMonthClosing::updateOrCreate(
                 ['period' => $period->toDateString()],
                 [
-                    'row_count' => (int) $rowCount,
+                    'row_count'    => (int) $rowCount,
                     'processed_by' => auth()->user()?->name,
                     'processed_at' => now(),
                 ]
             );
         });
     }
+
+
     private function canForceBuildYear(): bool
     {
         $u = auth()->user();
@@ -1054,7 +1118,7 @@ AS remaining_useful_life_months
             // 2) chain gate: prev year must be built unless empty eligible
             $this->assertPrevYearBuiltUnlessEmpty($year, 'buildYear');
 
-            // 3) must have Dec processed (or skip if year has no eligible assets per your helper)
+            // 3) must have Dec processed
             $this->assertDecemberProcessed($year);
 
             // 4) time rule: only applies when building CURRENT year
@@ -1062,7 +1126,7 @@ AS remaining_useful_life_months
                 throw new \RuntimeException("BUILD_YEAR_ONLY_DECEMBER_CURRENT|{$year}");
             }
 
-            // (optional) block future year
+            // 5) block future year
             if ($year > $nowYear) {
                 throw new \RuntimeException("BUILD_YEAR_FUTURE_NOT_ALLOWED|{$year}");
             }
@@ -1129,33 +1193,46 @@ AS remaining_useful_life_months
             $start = "{$year}-01-01";
             $end   = "{$year}-12-31";
 
-            $rows = AssetDeprMonthly::query()
-                ->selectRaw("
-                asset_uuid,
-                SUM(CASE WHEN EXTRACT(MONTH FROM period) = 1 THEN opening_balance ELSE 0 END) AS opening_balance,
-                SUM(additions + transfers_in - transfers_out - disposals + adjustment_value) AS total_additions,
-                SUM(depr_expense) AS depr_expense_year,
-                SUM(adjustment_depreciation) AS adjustment_depreciation_year,
-                MAX(accumulated_depr_end) AS accumulated_depr_end,
-                MAX(ending_balance) AS ending_balance_year
-            ")
+            $assetUuids = AssetDeprMonthly::query()
                 ->whereBetween('period', [$start, $end])
-                ->groupBy('asset_uuid')
-                ->get();
+                ->distinct()
+                ->pluck('asset_uuid');
 
-            foreach ($rows as $row) {
+            foreach ($assetUuids as $assetUuid) {
+                $rows = AssetDeprMonthly::query()
+                    ->where('asset_uuid', $assetUuid)
+                    ->whereBetween('period', [$start, $end])
+                    ->orderBy('period', 'asc')
+                    ->get();
+
+                if ($rows->isEmpty()) {
+                    continue;
+                }
+
+                $first = $rows->first();
+                $last  = $rows->last();
+
+                $totalAdditions = $rows->sum(function ($r) {
+                    return
+                        (float) $r->additions +
+                        (float) $r->transfers_in -
+                        (float) $r->transfers_out -
+                        (float) $r->disposals +
+                        (float) $r->adjustment_value;
+                });
+
                 AssetDeprYearly::updateOrCreate(
                     [
-                        'asset_uuid'  => $row->asset_uuid,
+                        'asset_uuid'  => $assetUuid,
                         'fiscal_year' => $year,
                     ],
                     [
-                        'opening_balance'              => (float) $row->opening_balance,
-                        'total_additions'              => (float) $row->total_additions,
-                        'depr_expense_year'            => (float) $row->depr_expense_year,
-                        'adjustment_depreciation_year' => (float) $row->adjustment_depreciation_year,
-                        'accumulated_depr_end'         => (float) $row->accumulated_depr_end,
-                        'ending_balance_year'          => (float) $row->ending_balance_year,
+                        'opening_balance'              => (float) $first->opening_balance,
+                        'total_additions'              => (float) $totalAdditions,
+                        'depr_expense_year'            => (float) $rows->sum('depr_expense'),
+                        'adjustment_depreciation_year' => (float) $rows->sum('adjustment_depreciation'),
+                        'accumulated_depr_end'         => (float) $last->accumulated_depr_end,
+                        'ending_balance_year'          => (float) $last->ending_balance,
                     ]
                 );
             }
@@ -1176,6 +1253,7 @@ AS remaining_useful_life_months
             'year'    => $year,
         ]);
     }
+
     public function yearStatus(Request $r)
     {
         abort_unless($this->canReadDepr(), 403);
