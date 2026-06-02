@@ -607,41 +607,35 @@ CASE
         COALESCE(
           NULLIF(p.useful_life_months, 0),
           NULLIF(av.useful_life_month, 0),
-          CASE WHEN av.useful_life_year IS NOT NULL THEN (av.useful_life_year * 12)::int ELSE 0 END,
+          CASE
+            WHEN av.useful_life_year IS NOT NULL
+              THEN (av.useful_life_year * 12)::int
+            ELSE 0
+          END,
           60
         )
         -
-        SUM(
-          CASE
-            -- sebelum eligible start: jangan dihitung
-            WHEN date_trunc('month', assets_depr_ledger_monthly.period)::date <
+        (
+          SELECT COUNT(*)
+          FROM assets_depr_ledger_monthly m2
+          WHERE m2.asset_uuid = assets_depr_ledger_monthly.asset_uuid
+            AND date_trunc('month', m2.period)::date <= date_trunc('month', assets_depr_ledger_monthly.period)::date
+            AND date_trunc('month', m2.period)::date >=
               CASE
                 WHEN EXTRACT(DAY FROM COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) <= COALESCE(p.cutoff_day, 15)
                   THEN date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at))::date
                 ELSE (date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) + INTERVAL '1 month')::date
               END
-              THEN 0
-
-            -- eligible tapi belum ada posting depresiasi: jangan mengurangi RUL
-            WHEN (
-              COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) = 0
-              AND COALESCE(assets_depr_ledger_monthly.depr_expense, 0) = 0
-              AND COALESCE(assets_depr_ledger_monthly.adjustment_depreciation, 0) = 0
-            ) THEN 0
-
-            -- bulan yang benar-benar “kepakai” (posted)
-            ELSE 1
-          END
-        ) OVER (
-          PARTITION BY assets_depr_ledger_monthly.asset_uuid
-          ORDER BY assets_depr_ledger_monthly.period
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            AND (
+              COALESCE(m2.depr_expense, 0) <> 0
+              OR COALESCE(m2.adjustment_depreciation, 0) <> 0
+              OR COALESCE(m2.accumulated_depr_end, 0) <> 0
+            )
         )
       ),
       0
     )
-END
-AS remaining_useful_life_months
+END AS remaining_useful_life_months
 ")
             ]);
 
@@ -935,7 +929,8 @@ AS remaining_useful_life_months
                 }
 
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
-                    ->whereDate('period', '<', $period)
+                    ->whereDate('period', '>=', $assetStartMonth->toDateString())
+                    ->whereDate('period', '<', $period->toDateString())
                     ->orderBy('period', 'desc')
                     ->first();
 
