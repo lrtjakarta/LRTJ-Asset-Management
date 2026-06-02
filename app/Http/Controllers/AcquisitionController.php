@@ -432,16 +432,19 @@ class AcquisitionController extends Controller
                 'salvage_value'      => 0,
                 'depr_start_date'    => $deprStartDate->toDateString(),
                 'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                'cutoff_day'         => 16,
+                'cutoff_day'         => 15,
                 'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
                 'is_active'          => true,
             ]);
         } else {
             $updates = [];
-            if (!$policy->depr_start_date || Carbon::parse($deprStartDate)->lt(Carbon::parse($policy->depr_start_date))) {
+            if (
+                !$policy->depr_start_date ||
+                Carbon::parse($policy->depr_start_date)->toDateString() !== $deprStartDate->toDateString()
+            ) {
                 $updates['depr_start_date'] = $deprStartDate->toDateString();
             }
-            if ((int)($policy->useful_life_months ?? 0) <= 0) {
+            if ($lifeMonths > 0 && (int)($policy->useful_life_months ?? 0) !== $lifeMonths) {
                 $updates['useful_life_months'] = $lifeMonths;
             }
             if (!empty($updates)) {
@@ -449,8 +452,17 @@ class AcquisitionController extends Controller
             }
         }
 
-        $from = $deprStartDate->copy()->startOfMonth();
-        $to   = now()->startOfMonth();
+        $oldPolicyStart = $policy?->depr_start_date
+            ? Carbon::parse($policy->depr_start_date)->startOfMonth()
+            : $deprStartDate->copy()->startOfMonth();
+
+        $newPolicyStart = $deprStartDate->copy()->startOfMonth();
+
+        $from = $oldPolicyStart->lt($newPolicyStart)
+            ? $oldPolicyStart
+            : $newPolicyStart;
+
+        $to = now()->startOfMonth();
 
         AssetDeprMonthly::where('asset_uuid', $assetUuid)
             ->whereDate('period', '>=', $from->toDateString())
@@ -487,7 +499,7 @@ class AcquisitionController extends Controller
         $startBase = $policy->depr_start_date
             ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
 
-        $cutoff = (int)($policy->cutoff_day ?? 16);
+        $cutoff = (int)($policy->cutoff_day ?? 15);
 
         $eligibleStart = $startBase
             ? Carbon::parse($startBase)->startOfMonth()->addMonths(
