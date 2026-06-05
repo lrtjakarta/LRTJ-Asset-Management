@@ -70,7 +70,7 @@
                 <div class="card-footer">
                     <button id="btnFilter" class="btn btn-danger btn-sm me-2">Apply Filter</button>
                     <button id="btnReset" class="btn btn-light-danger btn-sm me-2">Reset</button>
-                    <button id="btnExport" class="btn btn-light-danger btn-sm">Export Excel</button>
+                    {{-- <button id="btnExport" class="btn btn-light-danger btn-sm d-none d-md-block">Export Excel</button> --}}
                 </div>
             </div>
             <div class="card">
@@ -228,7 +228,8 @@
                             <div class="col-md-6">
                                 <label class="form-label required">Actual Date</label>
                                 <input type="date" class="form-control" id="adj-date" name="actual_date"
-                                    value="{{ Carbon::now()->toDateString() }}">
+                                    value="{{ $latestDeprDate }}" min="{{ $latestDeprMonthStart }}"
+                                    max="{{ $latestDeprMonthEnd }}">
                             </div>
 
                             {{-- <div class="col-md-6">
