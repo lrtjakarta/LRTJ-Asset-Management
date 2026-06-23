@@ -103,9 +103,7 @@
             processing: true,
             ajax: {
                 url: '{{ route('assets.datatable') }}',
-                type: 'POST',
                 data: function(d) {
-                    d._token = '{{ csrf_token() }}';
                     d.asset_class = $('#flt-asset-class').val() || '';
                     d.transaction = $('#flt-transaction').val() || '';
                     d.location = $('#flt-location').val() || '';
@@ -440,8 +438,8 @@
                 <ul class="breadcrumb breadcrumb-separatorless fw-semibold fs-7 my-0 pt-1">
                     <!--begin::Item-->
                     <li class="breadcrumb-item text-muted">
-                        Assets Data
-                    </li> 
+                        Assets
+                    </li>
                     <!--end::Item-->
                 </ul>
                 <!--end::Breadcrumb-->

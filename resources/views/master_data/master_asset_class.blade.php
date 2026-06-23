@@ -77,12 +77,14 @@
             });
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterAssetClass');
+                $('.modal-title').html('Add New');
                 $('#formMasterAssetClass')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
 
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
+                $('.modal-title').html('Edit');
                 $.get("{{ route('master.asset_class.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({

@@ -149,6 +149,7 @@
 
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
+                $('.modal-title').html('Edit');
 
                 $.get("{{ route('master.category_2.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {

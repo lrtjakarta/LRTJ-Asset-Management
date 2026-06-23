@@ -78,11 +78,13 @@
 
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterUOM');
+                $('.modal-title').html('Add New');
                 $('#formMasterUOM')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
             $(document).on('click', '.btn-edit', function() {
-                        $('#formMasterUOM')[0].reset(); 
+                $('.modal-title').html('Edit');
+                $('#formMasterUOM')[0].reset(); 
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.uom.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {

@@ -81,7 +81,15 @@
                         <!--end::Menu item-->
                         <!--begin::Menu separator-->
                         <div class="separator my-2"></div>
-                        
+                        <div class="menu-item px-5">
+                            <a href="#" class="menu-link px-5" data-bs-toggle="modal"
+                                data-bs-target="#user-self-modal">
+                                Edit Profile
+                            </a>
+                        </div>
+
+                        <div class="separator my-2"></div>
+
                         <!--end::Menu item-->
                         <!--begin::Menu item-->
                         <div class="menu-item px-5">
@@ -116,3 +124,4 @@
     </div>
     <!--end::Header container-->
 </div>
+

@@ -77,12 +77,14 @@
             });
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterSumber');
+                $('.modal-title').html('Add New');
                 $('#formMasterSumber')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
 
             $(document).on('click', '.btn-edit', function() {
-                        $('#formMasterSumber')[0].reset(); 
+                $('#formMasterSumber')[0].reset();
+                $('.modal-title').html('Edit');
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.sumber.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -122,7 +124,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        $('#formMasterSumber')[0].reset(); 
+                        $('#formMasterSumber')[0].reset();
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {

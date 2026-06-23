@@ -115,11 +115,13 @@
             });
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterUserCode');
+                $('.modal-title').html('Add New');
                 $('#formMasterUserCode')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
             $(document).on('click', '.btn-edit', function() {
                 $('#formMasterUserCode')[0].reset(); 
+                $('.modal-title').html('Edit');
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.user_code.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {

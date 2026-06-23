@@ -52,15 +52,14 @@ class AuthController extends Controller
             hash_equals($staticUser, Str::lower($username)) &&
             hash_equals($staticPass, $password)
         ) {
-            $user = User::findForDirectoryIdentity($staticUser, 'admin@example.com');
-            if (! $user) {
-                $user = User::create([
-                    'username' => $staticUser,
+            $user = User::firstOrCreate(
+                ['username' => $staticUser],
+                [
                     'name'     => 'Administrator',
                     'email'    => 'admin@example.com',
                     'password' => Hash::make(Str::random(32)),
-                ]);
-            }
+                ]
+            );
 
             // Ensure SYSADMIN role + primary role, like web syncAndLoginUser
             $user->roles()->syncWithoutDetaching(['SYSADMIN']);
@@ -130,38 +129,20 @@ class AuthController extends Controller
             $mail  = $attrs['mail'][0] ?? null;
 
             // Do NOT take kode_department from LDAP; internal only
-            $user = User::findForDirectoryIdentity($username, $mail);
-            $isNew = $user === null;
-
-            if (! $user) {
-                $user = User::create([
-                    'username' => $username,
+            $user = User::firstOrCreate(
+                ['username' => $username],
+                [
                     'name'     => $cn,
                     'email'    => $mail,
                     'password' => Hash::make(Str::random(32)),
-                ]);
-            }
+                ]
+            );
+
+            $isNew = $user->wasRecentlyCreated;
 
             // Keep basic info in sync, like web syncAndLoginUser
-            if (
-                strcasecmp((string) $user->username, $username) !== 0 &&
-                ! User::query()
-                    ->whereKeyNot($user->getKey())
-                    ->whereRaw('LOWER(username) = ?', [Str::lower($username)])
-                    ->exists()
-            ) {
-                $user->username = $username;
-            }
-
             $user->name = $cn;
-
-            if (
-                $mail &&
-                ! User::query()
-                    ->whereKeyNot($user->getKey())
-                    ->whereRaw('LOWER(email) = ?', [Str::lower($mail)])
-                    ->exists()
-            ) {
+            if ($mail) {
                 $user->email = $mail;
             }
             $user->save();

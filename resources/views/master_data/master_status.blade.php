@@ -83,13 +83,15 @@
 
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterStatus');
+                $('.modal-title').html('Add New');
                 $('#formMasterStatus')[0].reset();
                 $f.find('[name="uuid"]').val(null);
                 $f.find('[name="type"]').val('Asset').trigger('change');
             });
 
             $(document).on('click', '.btn-edit', function() {
-                        $('#formMasterStatus')[0].reset(); 
+                $('#formMasterStatus')[0].reset();
+                $('.modal-title').html('Edit');
                 const uuid = $(this).data('uuid');
                 $.get("{{ route('master.status.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
@@ -130,7 +132,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        $('#formMasterStatus')[0].reset(); 
+                        $('#formMasterStatus')[0].reset();
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {

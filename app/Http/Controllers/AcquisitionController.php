@@ -432,13 +432,16 @@ class AcquisitionController extends Controller
                 'salvage_value'      => 0,
                 'depr_start_date'    => $deprStartDate->toDateString(),
                 'convention'         => AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                'cutoff_day'         => 16,
+                'cutoff_day'         => 15,
                 'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
                 'is_active'          => true,
             ]);
         } else {
             $updates = [];
-            if (!$policy->depr_start_date || Carbon::parse($deprStartDate)->lt(Carbon::parse($policy->depr_start_date))) {
+            if (
+                !$policy->depr_start_date ||
+                Carbon::parse($policy->depr_start_date)->toDateString() !== $deprStartDate->toDateString()
+            ) {
                 $updates['depr_start_date'] = $deprStartDate->toDateString();
             }
             if ($lifeMonths > 0 && (int)($policy->useful_life_months ?? 0) !== $lifeMonths) {
@@ -449,8 +452,32 @@ class AcquisitionController extends Controller
             }
         }
 
-        $from = $deprStartDate->copy()->startOfMonth();
-        $to   = now()->startOfMonth();
+        // Ambil periode ledger paling awal asset ini.
+        // Jadi kalau tanggal masuk diubah ke April 2026,
+        // tapi ledger asset sudah pernah ada dari Jan 2026,
+        // recalculation tetap mulai dari Jan 2026.
+        $firstLedgerPeriod = AssetDeprMonthly::where('asset_uuid', $assetUuid)
+            ->min('period');
+
+        $oldPolicyStart = $policy?->depr_start_date
+            ? Carbon::parse($policy->depr_start_date)->startOfMonth()
+            : $deprStartDate->copy()->startOfMonth();
+
+        $newPolicyStart = $deprStartDate->copy()->startOfMonth();
+
+        // Ambil paling awal dari:
+        // 1. ledger pertama yang sudah pernah ada
+        // 2. policy start lama
+        // 3. policy start baru
+        $candidates = collect([
+            $firstLedgerPeriod ? Carbon::parse($firstLedgerPeriod)->startOfMonth() : null,
+            $oldPolicyStart,
+            $newPolicyStart,
+        ])->filter();
+
+        $from = $candidates->sortBy(fn($d) => $d->timestamp)->first();
+
+        $to = now()->startOfMonth();
 
         AssetDeprMonthly::where('asset_uuid', $assetUuid)
             ->whereDate('period', '>=', $from->toDateString())
@@ -477,8 +504,14 @@ class AcquisitionController extends Controller
 
         if ($capDate) {
             $assetStartMonth = Carbon::parse($capDate)->startOfMonth();
-            if ($to->lt($assetStartMonth)) return;
-            if ($from->lt($assetStartMonth)) $from = $assetStartMonth->copy();
+
+            if ($to->lt($from)) {
+                return;
+            }
+
+            // Jangan clamp $from ke assetStartMonth.
+            // Biarkan generate dari awal ledger.
+            // Nanti bulan sebelum eligible tetap dibuat dengan depresiasi 0.
         }
 
         $lifeMonths = (int) ($policy->useful_life_months ?: 60);
@@ -487,11 +520,11 @@ class AcquisitionController extends Controller
         $startBase = $policy->depr_start_date
             ?: ($capDate ? Carbon::parse($capDate)->toDateString() : null);
 
-        $cutoff = (int)($policy->cutoff_day ?? 16);
+        $cutoff = (int)($policy->cutoff_day ?? 15);
 
         $eligibleStart = $startBase
             ? Carbon::parse($startBase)->startOfMonth()->addMonths(
-                (Carbon::parse($startBase)->day <= $cutoff) ? 1 : 2
+                (Carbon::parse($startBase)->day <= $cutoff) ? 0 : 1
             )
             : $from->copy();
 

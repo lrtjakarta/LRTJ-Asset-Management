@@ -121,6 +121,85 @@
             </div>
         </div>
     </div>
+    <div class="modal fade" id="user-self-modal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered mw-600px">
+            <div class="modal-content">
+                <div class="modal-header pb-0 border-0">
+                    <h3 class="fw-bold mb-0">My Profile</h3>
+                    <div class="btn btn-icon btn-sm btn-active-light-primary ms-2" data-bs-dismiss="modal"
+                        aria-label="Close">
+                        <i class="ki-duotone ki-cross fs-2"></i>
+                    </div>
+                </div>
+
+                <div class="modal-body px-10 pb-10">
+                    <form id="user-self-form" method="post" action="{{ route('settings.profile.update') }}">
+                        @csrf
+                        @method('PUT')
+
+                        <div class="mb-5">
+                            <label class="form-label">Username</label>
+                            <input type="text" class="form-control form-control-solid"
+                                value="{{ session('ldap_user.username') }}" disabled>
+                        </div>
+
+                        <div class="mb-5">
+                            <label class="form-label required">Name</label>
+                            <input type="text" name="name" class="form-control form-control-solid"
+                                value="{{ session('ldap_user.name') }}" required>
+                        </div>
+
+                        <div class="mb-5">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control form-control-solid"
+                                value="{{ session('ldap_user.email') }}">
+                        </div>
+
+                        {{-- Password (optional) --}}
+                        <div class="mb-5">
+                            <label class="form-label">New Password</label>
+                            <div class="input-group">
+                                <input type="password" name="password" class="form-control"
+                                    id="self-password" minlength="5" autocomplete="new-password">
+                                <button type="button" class="btn btn-icon btn-primary" id="toggle-self-password">
+                                    <i class="ki-duotone ki-eye fs-2" id="icon-self-password">                                        
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                        <span class="path3"></span>
+                                    </i>
+                                </button>
+                            </div>
+                            <div class="form-text">Kosongkan jika tidak ingin mengganti password. Minimal 5 karakter.
+                            </div>
+                        </div>
+                        <div class="mb-7">
+                            <label class="form-label">Confirm New Password</label>
+                            <div class="input-group">
+                                <input type="password" name="password_confirmation"
+                                    class="form-control" id="self-password-confirm" minlength="5"
+                                    autocomplete="new-password">
+                                <button type="button" class="btn btn-icon btn-primary" id="toggle-self-password-confirm">
+                                    <i class="ki-duotone ki-eye fs-2" id="icon-self-password-confirm">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                        <span class="path3"></span>
+                                    </i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="button" class="btn btn-light me-2" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="indicator-label">Save</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
 
     {{-- Metronic Demo1 JS from /public --}}
     <script src="{{ asset('metronic/demo1/assets/plugins/global/plugins.bundle.js') }}"></script>
@@ -145,6 +224,54 @@
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/upgrade-plan.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/create-app.js') }}"></script>
     <script src="{{ asset('metronic/demo1/assets/js/custom/utilities/modals/users-search.js') }}"></script>
+    <script>
+        function bindPasswordToggle(inputId, btnId, iconId) {
+            const input = document.getElementById(inputId);
+            const btn = document.getElementById(btnId);
+            const icon = document.getElementById(iconId);
+            if (!input || !btn || !icon) return;
+
+            btn.addEventListener('click', function() {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+                icon.classList.remove('ki-eye', 'ki-eye-slash');
+                icon.classList.add(isHidden ? 'ki-eye-slash' : 'ki-eye');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            bindPasswordToggle('self-password', 'toggle-self-password', 'icon-self-password');
+            bindPasswordToggle('self-password-confirm', 'toggle-self-password-confirm',
+                'icon-self-password-confirm');
+        });
+
+        const selfModalEl = document.getElementById('user-self-modal');
+        if (selfModalEl) {
+            selfModalEl.addEventListener('show.bs.modal', function() {
+                const pw = document.getElementById('self-password');
+                const pwc = document.getElementById('self-password-confirm');
+                const i1 = document.getElementById('icon-self-password');
+                const i2 = document.getElementById('icon-self-password-confirm');
+
+                if (pw) {
+                    pw.value = '';
+                    pw.type = 'password';
+                }
+                if (pwc) {
+                    pwc.value = '';
+                    pwc.type = 'password';
+                }
+                if (i1) {
+                    i1.classList.remove('ki-eye-slash');
+                    i1.classList.add('ki-eye');
+                }
+                if (i2) {
+                    i2.classList.remove('ki-eye-slash');
+                    i2.classList.add('ki-eye');
+                }
+            });
+        }
+    </script>
     @stack('scripts')
 </body>
 

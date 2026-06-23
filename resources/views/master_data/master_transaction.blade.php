@@ -77,13 +77,15 @@
             });
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterTransaction');
+                $('.modal-title').html('Add New');
                 $('#formMasterTransaction')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
 
             $(document).on('click', '.btn-edit', function() {
-                        $('#formMasterTransaction')[0].reset(); 
+                $('#formMasterTransaction')[0].reset();
                 const uuid = $(this).data('uuid');
+                $('.modal-title').html('Edit');
                 $.get("{{ route('master.transaction.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
@@ -122,7 +124,7 @@
                             title: 'Success',
                             text: res.message || 'Saved.'
                         });
-                        $('#formMasterTransaction')[0].reset(); 
+                        $('#formMasterTransaction')[0].reset();
                         $f.find('[name="uuid"]').val(null);
                     })
                     .fail(function(xhr) {

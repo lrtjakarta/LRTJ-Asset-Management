@@ -75,6 +75,7 @@
 
             $(document).on('click', '.btn-edit', function() {
                 const uuid = $(this).data('uuid');
+                $('.modal-title').html('Edit');
                 $.get("{{ route('master.group_category.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({
