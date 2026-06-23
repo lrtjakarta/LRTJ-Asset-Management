@@ -601,7 +601,7 @@ class DepreciationController extends Controller
                 'av.capitalization_date as cap_date',
                 'av.total as total_value',
                 'y.ending_balance_year as ending_balance_prev_year',
-                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("COALESCE(av.total, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) AS last_net_book_value"),
                 DB::raw("
                 CASE
                     WHEN av.capitalization_date IS NULL THEN NULL

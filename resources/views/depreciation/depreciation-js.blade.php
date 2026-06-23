@@ -466,7 +466,7 @@
                     searchable: false
                 },
                 {
-                    data: 'ending_balance',
+                    data: 'last_net_book_value',
                     render: money,
                     className: 'text-end',
                     searchable: false
