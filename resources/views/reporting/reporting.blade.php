@@ -320,16 +320,13 @@
                 ],
                 ajax: {
                     url: R.datatable,
-                    type: 'POST',
                     data: function(d) {
-                        d._token = '{{ csrf_token() }}';
                         return Object.assign(d, buildFilters());
                     }
                 },
                 columns: [{
                         data: 'asset_code',
                         name: 'a.asset_code',
-                        defaultContent: '',
                         render: function(data, type, row) {
                             if (type !== 'display') return data;
                             const url = SHOW_URL_TPL.replace('__UUID__', encodeURIComponent(row.uuid));
@@ -338,71 +335,59 @@
                     },
                     {
                         data: 'description',
-                        name: 'a.description',
-                        defaultContent: ''
+                        name: 'a.description'
                     },
                     {
                         data: 'kode_asset_class_label',
-                        name: 'a.kode_asset_class',
-                        defaultContent: ''
+                        name: 'a.kode_asset_class'
                     },
                     {
                         data: 'kode_location_label',
-                        name: 'a.kode_location',
-                        defaultContent: ''
+                        name: 'a.kode_location'
                     },
                     {
                         data: 'kode_status_label',
-                        name: 'a.kode_status',
-                        defaultContent: ''
+                        name: 'a.kode_status'
                     },
                     {
                         data: 'asset_owner_label',
-                        name: 'g.asset_owner',
-                        defaultContent: ''
+                        name: 'g.asset_owner'
                     },
                     {
                         data: 'asset_user_label',
-                        name: 'g.asset_user',
-                        defaultContent: ''
+                        name: 'g.asset_user'
                     },
 
                     {
                         data: 'price',
                         name: 'v.price',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'quantity',
                         name: 'v.quantity',
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'vat_in',
                         name: 'v.vat_in',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'kode_uom_label',
-                        name: 'v.kode_uom',
-                        defaultContent: ''
+                        name: 'v.kode_uom'
                     },
                     {
                         data: 'total',
                         name: 'v.total',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'cap_date',
                         name: 'v.capitalization_date',
-                        defaultContent: '',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -419,8 +404,7 @@
 
                     {
                         data: 'period',
-                        name: 'period',
-                        defaultContent: '',
+                        name: 'l.period',
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
@@ -434,64 +418,55 @@
                     },
                     {
                         data: 'depr_code',
-                        name: 'depr_code',
-                        defaultContent: ''
+                        name: 'l.depr_code'
                     },
                     {
                         data: 'opening_balance',
-                        name: 'opening_balance',
+                        name: 'l.opening_balance',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'additions',
-                        name: 'additions',
+                        name: 'l.additions',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'transfers_in',
-                        name: 'transfers_in',
+                        name: 'l.transfers_in',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'transfers_out',
-                        name: 'transfers_out',
+                        name: 'l.transfers_out',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'disposals',
-                        name: 'disposals',
+                        name: 'l.disposals',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'adjustment_value',
-                        name: 'adjustment_value',
+                        name: 'l.adjustment_value',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'adjustment_depreciation',
-                        name: 'adjustment_depreciation',
+                        name: 'l.adjustment_depreciation',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     {
                         data: 'accumulated_depr_end',
-                        name: 'accumulated_depr_end',
+                        name: 'l.accumulated_depr_end',
                         render: formatNumber,
-                        className: 'text-end',
-                        defaultContent: ''
+                        className: 'text-end'
                     },
                     // {
                     //     data: 'ending_balance',
@@ -504,29 +479,25 @@
                         name: 'last_net_book_value',
                         render: formatNumber,
                         className: 'text-end',
-                        searchable: false,
-                        defaultContent: ''
+                        searchable: false
                     },
                     {
                         data: 'no_po_perjanjian_spk',
-                        name: 'd.no_po_perjanjian_spk',
-                        defaultContent: ''
+                        name: 'd.no_po_perjanjian_spk'
                     },
                     {
                         data: 'nota_referensi',
-                        name: 'd.nota_referensi',
-                        defaultContent: ''
+                        name: 'd.nota_referensi'
                     }, {
                         data: 'updated_at',
-                        name: 'depr_updated_at',
-                        defaultContent: '',
+                        name: 'l.updated_at', // atau disable order/search kalau mau
                         render: function(iso, type) {
                             if (!iso) return '';
                             if (type === 'sort' || type === 'type') return iso;
 
                             const d = new Date(iso);
                             if (isNaN(d.getTime()))
-                                return iso;
+                                return iso; // fallback kalau ada data lama formatnya beda
 
                             const dateStr = new Intl.DateTimeFormat('en-GB', {
                                 timeZone: 'Asia/Jakarta',

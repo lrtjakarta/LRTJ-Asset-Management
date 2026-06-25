@@ -7,6 +7,8 @@ use App\Models\MasterRole;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class UserManagementController extends Controller
 {
@@ -88,16 +90,26 @@ class UserManagementController extends Controller
         $user = User::findOrFail($id);
 
         $data = $request->validate([
-            'name'        => ['required', 'string', 'max:191'],
-            'email'       => ['nullable', 'email', 'max:191'],
-            'kode_department' => ['nullable', 'string', 'max:50'],
-            'role_kode'   => ['array'],
-            'role_kode.*' => ['string', 'exists:master_role,kode'],
+            'name'             => ['required', 'string', 'max:191'],
+            'email'            => ['nullable', 'email', 'max:191'],
+            'kode_department'  => ['nullable', 'string', 'max:50'],
+            'role_kode'        => ['array'],
+            'role_kode.*'      => ['string', 'exists:master_role,kode'],
+
+            // optional password:
+            'password'         => ['nullable', 'string', 'min:5', 'confirmed'],
+            // confirmed => butuh field password_confirmation
         ]);
 
-        $user->name  = $data['name'];
-        $user->email = $data['email'] ?? null;
+        $user->name            = $data['name'];
+        $user->email           = $data['email'] ?? null;
         $user->kode_department = $data['kode_department'] ?? null;
+
+        // update password hanya jika diisi
+        if (!empty($data['password'])) {
+            $user->password = Hash::make($data['password']);
+        }
+
         $user->save();
 
         $user->roles()->sync($data['role_kode'] ?? []);
@@ -112,6 +124,38 @@ class UserManagementController extends Controller
         return redirect()
             ->route('settings.users.index')
             ->with('success', 'User updated.');
+    }
+    public function profile_update(Request $request)
+    {
+        $user = Auth::user();
+
+        $data = $request->validate([
+            'name'     => ['required', 'string', 'max:191'],
+            'email'    => ['nullable', 'email', 'max:191'],
+            'password' => ['nullable', 'string', 'min:5', 'confirmed'],
+        ]);
+
+        $user->name = $data['name'];
+        $user->email = $data['email'] ?? null;
+
+        if (!empty($data['password'])) {
+            $user->password = Hash::make($data['password']);
+        }
+
+        $user->save();
+
+        // update session ldap_user biar header langsung ikut berubah
+        $roles = $user->roles()->pluck('kode')->toArray();
+        $request->session()->put('ldap_user', [
+            'username' => $user->username ?? null,
+            'name'     => $user->name ?? null,
+            'email'    => $user->email ?? null,
+            'ou'       => $user->ou ?? null,
+            'kode_department' => $user->kode_department ?? null,
+            'roles'    => $roles,
+        ]);
+
+        return back()->with('success', 'Profile updated.');
     }
     public function select_users(Request $request)
     {

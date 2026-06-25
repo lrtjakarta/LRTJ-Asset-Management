@@ -111,12 +111,27 @@ class AssetsController extends Controller
     }
     public function datatable(Request $request)
     {
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            DISTINCT ON (m.asset_uuid)
+            m.asset_uuid,
+            m.period,
+            m.accumulated_depr_end,
+            m.ending_balance
+        ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
+
         $q = DB::table('assets as a')
             // child tables
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
             ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
+
+            ->leftJoinSub($lastDepr, 'dm', function ($j) {
+                $j->on('dm.asset_uuid', '=', 'a.uuid');
+            })
 
             // master lookups (names)
             ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
@@ -163,6 +178,10 @@ class AssetsController extends Controller
                 'd.no_document',
 
                 'a.kode_sumber',
+
+                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
+                DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("dm.period as last_depr_period"),
 
                 DB::raw("
                 CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
@@ -224,33 +243,7 @@ class AssetsController extends Controller
             });
         }
 
-        $q->addSelect([
-            'last_accumulated_depr' => DB::table('assets_depr_ledger_monthly as maxdm')
-                ->select('maxdm.accumulated_depr_end')
-                ->whereColumn('maxdm.asset_uuid', 'a.uuid')
-                ->orderByDesc('maxdm.period')
-                ->limit(1),
-            'last_depr_period' => DB::table('assets_depr_ledger_monthly as maxdmp')
-                ->select('maxdmp.period')
-                ->whereColumn('maxdmp.asset_uuid', 'a.uuid')
-                ->orderByDesc('maxdmp.period')
-                ->limit(1)
-        ]);
-        $q->addSelect([
-            'last_net_book_value' => DB::table('assets_depr_ledger_monthly as maxdmval')
-                ->selectRaw("COALESCE(v.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
-                ->whereColumn('maxdmval.asset_uuid', 'a.uuid')
-                ->orderByDesc('maxdmval.period')
-                ->limit(1)
-        ]);
-
-        $dt = DataTables::of($q)
-            ->filterColumn('last_accumulated_depr', function($query, $keyword) { })
-            ->orderColumn('last_accumulated_depr', function ($query, $order) { })
-            ->filterColumn('last_net_book_value', function($query, $keyword) { })
-            ->orderColumn('last_net_book_value', function ($query, $order) { })
-            ->filterColumn('last_depr_period', function($query, $keyword) { })
-            ->orderColumn('last_depr_period', function ($query, $order) { });
+        $dt = DataTables::of($q);
 
         $like = function ($keyword) {
             $k = trim((string)$keyword);
@@ -861,6 +854,7 @@ class AssetsController extends Controller
             'Asset_Bulk_Template.xlsx'
         );
     }
+
     public function upload_excel(Request $request)
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'C'), 403);
@@ -1163,56 +1157,51 @@ class AssetsController extends Controller
         $hasDeprMonthly = class_exists(\App\Models\AssetDeprMonthly::class);
 
         // ===================== AUTO DEPR GENERATOR =====================
+        // Auto-generate ledger dari upload Excel, disamakan dengan DepreciationController:
+        // - Tanggal <= cutoff_day: mulai depresiasi bulan yang sama
+        // - Tanggal > cutoff_day: mulai bulan berikutnya
+        // - depr_code deterministic per bulan: DEP + yymm + 0001
+        // - Opening selalu dihitung ulang dari nilai acquisition awal setelah ledger lama dihapus
 
-        $seqCache = [];
-
-        $nextDeprCode = function (\Carbon\Carbon $period) use (&$seqCache) {
-            $prefix = 'DEP' . $period->format('ym');
-
-            if (!array_key_exists($prefix, $seqCache)) {
-                $last = \App\Models\AssetDeprMonthly::query()
-                    ->whereNotNull('depr_code')
-                    ->where('depr_code', 'like', $prefix . '%')
-                    ->orderBy('depr_code', 'desc')
-                    ->first();
-
-                $seqCache[$prefix] = $last ? ((int) substr($last->depr_code, -4)) : 0;
-            }
-
-            $seqCache[$prefix]++;
-
-            return $prefix . str_pad((string)$seqCache[$prefix], 4, '0', STR_PAD_LEFT);
-        };
-
-        $generateDeprHistory = function (string $assetUuid, \Carbon\Carbon $capDate, int $lifeMonths, float $capTotal) use ($nextDeprCode) {
+        $generateDeprHistory = function (
+            string $assetUuid,
+            \Carbon\Carbon $capDate,
+            int $lifeMonths,
+            float $capTotal
+        ) {
             if ($lifeMonths <= 0) return;
             if ($capTotal <= 0) return;
 
-            $cutoff = 16;
+            $policy = \App\Models\AssetDeprPolicy::query()
+                ->where('asset_uuid', $assetUuid)
+                ->first();
+
+            $cutoff = (int) ($policy?->cutoff_day ?? 15);
 
             $eligibleStart = $capDate->copy()->startOfMonth()
-                ->addMonths(($capDate->day <= $cutoff) ? 1 : 2);
+                ->addMonths(($capDate->day <= $cutoff) ? 0 : 1);
 
             $nowMonth = now()->startOfMonth();
-            $endByLife = $eligibleStart->copy()->addMonths($lifeMonths - 1);
-            $end = $endByLife->lte($nowMonth) ? $endByLife : $nowMonth;
 
-            if ($eligibleStart->gt($end)) return;
+            if ($eligibleStart->gt($nowMonth)) {
+                return;
+            }
 
             $opening = $capTotal;
             $accPrev = 0.0;
-
-            $period = $eligibleStart->copy();
-
+            $period  = $eligibleStart->copy();
             $elapsed = 0;
 
-            while ($period->lte($end)) {
+            while ($period->lte($nowMonth) && $elapsed < $lifeMonths) {
                 $remaining = max(0, $lifeMonths - $elapsed);
+                if ($remaining <= 0) break;
 
-                $deprBase = max($opening - 0.0, 0.0);
-                $deprExpense = ($remaining > 0)
-                    ? floor($deprBase / $remaining)
-                    : 0.0;
+                // Flat dari acquisition awal, sama seperti processMonthlyDepr()
+                // ketika tidak ada transfer/adjustment/disposal pada bulan tersebut.
+                $monthlyFixed = floor($capTotal / $lifeMonths);
+
+                $maxAllowed  = max($opening, 0.0);
+                $deprExpense = min($monthlyFixed, $maxAllowed);
 
                 $ending = $opening - $deprExpense;
                 $accEnd = $accPrev + $deprExpense;
@@ -1233,11 +1222,10 @@ class AssetsController extends Controller
                         'depr_expense'            => $deprExpense,
                         'accumulated_depr_end'    => $accEnd,
                         'ending_balance'          => $ending,
-                        'depr_code'               => $nextDeprCode($period),
+                        'depr_code'               => 'DEP' . $period->format('ym') . '0001',
                     ]
                 );
 
-                // next month
                 $opening = $ending;
                 $accPrev = $accEnd;
                 $elapsed++;
@@ -1608,14 +1596,45 @@ class AssetsController extends Controller
                 }
 
                 // ===================== AUTO GENERATE DEPRECIATION (HISTORY) =====================
-                if ($isNew && $hasDeprPolicy && $hasDeprMonthly) {
-                    $capDate = $valuePayload['capitalization_date'] ?? $valuePayload['actual_date'] ?? null;
-                    $life    = (int) ($valuePayload['useful_life_month'] ?? 0);
+                // Tetap auto-generate dari upload Excel untuk INSERT dan UPDATE.
+                // Regenerate hanya dilakukan jika kolom value yang mempengaruhi depresiasi ikut di-upload.
+                $hasValueForDepr =
+                    array_key_exists('capitalization_date', $valuePayload) ||
+                    array_key_exists('actual_date', $valuePayload) ||
+                    array_key_exists('useful_life_month', $valuePayload) ||
+                    array_key_exists('total', $valuePayload) ||
+                    array_key_exists('quantity', $valuePayload) ||
+                    array_key_exists('price', $valuePayload) ||
+                    ($isPajakFlag !== null);
 
-                    $capTotal = (float) ($valuePayload['total'] ?? 0);
+                if ($hasValueForDepr && $hasDeprPolicy && $hasDeprMonthly && $tableValues) {
+                    $finalValue = \Illuminate\Support\Facades\DB::table($tableValues)
+                        ->where('asset_uuid', $asset->uuid)
+                        ->first();
 
-                    if ($capDate instanceof \Carbon\Carbon && $life > 0 && $capTotal > 0) {
-                        $policy = \App\Models\AssetDeprPolicy::query()->where('asset_uuid', $asset->uuid)->first();
+                    $capDateRaw = $finalValue?->capitalization_date
+                        ?? $finalValue?->actual_date
+                        ?? null;
+
+                    $life = (int) ($finalValue?->useful_life_month ?? 0);
+
+                    if ($life <= 0 && isset($finalValue?->useful_life_year)) {
+                        $life = (int) round(((float) $finalValue->useful_life_year) * 12);
+                    }
+
+                    $capTotal = (float) ($finalValue?->total ?? 0);
+
+                    if ($capDateRaw && $life > 0 && $capTotal > 0) {
+                        $capDate = \Carbon\Carbon::parse($capDateRaw)->startOfDay();
+
+                        $policy = \App\Models\AssetDeprPolicy::query()
+                            ->where('asset_uuid', $asset->uuid)
+                            ->first();
+
+                        $oldPolicyStart = $policy?->depr_start_date
+                            ? \Carbon\Carbon::parse($policy->depr_start_date)->startOfMonth()
+                            : $capDate->copy()->startOfMonth();
+
                         if (!$policy) {
                             \App\Models\AssetDeprPolicy::create([
                                 'asset_uuid'         => $asset->uuid,
@@ -1624,19 +1643,34 @@ class AssetsController extends Controller
                                 'salvage_value'      => 0,
                                 'depr_start_date'    => $capDate->toDateString(),
                                 'convention'         => \App\Models\AssetDeprPolicy::CONVENTION_PRORATA_MONTH,
-                                'cutoff_day'         => 16,
+                                'cutoff_day'         => 15,
                                 'start_rule'         => 'CUT_OFF_NEXT_OR_NEXT2',
                                 'is_active'          => true,
+                                'created_at'         => now(),
+                                'updated_at'         => now(),
                             ]);
                         } else {
-                            // update minimal kalau kosong / tidak sinkron
-                            $upd = [];
-                            if (!$policy->depr_start_date) $upd['depr_start_date'] = $capDate->toDateString();
-                            if ((int)($policy->useful_life_months ?? 0) <= 0) $upd['useful_life_months'] = $life;
-                            if (!empty($upd)) {
-                                \App\Models\AssetDeprPolicy::where('asset_uuid', $asset->uuid)->update($upd);
-                            }
+                            \App\Models\AssetDeprPolicy::where('asset_uuid', $asset->uuid)->update([
+                                'depr_start_date'    => $capDate->toDateString(),
+                                'useful_life_months' => $life,
+                                'cutoff_day'         => $policy->cutoff_day ?: 15,
+                                'is_active'          => true,
+                                'updated_at'         => now(),
+                            ]);
                         }
+
+                        $newPolicyStart = $capDate->copy()->startOfMonth();
+
+                        // Hapus dari tanggal paling awal antara policy lama dan tanggal baru.
+                        // Ini mencegah ledger lama bernilai 0 / salah ikut menjadi opening bulan berikutnya.
+                        $from = $oldPolicyStart->lt($newPolicyStart)
+                            ? $oldPolicyStart
+                            : $newPolicyStart;
+
+                        \App\Models\AssetDeprMonthly::query()
+                            ->where('asset_uuid', $asset->uuid)
+                            ->whereDate('period', '>=', $from->toDateString())
+                            ->delete();
 
                         $generateDeprHistory($asset->uuid, $capDate, $life, $capTotal);
                     }

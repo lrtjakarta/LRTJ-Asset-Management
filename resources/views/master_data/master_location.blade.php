@@ -79,12 +79,14 @@
 
             $(document).on('click', '#btn-add', function() {
                 const $f = $('#formMasterLocation');
+                $('.modal-title').html('Add New');
                 $('#formMasterLocation')[0].reset();
                 $f.find('[name="uuid"]').val(null);
             });
             $(document).on('click', '.btn-edit', function() {
                 $('#formMasterLocation')[0].reset();
                 const uuid = $(this).data('uuid');
+                $('.modal-title').html('Edit');
                 $.get("{{ route('master.location.show', ':uuid') }}".replace(':uuid', uuid))
                     .done(function(res) {
                         if (!res?.ok) return Swal.fire({

@@ -90,7 +90,8 @@
 
                         <div class="mb-5">
                             <label class="form-label">Department</label>
-                            <select name="kode_department" id="user-kode-department" class="form-select form-select-solid" data-control="select2" data-placeholder="Select department">
+                            <select name="kode_department" id="user-kode-department" class="form-select form-select-solid"
+                                data-control="select2" data-placeholder="Select department">
                                 <option value="">-- Select Department --</option>
                             </select>
                         </div>
@@ -105,6 +106,39 @@
                             </select>
                             <div class="form-text">
                                 One user can have multiple roles.
+                            </div>
+                        </div>
+                        <div class="mb-5">
+                            <label class="form-label">New Password</label>
+                            <div class="input-group">
+                                <input type="password" name="password" class="form-control "
+                                    id="user-password" autocomplete="new-password" minlength="5">
+                                <button type="button" class="btn btn-icon btn-primary" id="toggle-user-password"
+                                    aria-label="Toggle password">
+                                    <i class="ki-duotone ki-eye fs-2" id="icon-user-password">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                        <span class="path3"></span>
+                                    </i>
+                                </button>
+                            </div>
+                            <div class="form-text">Kosongkan jika tidak ingin mengganti password. Minimal 5 karakter.</div>
+                        </div>
+
+                        <div class="mb-5">
+                            <label class="form-label">Confirm New Password</label>
+                            <div class="input-group">
+                                <input type="password" name="password_confirmation"
+                                    class="form-control " id="user-password-confirm"
+                                    autocomplete="new-password" minlength="5">
+                                <button type="button" class="btn btn-icon btn-primary"
+                                    id="toggle-user-password-confirm" aria-label="Toggle confirm password">
+                                    <i class="ki-duotone ki-eye fs-2" id="icon-user-password-confirm">
+                                        <span class="path1"></span>
+                                        <span class="path2"></span>
+                                        <span class="path3"></span>
+                                    </i>
+                                </button>
                             </div>
                         </div>
 
@@ -226,6 +260,28 @@
             }
         });
 
+        function bindPasswordToggle(inputId, btnId, iconId) {
+            const input = document.getElementById(inputId);
+            const btn = document.getElementById(btnId);
+            const icon = document.getElementById(iconId);
+
+            if (!input || !btn || !icon) return;
+
+            btn.addEventListener('click', function() {
+                const isHidden = input.type === 'password';
+                input.type = isHidden ? 'text' : 'password';
+
+                // swap icon class
+                icon.classList.remove('ki-eye', 'ki-eye-slash');
+                icon.classList.add(isHidden ? 'ki-eye-slash' : 'ki-eye');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            bindPasswordToggle('user-password', 'toggle-user-password', 'icon-user-password');
+            bindPasswordToggle('user-password-confirm', 'toggle-user-password-confirm',
+                'icon-user-password-confirm');
+        });
         const modalEl = document.getElementById('user-role-modal');
         if (modalEl) {
             modalEl.addEventListener('show.bs.modal', function(event) {
@@ -241,10 +297,13 @@
                 const rolesCsv = button.getAttribute('data-user-roles') || '';
                 const roles = rolesCsv.split(',').filter(Boolean);
 
+
                 document.getElementById('user-id').value = userId;
                 document.getElementById('user-username').value = username;
                 document.getElementById('user-name').value = name;
                 document.getElementById('user-email').value = email || '';
+                document.getElementById('user-password').value = '';
+                document.getElementById('user-password-confirm').value = '';
 
                 const form = document.getElementById('user-role-form');
                 form.action = USER_UPDATE_URL(userId);
@@ -261,6 +320,23 @@
                     deptSelect.append(option).trigger('change');
                 } else {
                     deptSelect.val(null).trigger('change');
+                }
+                const pw = document.getElementById('user-password');
+                const pwc = document.getElementById('user-password-confirm');
+
+                const i1 = document.getElementById('icon-user-password');
+                const i2 = document.getElementById('icon-user-password-confirm');
+
+                if (pw) pw.type = 'password';
+                if (pwc) pwc.type = 'password';
+
+                if (i1) {
+                    i1.classList.remove('ki-eye-slash');
+                    i1.classList.add('ki-eye');
+                }
+                if (i2) {
+                    i2.classList.remove('ki-eye-slash');
+                    i2.classList.add('ki-eye');
                 }
             });
         }

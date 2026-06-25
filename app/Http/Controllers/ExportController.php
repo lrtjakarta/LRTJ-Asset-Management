@@ -314,6 +314,16 @@ class ExportController
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'R'), 403);
 
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            DISTINCT ON (m.asset_uuid)
+            m.asset_uuid,
+            m.period,
+            m.accumulated_depr_end,
+            m.ending_balance
+        ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
@@ -328,12 +338,8 @@ class ExportController
             ->leftJoin('master_user_code    as uu',   'uu.kode',    'g.asset_user')
             ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
 
-            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
-                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
-            })
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
-                     ->on('dm.period', '=', 'max_depr.max_period');
+            ->leftJoinSub($lastDepr, 'dm', function ($j) {
+                $j->on('dm.asset_uuid', '=', 'a.uuid');
             })
 
             ->whereNull('a.deleted_at')

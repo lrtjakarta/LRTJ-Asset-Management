@@ -4,264 +4,269 @@ namespace App\Services;
 
 use App\Models\Assets;
 use App\Models\AssetsRfid;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 class SatoRfidPrinter
 {
-    public function printByAssetUuids(array $assetUuids, string $labelSize = '100x40'): void
+    private int $dpi = 203;
+
+    /**
+     * Print RFID label via LAN (raw SBPL) for asset UUID list.
+     *
+     * @param array<int, string> $assetUuids
+     * @param string $size '100x40' or '60x40'
+     * @param bool $withRfid Whether to include RFID encode command
+     */
+    public function printByAssetUuids(array $assetUuids, string $size = '100x40', bool $withRfid = true): void
     {
-        try {
-            $assets = Assets::with([
-                'rfids',
-                'activeQr',
-                'assignment.owner',
-                'location',
-            ])
-                ->whereIn('uuid', $assetUuids)
-                ->get();
+        $assets = Assets::query()
+            ->with(['rfids', 'assignment'])
+            ->whereIn('uuid', $assetUuids)
+            ->get();
 
-            if ($assets->isEmpty()) {
-                Log::warning('SatoRfidPrinter: No assets found for printing.', [
-                    'assetUuids' => $assetUuids
-                ]);
-                return; // jangan throw exception
-            }
-
-            $layout = $this->labelLayout($labelSize);
-            $sbplAll = $this->buildMediaSizeCommand($layout);
-
-            foreach ($assets as $asset) {
-                $rfid = $asset->rfids; // hasOne
-
-                // kalau belum punya tag, generate dari UUID (32 hex)
-                if (! $rfid) {
-                    $epc = strtoupper(str_replace('-', '', $asset->uuid));
-                    $epc = preg_replace('/[^0-9A-F]/', '', $epc);
-
-                    $rfid = AssetsRfid::create([
-                        'asset_uuid' => $asset->uuid,
-                        'epc'        => $epc,
-                        'tag_type'   => 'UHF',
-                        'is_active'  => true,
-                    ]);
-                }
-
-                $sbplAll .= $this->buildLabelCommand($asset, $rfid, $layout);
-            }
-
-            $this->sendToPrinter($sbplAll);
-
-        } catch (\Throwable $e) {
-            // jangan crash request
-            Log::error('RFID printing failed', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+        if ($assets->isEmpty()) {
+            throw new \RuntimeException('No assets found.');
         }
+
+        [$wDots, $hDots] = match ($size) {
+            '60x40' => [$this->mmToDots(60), $this->mmToDots(40)],
+            default => [$this->mmToDots(100), $this->mmToDots(40)],
+        };
+
+        $sbplAll = $this->buildInitBlock($wDots, $hDots);
+
+        foreach ($assets as $asset) {
+            $rfid = $this->resolveOrCreateRfid($asset);
+
+            $sbplAll .= $this->buildPrintBlock(
+                $asset,
+                $rfid,
+                $wDots,
+                $hDots,
+                $size,
+                $withRfid
+            );
+        }
+
+        $this->sendToPrinter($sbplAll);
+    }
+
+    private function resolveOrCreateRfid(Assets $asset): AssetsRfid
+    {
+        $rfid = $asset->rfids instanceof Collection
+            ? $asset->rfids->first()
+            : $asset->rfids;
+
+        if ($rfid instanceof AssetsRfid) {
+            return $rfid;
+        }
+
+        $epc = strtoupper(str_replace('-', '', (string) $asset->uuid));
+        $epc = preg_replace('/[^0-9A-F]/', '', $epc) ?? '';
+        $epc = substr(str_pad($epc, 32, '0', STR_PAD_LEFT), -32);
+
+        return AssetsRfid::create([
+            'asset_uuid' => $asset->uuid,
+            'epc'        => $epc,
+            'tag_type'   => 'UHF',
+            'is_active'  => true,
+        ]);
+    }
+
+    private function mmToDots(float $mm): int
+    {
+        return (int) round($mm * $this->dpi / 25.4);
     }
 
     /**
-     * SBPL per label (print + tulis EPC)
+     * Build asset description:
+     * - remove special characters/symbols
+     * - normalize whitespace
+     * - truncate safely
      */
-    protected function buildLabelCommand(Assets $asset, AssetsRfid $rfid, array $layout): string
+    private function sanitizeDescForLabel(?string $text, int $maxLen = 20): string
+    {
+        $text = (string) ($text ?? '');
+
+        $text = preg_replace('/[^\P{C}\n]+/u', '', $text) ?? '';
+        $text = preg_replace('/[^\p{L}\p{N}\s]/u', '', $text) ?? '';
+        $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+        $text = trim($text);
+
+        return mb_substr($text, 0, $maxLen);
+    }
+
+    protected function buildInitBlock(int $wDots, int $hDots): string
     {
         $esc = "\x1B";
-        $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', $rfid->epc));
-        $qrData = $this->cleanQrData($rfid->epc ?: $asset->uuid);
-        $lines = $this->labelLines($asset, $rfid, $layout);
+        $stx = "\x02";
+        $etx = "\x03";
 
-        $cmd  = $esc . "A";
+        $maxH = max(0, $wDots - 1);
+        $maxV = max(0, $hDots);
 
-        foreach ($lines as $line) {
-            $cmd .= $esc . $this->h($line['h'])
-                . $esc . $this->v($line['v'])
-                . $esc . "L" . $line['scale']
-                . $esc . $line['font'] . $line['text'];
+        return $stx
+            . $esc . 'A'
+            . $esc . 'A3V+00000H+0000'
+            . $esc . 'CS6'
+            . $esc . '#F5'
+            . $esc . 'A1V' . str_pad((string) $maxV, 5, '0', STR_PAD_LEFT)
+            . 'H' . str_pad((string) $maxH, 4, '0', STR_PAD_LEFT)
+            . $esc . 'Z'
+            . $etx;
+    }
+
+    protected function buildPrintBlock(
+        Assets $asset,
+        AssetsRfid $rfid,
+        int $wDots,
+        int $hDots,
+        string $size,
+        bool $withRfid = true
+    ): string {
+        $esc = "\x1B";
+        $stx = "\x02";
+        $etx = "\x03";
+
+        $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', (string) $rfid->epc) ?? '');
+        $epc = substr(str_pad($epc, 32, '0', STR_PAD_LEFT), -32);
+
+        $uuid         = strtolower((string) $asset->uuid);
+        $assetCode    = (string) ($asset->asset_code ?? '');
+        $ownerCode    = (string) ($asset->assignment?->asset_owner ?? '');
+        $locationCode = (string) ($asset->kode_location ?? '');
+        $header       = 'PT. LRT JAKARTA';
+        $ttf          = 'SATO0.ttf';
+
+        $desc = $size !== '60x40'
+            ? $this->sanitizeDescForLabel($asset->description, 36)
+            : $this->sanitizeDescForLabel($asset->description, 20);
+
+        $makeTtfText = function (
+            string $H,
+            string $V,
+            string $text,
+            string $h = '024',
+            string $w = '028'
+        ) use ($esc, $ttf): string {
+            return $esc . '%0'
+                . $esc . "H{$H}"
+                . $esc . "V{$V}"
+                . $esc . 'P02'
+                . $esc . "RH0,{$ttf},0,{$h},{$w}," . $text;
+        };
+
+        $cmd = $stx
+            . $esc . 'A'
+            . $esc . 'PS'
+            . $esc . 'WKLabel';
+
+        if ($withRfid) {
+            $cmd .= $esc . 'IP0' . 'e:h,epc:' . $epc . ';';
         }
 
-        if ($qrData !== '') {
-            $cmd .= $esc . $this->h($layout['qr_h'])
-                . $esc . $this->v($layout['qr_v'])
-                . $this->qrCommand($qrData, $layout);
+        if ($size !== '60x40') {
+            $cmd .= $esc . '%0'
+                . $esc . 'H0036'
+                . $esc . 'V00060'
+                . $esc . 'P02'
+                . $esc . 'RH0,SATO0.ttf,0,040,040,' . $header;
+
+            $cmd .= $esc . '%0'
+                . $esc . 'H0599'
+                . $esc . 'V00026'
+                . $esc . '2D30,L,06,1,0'
+                . $esc . 'DN0036,' . $uuid;
+
+            $cmd .= $makeTtfText('0036', '00113', $assetCode);
+            $cmd .= $makeTtfText('0036', '00144', $desc);
+            $cmd .= $makeTtfText('0036', '00177', 'Owner Asset: ' . $ownerCode);
+            $cmd .= $makeTtfText('0036', '00206', 'Lokasi: ' . $locationCode);
+            $cmd .= $makeTtfText('0036', '00237', 'RFID: ' . $epc);
+        } else {
+            $cmd .= $esc . '%0'
+                . $esc . 'H0020'
+                . $esc . 'V00045'
+                . $esc . 'P02'
+                . $esc . 'RH0,SATO0.ttf,0,032,032,' . $header;
+
+            $qrModule = 4;
+            $qrEstimateSize = 170;
+            $qrH = max(20, $wDots - $qrEstimateSize);
+            $qrV = 20;
+
+            $cmd .= $esc . '%0'
+                . $esc . 'H' . str_pad((string) $qrH, 4, '0', STR_PAD_LEFT)
+                . $esc . 'V' . str_pad((string) $qrV, 5, '0', STR_PAD_LEFT)
+                . $esc . '2D30,L,' . str_pad((string) $qrModule, 2, '0', STR_PAD_LEFT) . ',1,0'
+                . $esc . 'DN0036,' . $uuid;
+
+            $cmd .= $makeTtfText('0020', '00105', $assetCode, '022', '024');
+            $cmd .= $makeTtfText('0020', '00135', $desc, '022', '024');
+            $cmd .= $makeTtfText('0020', '00168', 'Owner: ' . $ownerCode, '022', '024');
+            $cmd .= $makeTtfText('0020', '00196', 'Lokasi: ' . $locationCode, '022', '024');
+
+            $shortEpc = substr($epc, 0, 8) . '...' . substr($epc, -8);
+            $cmd .= $makeTtfText('0020', '00228', 'RFID: ' . $shortEpc, '022', '024');
         }
 
-        // EPC WRITE
-        $cmd .= $esc . "IP0e:h,epc:" . $epc . ";";
-
-        $cmd .= $esc . "Q1";
-        $cmd .= $esc . "Z";
+        $cmd .= $esc . 'Q1'
+            . $esc . 'Z'
+            . $etx;
 
         return $cmd;
-    }
-
-    protected function buildMediaSizeCommand(array $layout): string
-    {
-        $esc = "\x1B";
-
-        return $esc . "A"
-            . $esc . "A1" . $this->dots($layout['height_dots']) . $this->dots($layout['width_dots'])
-            . $esc . "Z";
-    }
-
-    protected function labelLayout(string $labelSize): array
-    {
-        $dotsPerMm = (int) config('printing.sato_rfid.dots_per_mm', 8);
-        $dotsPerMm = $dotsPerMm > 0 ? $dotsPerMm : 8;
-
-        $sizes = [
-            '100x40' => [
-                'width_mm' => 100,
-                'height_mm' => 40,
-                'text_h_mm' => 5,
-                'text_v_mm' => 5,
-                'line_gap_mm' => 5,
-                'qr_h_mm' => 68,
-                'qr_v_mm' => 6,
-                'qr_cell_size' => 6,
-                'description_length' => 28,
-                'text_font' => 'XS',
-                'title_font' => 'XM',
-                'title_scale' => '0101',
-                'text_scale' => '0101',
-            ],
-            '60x25' => [
-                'width_mm' => 60,
-                'height_mm' => 25,
-                'text_h_mm' => 4,
-                'text_v_mm' => 3,
-                'line_gap_mm' => 3,
-                'qr_h_mm' => 42,
-                'qr_v_mm' => 3,
-                'qr_cell_size' => 3,
-                'description_length' => 18,
-                'text_font' => 'M',
-                'title_font' => 'M',
-                'title_scale' => '0101',
-                'text_scale' => '0101',
-            ],
-        ];
-
-        $layout = $sizes[$labelSize] ?? $sizes['100x40'];
-
-        return [
-            'width_dots' => $layout['width_mm'] * $dotsPerMm,
-            'height_dots' => $layout['height_mm'] * $dotsPerMm,
-            'text_h' => $layout['text_h_mm'] * $dotsPerMm,
-            'text_v' => $layout['text_v_mm'] * $dotsPerMm,
-            'line_gap' => $layout['line_gap_mm'] * $dotsPerMm,
-            'qr_h' => $layout['qr_h_mm'] * $dotsPerMm,
-            'qr_v' => $layout['qr_v_mm'] * $dotsPerMm,
-            'qr_cell_size' => $layout['qr_cell_size'],
-            'description_length' => $layout['description_length'],
-            'text_font' => $layout['text_font'],
-            'title_font' => $layout['title_font'],
-            'title_scale' => $layout['title_scale'],
-            'text_scale' => $layout['text_scale'],
-        ];
-    }
-
-    protected function labelLines(Assets $asset, AssetsRfid $rfid, array $layout): array
-    {
-        $owner = $asset->assignment?->asset_owner
-            ?: $asset->assignment?->owner?->department
-            ?: $asset->assignment?->owner?->description
-            ?: '-';
-        $location = $asset->kode_location ?: $asset->location?->name ?: '-';
-        $epc = $this->shortRfidText($rfid->epc ?? '');
-
-        $texts = [
-            ['text' => 'PT. LRT JAKARTA', 'font' => $layout['title_font'], 'scale' => $layout['title_scale']],
-            ['text' => $asset->asset_code ?? '-', 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => mb_substr($asset->description ?? '-', 0, $layout['description_length']), 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'Owner: ' . $owner, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'Lok: ' . $location, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'RFID: ' . $epc, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-        ];
-
-        $lines = [];
-        foreach ($texts as $index => $item) {
-            $lines[] = [
-                'h' => $layout['text_h'],
-                'v' => $layout['text_v'] + ($layout['line_gap'] * $index),
-                'font' => $item['font'],
-                'scale' => $item['scale'],
-                'text' => $this->cleanPrintableText($item['text']),
-            ];
-        }
-
-        return $lines;
-    }
-
-    protected function shortRfidText(string $epc): string
-    {
-        $epc = strtoupper(preg_replace('/[^0-9A-F]/', '', $epc) ?? '');
-
-        if (strlen($epc) <= 18) {
-            return $epc !== '' ? $epc : '-';
-        }
-
-        return substr($epc, 0, 6) . '...' . substr($epc, -6);
-    }
-
-    protected function cleanQrData(string $text): string
-    {
-        return preg_replace('/[\x00-\x1F\x7F]/u', '', $text) ?? '';
-    }
-
-    protected function qrCommand(string $data, array $layout): string
-    {
-        $cellSize = str_pad((string) $layout['qr_cell_size'], 2, '0', STR_PAD_LEFT);
-        $length = str_pad((string) strlen($data), 4, '0', STR_PAD_LEFT);
-
-        return "\x1B" . "BQ20" . $cellSize . ",3" . $length . $data;
-    }
-
-    protected function cleanPrintableText(string $text): string
-    {
-        $text = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $text) ?? '';
-
-        return trim(preg_replace('/\s+/u', ' ', $text) ?? '');
-    }
-
-    protected function h(int $dots): string
-    {
-        return 'H' . $this->dots($dots);
-    }
-
-    protected function v(int $dots): string
-    {
-        return 'V' . $this->dots($dots);
-    }
-
-    protected function dots(int $dots): string
-    {
-        return str_pad((string) max(1, $dots), 4, '0', STR_PAD_LEFT);
     }
 
     protected function sendToPrinter(string $data): void
     {
         $cfg     = config('printing.sato_rfid');
-        $host    = $cfg['host'] ?? '127.0.0.1';
+        $host    = $cfg['host'] ?? '192.168.18.51';
         $port    = (int) ($cfg['port'] ?? 9100);
         $timeout = (int) ($cfg['timeout'] ?? 5);
 
         $errno  = 0;
         $errstr = '';
 
+        Log::info('Printing to SATO', [
+            'host' => $host,
+            'port' => $port,
+            'bytes' => strlen($data),
+        ]);
+
         $fp = @fsockopen($host, $port, $errno, $errstr, $timeout);
-
         if (! $fp) {
-            Log::error("RFID printer unreachable", [
-                'host' => $host,
-                'port' => $port,
-                'errno' => $errno,
-                'errstr' => $errstr
-            ]);
-
-            return; // jangan throw exception
+            Log::error("SatoRfidPrinter: cannot connect to {$host}:{$port}", compact('errno', 'errstr'));
+            throw new \RuntimeException("Cannot connect to RFID printer: {$errstr} ({$errno})");
         }
 
-        fwrite($fp, $data);
+        stream_set_timeout($fp, $timeout);
+
+        $len = strlen($data);
+        $off = 0;
+
+        while ($off < $len) {
+            $chunk = substr($data, $off);
+            $w = fwrite($fp, $chunk);
+
+            if ($w === false) {
+                fclose($fp);
+                throw new \RuntimeException("Failed writing to printer socket.");
+            }
+
+            $off += $w;
+        }
+
+        fflush($fp);
+        usleep(300000);
+
+        Log::info('SATO print sent', [
+            'host' => $host,
+            'port' => $port,
+            'bytes_sent' => $off,
+            'bytes_total' => $len,
+        ]);
+
         fclose($fp);
     }
 }

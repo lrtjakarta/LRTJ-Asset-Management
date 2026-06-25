@@ -47,6 +47,15 @@ class DepreciationController extends Controller
      *   FIRST_RUN_MUST_START_AT_MIN_ELIGIBLE|{needPeriod}
      *   NO_CLOSING_YET|{context}
      */
+    private function latestProcessedDepreciationPeriod(): ?Carbon
+    {
+        $latest = AssetDeprMonthClosing::query()
+            ->max('period');
+
+        return $latest
+            ? Carbon::parse($latest)->startOfMonth()
+            : null;
+    }
     private function guardWritablePeriod(Carbon $period, string $context, array $opt = []): array
     {
         $period = $period->copy()->startOfMonth();
@@ -322,7 +331,20 @@ class DepreciationController extends Controller
 
     public function index()
     {
-        return view('depreciation.depreciation');
+        $latestPeriod = $this->latestProcessedDepreciationPeriod();
+
+        return view('depreciation.depreciation', [
+            'latestDeprPeriod' => $latestPeriod,
+            'latestDeprDate' => $latestPeriod
+                ? $latestPeriod->copy()->endOfMonth()->toDateString()
+                : now()->toDateString(),
+            'latestDeprMonthStart' => $latestPeriod
+                ? $latestPeriod->toDateString()
+                : now()->startOfMonth()->toDateString(),
+            'latestDeprMonthEnd' => $latestPeriod
+                ? $latestPeriod->copy()->endOfMonth()->toDateString()
+                : now()->endOfMonth()->toDateString(),
+        ]);
     }
 
     public function periodIndex(Request $r)
@@ -579,7 +601,7 @@ class DepreciationController extends Controller
                 'av.capitalization_date as cap_date',
                 'av.total as total_value',
                 'y.ending_balance_year as ending_balance_prev_year',
-                DB::raw("COALESCE(assets_depr_ledger_monthly.ending_balance, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) as last_net_book_value"),
+                DB::raw("COALESCE(av.total, 0) - COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) AS last_net_book_value"),
                 DB::raw("
                 CASE
                     WHEN av.capitalization_date IS NULL THEN NULL
@@ -607,41 +629,35 @@ CASE
         COALESCE(
           NULLIF(p.useful_life_months, 0),
           NULLIF(av.useful_life_month, 0),
-          CASE WHEN av.useful_life_year IS NOT NULL THEN (av.useful_life_year * 12)::int ELSE 0 END,
+          CASE
+            WHEN av.useful_life_year IS NOT NULL
+              THEN (av.useful_life_year * 12)::int
+            ELSE 0
+          END,
           60
         )
         -
-        SUM(
-          CASE
-            -- sebelum eligible start: jangan dihitung
-            WHEN date_trunc('month', assets_depr_ledger_monthly.period)::date <
+        (
+          SELECT COUNT(*)
+          FROM assets_depr_ledger_monthly m2
+          WHERE m2.asset_uuid = assets_depr_ledger_monthly.asset_uuid
+            AND date_trunc('month', m2.period)::date <= date_trunc('month', assets_depr_ledger_monthly.period)::date
+            AND date_trunc('month', m2.period)::date >=
               CASE
                 WHEN EXTRACT(DAY FROM COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) <= COALESCE(p.cutoff_day, 15)
                   THEN date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at))::date
                 ELSE (date_trunc('month', COALESCE(p.depr_start_date, av.capitalization_date, av.actual_date, av.created_at)) + INTERVAL '1 month')::date
               END
-              THEN 0
-
-            -- eligible tapi belum ada posting depresiasi: jangan mengurangi RUL
-            WHEN (
-              COALESCE(assets_depr_ledger_monthly.accumulated_depr_end, 0) = 0
-              AND COALESCE(assets_depr_ledger_monthly.depr_expense, 0) = 0
-              AND COALESCE(assets_depr_ledger_monthly.adjustment_depreciation, 0) = 0
-            ) THEN 0
-
-            -- bulan yang benar-benar “kepakai” (posted)
-            ELSE 1
-          END
-        ) OVER (
-          PARTITION BY assets_depr_ledger_monthly.asset_uuid
-          ORDER BY assets_depr_ledger_monthly.period
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+            AND (
+              COALESCE(m2.depr_expense, 0) <> 0
+              OR COALESCE(m2.adjustment_depreciation, 0) <> 0
+              OR COALESCE(m2.accumulated_depr_end, 0) <> 0
+            )
         )
       ),
       0
     )
-END
-AS remaining_useful_life_months
+END AS remaining_useful_life_months
 ")
             ]);
 
@@ -935,7 +951,8 @@ AS remaining_useful_life_months
                 }
 
                 $prev = AssetDeprMonthly::where('asset_uuid', $assetUuid)
-                    ->whereDate('period', '<', $period)
+                    ->whereDate('period', '>=', $assetStartMonth->toDateString())
+                    ->whereDate('period', '<', $period->toDateString())
                     ->orderBy('period', 'desc')
                     ->first();
 
@@ -1455,38 +1472,53 @@ AS remaining_useful_life_months
             'note'        => ['nullable', 'string', 'max:300'],
         ]);
 
-        $actual  = Carbon::parse($data['actual_date']);
-        $period  = $actual->copy()->startOfMonth();
-        $current = now()->startOfMonth();
+        $actual = Carbon::parse($data['actual_date']);
+        $period = $actual->copy()->startOfMonth();
 
-        // Rule: hanya periode berjalan
-        if (! $period->equalTo($current)) {
+        // Ambil bulan terakhir depreciation yang sudah diproses/closing
+        $latestPeriod = $this->latestProcessedDepreciationPeriod();
+
+        if (! $latestPeriod) {
             return response()->json([
                 'ok' => false,
-                'code' => 'ADJ_ONLY_CURRENT_PERIOD',
-                'message' => 'Adjustment Depreciation hanya bisa dilakukan di periode berjalan.',
-                'need_period' => $current->toDateString(),
-                'need_period_text' => $current->isoFormat('MMMM YYYY'),
+                'code' => 'NO_DEPRECIATION_PROCESSED',
+                'message' => 'Belum ada periode depresiasi yang diproses. Jalankan Process Depreciation Month dulu.',
+            ], 422);
+        }
+
+        // Rule baru:
+        // Adjustment hanya boleh di bulan terakhir depreciation diproses,
+        // bukan berdasarkan bulan kalender sekarang.
+        if (! $period->equalTo($latestPeriod)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'ADJ_ONLY_LATEST_DEPRECIATION_PERIOD',
+                'message' => 'Adjustment Depreciation hanya bisa dilakukan di periode depresiasi terakhir yang sudah diproses.',
+                'need_period' => $latestPeriod->toDateString(),
+                'need_period_text' => $latestPeriod->isoFormat('MMMM YYYY'),
             ], 422);
         }
 
         try {
-            // optional: pastikan current month sudah pernah diproses
-            $currentClosingExists = AssetDeprMonthClosing::query()
+            // Safety: pastikan periode latest itu memang sudah closing
+            $closingExists = AssetDeprMonthClosing::query()
                 ->whereDate('period', $period->toDateString())
                 ->exists();
 
-            if (! $currentClosingExists) {
+            if (! $closingExists) {
                 return response()->json([
                     'ok' => false,
-                    'code' => 'CURRENT_MONTH_NOT_PROCESSED',
-                    'message' => 'Periode berjalan belum diproses. Jalankan "Process Depreciation Month" dulu.',
+                    'code' => 'LATEST_PERIOD_NOT_CLOSED',
+                    'message' => 'Periode depresiasi terakhir belum valid/closing.',
                     'need_period' => $period->toDateString(),
                     'need_period_text' => $period->isoFormat('MMMM YYYY'),
                 ], 422);
             }
 
-            // Guard: year lock + chain gate + prev-month processed (skip kalau prev-month kosong)
+            // Guard tetap dipakai:
+            // - cek year locked
+            // - cek prev year built
+            // - cek prev month processed
             $this->guardWritablePeriod($period, 'adjDepr', [
                 'require_prev_month' => true,
                 'enforce_first_run_min_eligible' => false,
@@ -1502,13 +1534,14 @@ AS remaining_useful_life_months
                 'note'              => $data['note'] ?? null,
             ]);
 
-            // recompute month
+            // Recompute periode terakhir tersebut
             $this->processMonthlyDepr($period);
 
             return response()->json([
                 'ok' => true,
-                'message' => 'Depreciation adjustment recorded (current period).',
+                'message' => 'Depreciation adjustment recorded.',
                 'period' => $period->toDateString(),
+                'period_text' => $period->isoFormat('MMMM YYYY'),
             ]);
         } catch (\Throwable $e) {
             if ($resp = $this->renderGuardError($e)) return $resp;

@@ -1585,11 +1585,19 @@ class StockOpnameController extends Controller
     {
         abort_unless($request->user()?->hasAction('ASSETS', 'R'), 403);
 
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+                DISTINCT ON (m.asset_uuid)
+                m.asset_uuid, m.period, m.accumulated_depr_end, m.ending_balance
+            ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
+
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            // master lookups (names)
+            ->leftJoinSub($lastDepr, 'dm', fn($j) => $j->on('dm.asset_uuid', '=', 'a.uuid'))
             ->leftJoin('master_location     as ml',   'ml.kode',   'a.kode_location')
             ->leftJoin('master_asset_class  as mac',  'mac.kode',  'a.kode_asset_class')
             ->leftJoin('master_status       as ms',   'ms.kode',   'a.kode_status')
@@ -1607,6 +1615,8 @@ class StockOpnameController extends Controller
                 'a.kode_status',
                 'a.kode_asset_class',
                 'v.total',
+                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
+                DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
                 DB::raw("
                     CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
                     CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label,
@@ -1615,22 +1625,8 @@ class StockOpnameController extends Controller
                     CASE WHEN uu.department IS NULL THEN g.asset_user  ELSE g.asset_user  || ' - ' || uu.department END AS asset_user_label,
                     CASE WHEN um.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance || ' - ' || um.department END AS asset_maintenance_label
                 ")
-            )
-            ->addSelect([
-                'last_accumulated_depr' => DB::table('assets_depr_ledger_monthly as maxdm')
-                    ->select('maxdm.accumulated_depr_end')
-                    ->whereColumn('maxdm.asset_uuid', 'a.uuid')
-                    ->orderByDesc('maxdm.period')
-                    ->limit(1),
-            ]);
+            );
 
-            $q->addSelect([
-                 'last_net_book_value' => DB::table('assets_depr_ledger_monthly as maxdmval')
-                    ->selectRaw("COALESCE(v.total, 0) - COALESCE(maxdmval.accumulated_depr_end, 0)")
-                    ->whereColumn('maxdmval.asset_uuid', 'a.uuid')
-                    ->orderByDesc('maxdmval.period')
-                    ->limit(1),
-            ]);
         // same filters as your index
         if ($assetClass = $request->input('asset_class')) $q->where('a.kode_asset_class', $assetClass);
         if ($transaction = $request->input('transaction')) $q->where('mac.kode_transaction', $transaction);
@@ -1648,11 +1644,7 @@ class StockOpnameController extends Controller
             });
         }
 
-        $dt = DataTables::of($q)
-            ->filterColumn('last_accumulated_depr', function($query, $keyword) { })
-            ->orderColumn('last_accumulated_depr', function ($query, $order) { })
-            ->filterColumn('last_net_book_value', function($query, $keyword) { })
-            ->orderColumn('last_net_book_value', function ($query, $order) { });
+        $dt = DataTables::of($q);
 
         // add checkbox column
         $dt->addColumn('select_cb', function ($row) {
@@ -2052,18 +2044,21 @@ class StockOpnameController extends Controller
     {
         abort_unless($request->user()?->hasAction('STOCK_OPN', 'R'), 403);
 
+        // --- last depr subquery (same as datatable) ---
+        $lastDepr = DB::table('assets_depr_ledger_monthly as m')
+            ->selectRaw("
+            DISTINCT ON (m.asset_uuid)
+            m.asset_uuid, m.period, m.accumulated_depr_end, m.ending_balance
+        ")
+            ->orderBy('m.asset_uuid')
+            ->orderByDesc('m.period');
+
         // --- base query (same as datatable) ---
         $q = DB::table('assets as a')
             ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
             ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
             ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin(DB::raw('(SELECT asset_uuid, MAX(period) as max_period FROM assets_depr_ledger_monthly GROUP BY asset_uuid) as max_depr'), function($join) {
-                $join->on('a.uuid', '=', 'max_depr.asset_uuid');
-            })
-            ->leftJoin('assets_depr_ledger_monthly as dm', function ($join) {
-                $join->on('dm.asset_uuid', '=', 'max_depr.asset_uuid')
-                     ->on('dm.period', '=', 'max_depr.max_period');
-            })
+            ->leftJoinSub($lastDepr, 'dm', fn($j) => $j->on('dm.asset_uuid', '=', 'a.uuid'))
             ->leftJoin('master_location     as ml', 'ml.kode', 'a.kode_location')
             ->leftJoin('master_asset_class  as mac', 'mac.kode', 'a.kode_asset_class')
             ->leftJoin('master_status       as ms', 'ms.kode', 'a.kode_status')
