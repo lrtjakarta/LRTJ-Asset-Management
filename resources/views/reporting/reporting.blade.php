@@ -320,8 +320,14 @@
                 ],
                 ajax: {
                     url: R.datatable,
+                    type: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                    },
                     data: function(d) {
-                        return Object.assign(d, buildFilters());
+                        return Object.assign(d, {
+                            _token: '{{ csrf_token() }}',
+                        }, buildFilters());
                     }
                 },
                 columns: [{
