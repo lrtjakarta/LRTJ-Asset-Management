@@ -123,115 +123,54 @@ class AssetsController extends Controller
             ->orderByDesc('m.period');
 
         $q = DB::table('assets as a')
-            // child tables
-            ->leftJoin('assets_identifiers as i', 'i.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_assignment  as g', 'g.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_value       as v', 'v.asset_uuid', 'a.uuid')
-            ->leftJoin('assets_document    as d', 'd.asset_uuid', 'a.uuid')
-
+            ->leftJoin('assets_identifiers as i', 'i.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_assignment as g', 'g.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_value as v', 'v.asset_uuid', '=', 'a.uuid')
+            ->leftJoin('assets_document as d', 'd.asset_uuid', '=', 'a.uuid')
             ->leftJoinSub($lastDepr, 'dm', function ($j) {
                 $j->on('dm.asset_uuid', '=', 'a.uuid');
             })
+            ->whereNull('a.deleted_at');
 
-            // master lookups (names)
-            ->leftJoin('master_location     as ml',   'ml.kode',    'a.kode_location')
-            ->leftJoin('master_asset_class  as mac',  'mac.kode',   'a.kode_asset_class')
-            ->leftJoin('master_status       as ms',   'ms.kode',    'a.kode_status')
-            ->leftJoin('master_uom          as mu',   'mu.kode',    'v.kode_uom')
-            ->leftJoin('master_sumber       as msrc', 'msrc.kode',  'a.kode_sumber')
-            ->leftJoin('master_user_code    as ou',   'ou.kode',    'g.asset_owner')
-            ->leftJoin('master_user_code    as uu',   'uu.kode',    'g.asset_user')
-            ->leftJoin('master_user_code    as muw',  'muw.kode',   'g.asset_maintenance')
-            ->whereNull('a.deleted_at')
-            ->select(
-                'a.uuid',
-                'a.asset_code',
-                'a.kode_group_category',
-                'a.asset_number_parent',
-                'a.asset_number_child',
-                'a.description',
-                'a.upload_code',
-
-                'i.asset_number_maximo',
-                'i.asset_number_dynamic_365',
-                'i.asset_number_internal',
-                'i.alias',
-
-                'g.asset_owner',
-                'g.asset_user',
-                'g.asset_maintenance',
-
-                'a.kode_location',
-                'a.kode_asset_class',
-                'a.kode_status',
-
-                'v.price',
-                'v.quantity',
-                'v.vat_in',
-                'v.kode_uom',
-                'v.total',
-                'v.useful_life_month',
-                'v.useful_life_year',
-
-                'd.no_po_perjanjian_spk',
-                'd.nota_referensi',
-                'd.no_document',
-
-                'a.kode_sumber',
-
-                DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
-                DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
-                DB::raw("dm.period as last_depr_period"),
-
-                DB::raw("
-                CASE WHEN ml.name  IS NULL THEN a.kode_location    ELSE a.kode_location    || ' - ' || ml.name  END AS kode_location_label,
-                CASE WHEN mac.name IS NULL THEN a.kode_asset_class ELSE a.kode_asset_class || ' - ' || mac.name END AS kode_asset_class_label,
-                CASE WHEN ms.name  IS NULL THEN a.kode_status      ELSE a.kode_status      || ' - ' || ms.name  END AS kode_status_label,
-                CASE WHEN mu.name  IS NULL THEN v.kode_uom         ELSE v.kode_uom         || ' - ' || mu.name  END AS kode_uom_label,
-                CASE WHEN msrc.name IS NULL THEN a.kode_sumber     ELSE a.kode_sumber      || ' - ' || msrc.name END AS kode_sumber_label,
-
-                CASE WHEN ou.department  IS NULL THEN g.asset_owner      ELSE g.asset_owner         || ' - ' || ou.department  END AS asset_owner_label,
-                CASE WHEN uu.department  IS NULL THEN g.asset_user       ELSE g.asset_user          || ' - ' || uu.department  END AS asset_user_label,
-                CASE WHEN muw.department IS NULL THEN g.asset_maintenance ELSE g.asset_maintenance  || ' - ' || muw.department END AS asset_maintenance_label,
-                to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at
-            ")
-            );
+        /*
+    |--------------------------------------------------------------------------
+    | Filters
+    |--------------------------------------------------------------------------
+    */
 
         if ($assetClass = $request->input('asset_class')) {
             $q->where('a.kode_asset_class', $assetClass);
         }
 
-        // Transaction / Company
         if ($transaction = $request->input('transaction')) {
-            $q->where('mac.kode_transaction', $transaction);
+            $q->whereExists(function ($sub) use ($transaction) {
+                $sub->selectRaw('1')
+                    ->from('master_asset_class as mac')
+                    ->whereColumn('mac.kode', 'a.kode_asset_class')
+                    ->where('mac.kode_transaction', $transaction);
+            });
         }
 
-        // Location
         if ($location = $request->input('location')) {
             $q->where('a.kode_location', $location);
         }
 
-        // Status
         if ($status = $request->input('status')) {
             $q->where('a.kode_status', $status);
         }
 
-        // Owner
         if ($owner = $request->input('owner')) {
             $q->where('g.asset_owner', $owner);
         }
 
-        // User
         if ($user = $request->input('user')) {
             $q->where('g.asset_user', $user);
         }
 
-        // Maintenance
         if ($maintenance = $request->input('maintenance')) {
             $q->where('g.asset_maintenance', $maintenance);
         }
 
-        // Sumber
         if ($sumber = $request->input('sumber')) {
             $q->where('a.kode_sumber', $sumber);
         }
@@ -243,58 +182,280 @@ class AssetsController extends Controller
             });
         }
 
+        /*
+    |--------------------------------------------------------------------------
+    | Base Select
+    |--------------------------------------------------------------------------
+    */
+
+        $q->select([
+            'a.uuid',
+            'a.asset_code',
+            'a.kode_group_category',
+            'a.asset_number_parent',
+            'a.asset_number_child',
+            'a.description',
+            'a.upload_code',
+
+            'i.asset_number_maximo',
+            'i.asset_number_dynamic_365',
+            'i.asset_number_internal',
+            'i.alias',
+
+            'g.asset_owner',
+            'g.asset_user',
+            'g.asset_maintenance',
+
+            'a.kode_location',
+            'a.kode_asset_class',
+            'a.kode_status',
+            'a.kode_sumber',
+
+            'v.price',
+            'v.quantity',
+            'v.vat_in',
+            'v.kode_uom',
+            'v.total',
+            'v.useful_life_month',
+            'v.useful_life_year',
+
+            'd.no_po_perjanjian_spk',
+            'd.nota_referensi',
+            'd.no_document',
+        ]);
+
+        /*
+    |--------------------------------------------------------------------------
+    | Lightweight addSelect labels
+    |--------------------------------------------------------------------------
+    */
+
+        $q->addSelect([
+            DB::raw("COALESCE(dm.accumulated_depr_end, 0) as last_accumulated_depr"),
+            DB::raw("COALESCE(v.total, 0) - COALESCE(dm.accumulated_depr_end, 0) as last_net_book_value"),
+            DB::raw("dm.period as last_depr_period"),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT a.kode_location || ' - ' || ml.name
+                    FROM master_location ml
+                    WHERE ml.kode = a.kode_location
+                    LIMIT 1
+                ),
+                a.kode_location
+            ) AS kode_location_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT a.kode_asset_class || ' - ' || mac.name
+                    FROM master_asset_class mac
+                    WHERE mac.kode = a.kode_asset_class
+                    LIMIT 1
+                ),
+                a.kode_asset_class
+            ) AS kode_asset_class_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT a.kode_status || ' - ' || ms.name
+                    FROM master_status ms
+                    WHERE ms.kode = a.kode_status
+                    LIMIT 1
+                ),
+                a.kode_status
+            ) AS kode_status_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT v.kode_uom || ' - ' || mu.name
+                    FROM master_uom mu
+                    WHERE mu.kode = v.kode_uom
+                    LIMIT 1
+                ),
+                v.kode_uom
+            ) AS kode_uom_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT a.kode_sumber || ' - ' || msrc.name
+                    FROM master_sumber msrc
+                    WHERE msrc.kode = a.kode_sumber
+                    LIMIT 1
+                ),
+                a.kode_sumber
+            ) AS kode_sumber_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT g.asset_owner || ' - ' || ou.department
+                    FROM master_user_code ou
+                    WHERE ou.kode = g.asset_owner
+                    LIMIT 1
+                ),
+                g.asset_owner
+            ) AS asset_owner_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT g.asset_user || ' - ' || uu.department
+                    FROM master_user_code uu
+                    WHERE uu.kode = g.asset_user
+                    LIMIT 1
+                ),
+                g.asset_user
+            ) AS asset_user_label
+        "),
+
+            DB::raw("
+            COALESCE(
+                (
+                    SELECT g.asset_maintenance || ' - ' || muw.department
+                    FROM master_user_code muw
+                    WHERE muw.kode = g.asset_maintenance
+                    LIMIT 1
+                ),
+                g.asset_maintenance
+            ) AS asset_maintenance_label
+        "),
+
+            DB::raw("to_char(a.updated_at at time zone 'Asia/Jakarta','YYYY-MM-DD HH24:MI') as updated_at"),
+        ]);
+
         $dt = DataTables::of($q);
 
         $like = function ($keyword) {
-            $k = trim((string)$keyword);
+            $k = trim((string) $keyword);
             return $k === '' ? null : "%{$k}%";
         };
 
+        /*
+    |--------------------------------------------------------------------------
+    | Filter alias columns pakai EXISTS, bukan join master
+    |--------------------------------------------------------------------------
+    */
+
         $dt->filterColumn('kode_location_label', function ($query, $keyword) use ($like) {
             if (!$pat = $like($keyword)) return;
+
             $query->where(function ($w) use ($pat) {
                 $w->where('a.kode_location', 'ilike', $pat)
-                    ->orWhere('ml.name', 'ilike', $pat);
-            });
-        });
-
-        $dt->filterColumn('asset_owner_label', function ($query, $keyword) use ($like) {
-            if (!$pat = $like($keyword)) return;
-            $query->where(function ($w) use ($pat) {
-                $w->where('g.asset_owner', 'ilike', $pat)
-                    ->orWhere('ou.department', 'ilike', $pat);
-            });
-        });
-
-        $dt->filterColumn('asset_user_label', function ($query, $keyword) use ($like) {
-            if (!$pat = $like($keyword)) return;
-            $query->where(function ($w) use ($pat) {
-                $w->where('g.asset_user', 'ilike', $pat)
-                    ->orWhere('uu.department', 'ilike', $pat);
-            });
-        });
-
-        $dt->filterColumn('asset_maintenance_label', function ($query, $keyword) use ($like) {
-            if (!$pat = $like($keyword)) return;
-            $query->where(function ($w) use ($pat) {
-                $w->where('g.asset_maintenance', 'ilike', $pat)
-                    ->orWhere('muw.department', 'ilike', $pat);
-            });
-        });
-
-        $dt->filterColumn('kode_status_label', function ($query, $keyword) use ($like) {
-            if (!$pat = $like($keyword)) return;
-            $query->where(function ($w) use ($pat) {
-                $w->where('a.kode_status', 'ilike', $pat)
-                    ->orWhere('ms.name', 'ilike', $pat);
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_location as ml')
+                            ->whereColumn('ml.kode', 'a.kode_location')
+                            ->where('ml.name', 'ilike', $pat);
+                    });
             });
         });
 
         $dt->filterColumn('kode_asset_class_label', function ($query, $keyword) use ($like) {
             if (!$pat = $like($keyword)) return;
+
             $query->where(function ($w) use ($pat) {
                 $w->where('a.kode_asset_class', 'ilike', $pat)
-                    ->orWhere('mac.name', 'ilike', $pat);
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_asset_class as mac')
+                            ->whereColumn('mac.kode', 'a.kode_asset_class')
+                            ->where('mac.name', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('kode_status_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('a.kode_status', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_status as ms')
+                            ->whereColumn('ms.kode', 'a.kode_status')
+                            ->where('ms.name', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('kode_uom_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('v.kode_uom', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_uom as mu')
+                            ->whereColumn('mu.kode', 'v.kode_uom')
+                            ->where('mu.name', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('kode_sumber_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('a.kode_sumber', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_sumber as msrc')
+                            ->whereColumn('msrc.kode', 'a.kode_sumber')
+                            ->where('msrc.name', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('asset_owner_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_owner', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_user_code as ou')
+                            ->whereColumn('ou.kode', 'g.asset_owner')
+                            ->where('ou.department', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('asset_user_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_user', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_user_code as uu')
+                            ->whereColumn('uu.kode', 'g.asset_user')
+                            ->where('uu.department', 'ilike', $pat);
+                    });
+            });
+        });
+
+        $dt->filterColumn('asset_maintenance_label', function ($query, $keyword) use ($like) {
+            if (!$pat = $like($keyword)) return;
+
+            $query->where(function ($w) use ($pat) {
+                $w->where('g.asset_maintenance', 'ilike', $pat)
+                    ->orWhereExists(function ($sub) use ($pat) {
+                        $sub->selectRaw('1')
+                            ->from('master_user_code as muw')
+                            ->whereColumn('muw.kode', 'g.asset_maintenance')
+                            ->where('muw.department', 'ilike', $pat);
+                    });
             });
         });
 
