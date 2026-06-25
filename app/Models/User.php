@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -47,6 +48,22 @@ class User extends Authenticatable
             'kode'             // relatedKey       (local key on master_role)
         )->withTimestamps();
     }
+
+    public static function findForDirectoryIdentity(string $username, ?string $email): ?self
+    {
+        $user = static::query()
+            ->whereRaw('LOWER(username) = ?', [Str::lower($username)])
+            ->first();
+
+        if ($user || empty($email)) {
+            return $user;
+        }
+
+        return static::query()
+            ->whereRaw('LOWER(email) = ?', [Str::lower($email)])
+            ->first();
+    }
+
     public function department()
     {
         return $this->belongsTo(MasterUserCode::class, 'kode_department', 'kode');
