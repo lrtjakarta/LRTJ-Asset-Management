@@ -24,11 +24,12 @@ class AuthLdapController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $username = $data['username'];
-        $password = $data['password'];
+        $username = trim((string) $data['username']);
+        $password = (string) $data['password'];
+        $remember = $request->boolean('remember');
 
         // --- Rate limiting ---------------------------------------------------
-        $key = 'ldap-login:' . Str::lower($request->input('username')) . '|' . $request->ip();
+        $key = 'ldap-login:' . Str::lower($username) . '|' . $request->ip();
 
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
@@ -38,14 +39,15 @@ class AuthLdapController extends Controller
             ])->status(429);
         }
 
-        RateLimiter::hit($key, 60); // 5 attempts per 60 seconds
+        RateLimiter::hit($key, 60);
 
         // --- STATIC ADMIN SHORT-CIRCUIT -------------------------------------
         $staticUser = strtolower((string) config('auth.static_admin.username'));
         $staticPass = (string) config('auth.static_admin.password');
 
         if (
-            $staticUser !== '' && $staticPass !== '' &&
+            $staticUser !== '' &&
+            $staticPass !== '' &&
             hash_equals($staticUser, strtolower($username)) &&
             hash_equals($staticPass, $password)
         ) {
@@ -64,98 +66,197 @@ class AuthLdapController extends Controller
                 ->with('success', 'Welcome, admin!');
         }
 
-        // --- 1) LOCAL DB LOGIN (users table, username + hashed password) -----
-        if (
-            Auth::attempt(
-                ['username' => $username, 'password' => $password],
-                $request->boolean('remember')
-            )
-        ) {
-            $request->session()->regenerate();
-            RateLimiter::clear($key);
+        // --- 1) LOCAL DB LOGIN ----------------------------------------------
+        // Tetap support login lokal, tapi jangan sampai error DB menghentikan LDAP.
+        try {
+            if (
+                Auth::attempt(
+                    ['username' => $username, 'password' => $password],
+                    $remember
+                )
+            ) {
+                $request->session()->regenerate();
+                RateLimiter::clear($key);
 
-            return redirect()->intended(route('dashboard.monthly'));
-        }
-
-        // --- 2) LDAP CONFIG --------------------------------------------------
-        $host    = env('LDAP_HOST', 'ldap.forumsys.com');
-        $port    = (int) env('LDAP_PORT', 389);
-        $baseDn  = env('LDAP_BASE_DN', 'dc=example,dc=com');
-        $roDn    = env('LDAP_BIND_DN');
-        $roPass  = env('LDAP_BIND_PASSWORD');
-        $timeout = (int) env('LDAP_TIMEOUT', 5);
-
-        $userDn = "uid={$username},{$baseDn}";
-
-        // --- 3) Try direct bind ---------------------------------------------
-        if ($this->ldapBind($host, $port, $userDn, $password, $timeout)) {
-            $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-
-            $cn    = $attrs['cn'][0]   ?? $username;
-            $email = $attrs['mail'][0] ?? null;
-
-            $ous = [];
-            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($userDn)));
-            $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
-            if (!empty($attrs['ou'])) {
-                for ($i = 0; $i < $attrs['ou']['count']; $i++) {
-                    $ous[] = $attrs['ou'][$i];
-                }
+                return redirect()->intended(route('dashboard.monthly'));
             }
-            $ou = $ous[0] ?? null;
-
-            // Only auth via LDAP; roles & departments are internal
-            $this->syncAndLoginUser(
-                $request,
-                username: $username,
-                name: $cn,
-                email: $email,
-                ou: $ou,
-                isStaticAdmin: false,
-            );
-
-            RateLimiter::clear($key);
-
-            return redirect()->intended(route('dashboard.monthly'));
+        } catch (\Throwable $e) {
+            \Log::warning('Local DB login skipped, fallback to LDAP', [
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
         }
 
-        // --- 4) Fallback: search DN then bind -------------------------------
-        $foundDn = $this->ldapFindUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+        // --- 2) LDAP CONFIG - mengikuti ENV kamu -----------------------------
+        $connectionName = env('LDAP_CONNECTION', 'default');
+        $host           = env('LDAP_HOST');
+        $port           = (int) env('LDAP_PORT', 389);
+        $baseDn         = trim((string) env('LDAP_BASE_DN'), '"');
+        $bindDn         = env('LDAP_USERNAME');   // mengikuti env kamu
+        $bindPassword   = env('LDAP_PASSWORD');   // mengikuti env kamu
+        $domain         = env('LDAP_DOMAIN');
+        $timeout        = (int) env('LDAP_TIMEOUT', 5);
+        $useSsl         = filter_var(env('LDAP_SSL', false), FILTER_VALIDATE_BOOLEAN);
+        $useTls         = filter_var(env('LDAP_TLS', false), FILTER_VALIDATE_BOOLEAN);
 
-        if ($foundDn && $this->ldapBind($host, $port, $foundDn, $password, $timeout)) {
-            $attrs = $this->ldapFetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
+        if (empty($host) || empty($baseDn)) {
+            \Log::error('LDAP configuration incomplete', [
+                'connection' => $connectionName,
+                'host_exists' => !empty($host),
+                'base_dn_exists' => !empty($baseDn),
+            ]);
 
-            $cn    = $attrs['cn'][0]   ?? $username;
-            $email = $attrs['mail'][0] ?? null;
+            throw ValidationException::withMessages([
+                'username' => 'LDAP configuration is incomplete. Please contact administrator.',
+            ]);
+        }
 
-            $ous = [];
-            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($foundDn)));
-            $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
-            if (!empty($attrs['ou'])) {
-                for ($i = 0; $i < $attrs['ou']['count']; $i++) {
-                    $ous[] = $attrs['ou'][$i];
+        \Log::info('LDAP login attempt started', [
+            'username' => $username,
+            'connection' => $connectionName,
+            'host' => $host,
+            'port' => $port,
+            'baseDn' => $baseDn,
+            'domain' => $domain,
+            'bindDnExists' => !empty($bindDn),
+            'bindPasswordExists' => !empty($bindPassword),
+            'ssl' => $useSsl,
+            'tls' => $useTls,
+        ]);
+
+        // --- 3) LDAP AUTHENTICATION ------------------------------------------
+        $authenticated = false;
+        $attrs = [];
+
+        /*
+        * Karena env kamu Active Directory:
+        * LDAP_BASE_DN="DC=office,DC=xx,DC=co,DC=id"
+        *
+        * Maka kandidat login user:
+        * - username@LDAP_DOMAIN
+        * - username langsung kalau input sudah email/UPN
+        * - uid=username,BASE_DN sebagai fallback lama
+        */
+        $candidateDns = [];
+
+        if (str_contains($username, '@')) {
+            $candidateDns[] = $username;
+        }
+
+        if (!empty($domain) && !str_contains($username, '@')) {
+            $candidateDns[] = $username . '@' . $domain;
+        }
+
+        $netbios = env('LDAP_NETBIOS');
+        if (!empty($netbios) && !str_contains($username, '\\')) {
+            $candidateDns[] = $netbios . '\\' . $username;
+        }
+
+        // fallback lama untuk OpenLDAP
+        $candidateDns[] = "uid={$username},{$baseDn}";
+
+        $candidateDns = array_values(array_unique(array_filter($candidateDns)));
+
+        foreach ($candidateDns as $candidateDn) {
+            try {
+                if ($this->ldapBind($host, $port, $candidateDn, $password, $timeout, $useSsl, $useTls)) {
+                    $authenticated = true;
+
+                    \Log::info('LDAP bind success', [
+                        'username' => $username,
+                        'bindAs' => $this->maskLdapDn($candidateDn),
+                    ]);
+
+                    break;
                 }
+
+                \Log::warning('LDAP bind failed', [
+                    'username' => $username,
+                    'bindAs' => $this->maskLdapDn($candidateDn),
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning('LDAP bind exception', [
+                    'username' => $username,
+                    'bindAs' => $this->maskLdapDn($candidateDn),
+                    'error' => $e->getMessage(),
+                ]);
             }
-            $ou = $ous[0] ?? null;
-
-            $this->syncAndLoginUser(
-                $request,
-                username: $username,
-                name: $cn,
-                email: $email,
-                ou: $ou,
-                isStaticAdmin: false,
-            );
-
-            RateLimiter::clear($key);
-
-            return redirect()->route('dashboard.monthly');
         }
 
-        // --- 5) Failed -------------------------------------------------------
-        return back()
-            ->withErrors(['username' => 'Invalid credentials.'])
-            ->onlyInput('username');
+        if (! $authenticated) {
+            throw ValidationException::withMessages([
+                'username' => 'Invalid credentials.',
+            ]);
+        }
+
+        // --- 4) FETCH LDAP ATTRIBUTES pakai LDAP_USERNAME & LDAP_PASSWORD -----
+        try {
+            $attrs = $this->ldapFetchAttributes(
+                $host,
+                $port,
+                $bindDn,
+                $bindPassword,
+                $baseDn,
+                $username,
+                $timeout,
+                $useSsl,
+                $useTls
+            ) ?? [];
+        } catch (\Throwable $e) {
+            \Log::warning('LDAP attributes fetch failed, continue with basic username', [
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+
+            $attrs = [];
+        }
+
+        $cn = $attrs['cn'][0]
+            ?? $attrs['displayname'][0]
+            ?? $attrs['displayName'][0]
+            ?? $attrs['name'][0]
+            ?? $username;
+
+        $email = $attrs['mail'][0]
+            ?? $attrs['userprincipalname'][0]
+            ?? $attrs['userPrincipalName'][0]
+            ?? (str_contains($username, '@') ? $username : null);
+
+        $ous = [];
+
+        foreach ($candidateDns as $candidateDn) {
+            $ous = array_unique(array_merge($ous, $this->extractOusFromDn($candidateDn)));
+        }
+
+        $ous = array_unique(array_merge($ous, $this->extractOusFromMemberOf($attrs)));
+
+        if (!empty($attrs['ou']) && isset($attrs['ou']['count'])) {
+            for ($i = 0; $i < $attrs['ou']['count']; $i++) {
+                $ous[] = $attrs['ou'][$i];
+            }
+        }
+
+        $ou = array_values(array_filter(array_unique($ous)))[0] ?? null;
+
+        // --- 5) SYNC LOCAL USER + LOGIN --------------------------------------
+        $this->syncAndLoginUser(
+            $request,
+            username: $username,
+            name: $cn,
+            email: $email,
+            ou: $ou,
+            isStaticAdmin: false,
+        );
+
+        RateLimiter::clear($key);
+
+        \Log::info('LDAP login success and local user synced', [
+            'username' => $username,
+            'email' => $email,
+            'ou' => $ou,
+        ]);
+
+        return redirect()->intended(route('dashboard.monthly'));
     }
 
     public function logout(Request $request)
@@ -181,26 +282,44 @@ class AuthLdapController extends Controller
         ?string $ou,
         bool $isStaticAdmin = false,
     ): void {
-        // Create user if not exists; do NOT set kode_department here.
-        $user = User::firstOrCreate(
-            ['username' => $username],
-            [
+        $user = User::findForDirectoryIdentity($username, $email);
+        $isNew = $user === null;
+
+        if (! $user) {
+            $user = User::create([
+                'username' => $username,
                 'name'     => $name,
                 'email'    => $email,
                 'ou'       => $ou,
                 'password' => $isStaticAdmin
                     ? Hash::make((string) config('auth.static_admin.password'))
                     : Hash::make(Str::random(64)),
-            ]
-        );
-
-        $isNew = $user->wasRecentlyCreated;
+            ]);
+        }
 
         // Keep some basic info in sync with LDAP (optional)
+        if (
+            strcasecmp((string) $user->username, $username) !== 0 &&
+            ! User::query()
+                ->whereKeyNot($user->getKey())
+                ->whereRaw('LOWER(username) = ?', [Str::lower($username)])
+                ->exists()
+        ) {
+            $user->username = $username;
+        }
+
         $user->name = $name;
-        if ($email) {
+
+        if (
+            $email &&
+            ! User::query()
+                ->whereKeyNot($user->getKey())
+                ->whereRaw('LOWER(email) = ?', [Str::lower($email)])
+                ->exists()
+        ) {
             $user->email = $email;
         }
+
         if ($ou) {
             $user->ou = $ou;
         }
@@ -388,5 +507,36 @@ class AuthLdapController extends Controller
         }
 
         return $res;
+    }
+
+    private function maskLdapDn(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        if (str_contains($value, '@')) {
+            [$local, $domain] = array_pad(explode('@', $value, 2), 2, '');
+
+            if ($local === '') {
+                return '***@' . $domain;
+            }
+
+            return substr($local, 0, 2) . '***@' . $domain;
+        }
+
+        if (str_contains($value, '\\')) {
+            [$prefix, $account] = array_pad(explode('\\', $value, 2), 2, '');
+
+            if ($account === '') {
+                return $prefix . '\\***';
+            }
+
+            return $prefix . '\\' . substr($account, 0, 2) . '***';
+        }
+
+        return preg_replace('/^(.{0,2}).*/', '$1***', $value) ?? '***';
     }
 }

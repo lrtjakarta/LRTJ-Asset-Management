@@ -543,16 +543,10 @@ class DisposalApi extends Controller
 
         $ledgerMap = [];
         if ($assetUuids->isNotEmpty()) {
-            $ledgerRows = DB::table(DB::raw("(
-                SELECT DISTINCT ON (asset_uuid)
-                    asset_uuid,
-                    period,
-                    ending_balance,
-                    accumulated_depr_end
-                FROM assets_depr_ledger_monthly
-                ORDER BY asset_uuid, period DESC
-            ) as ld"))
-                ->whereIn('ld.asset_uuid', $assetUuids)
+            $ledgerRows = DB::table('assets_depr_ledger_monthly as ld')
+                ->select('asset_uuid', 'period', 'ending_balance', 'accumulated_depr_end')
+                ->whereIn('asset_uuid', $assetUuids)
+                ->whereRaw('period = (SELECT MAX(period) FROM assets_depr_ledger_monthly m WHERE m.asset_uuid = ld.asset_uuid)')
                 ->get();
 
             $ledgerMap = $ledgerRows->keyBy('asset_uuid')->map(function ($r) {
