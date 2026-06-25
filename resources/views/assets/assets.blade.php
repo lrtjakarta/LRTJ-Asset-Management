@@ -103,7 +103,12 @@
             processing: true,
             ajax: {
                 url: '{{ route('assets.datatable') }}',
+                type: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content'),
+                },
                 data: function(d) {
+                    d._token = '{{ csrf_token() }}';
                     d.asset_class = $('#flt-asset-class').val() || '';
                     d.transaction = $('#flt-transaction').val() || '';
                     d.location = $('#flt-location').val() || '';
@@ -113,6 +118,8 @@
                     d.maintenance = $('#flt-maintenance').val() || '';
                     d.sumber = $('#flt-sumber').val() || '';
                     d.asset_q = $('#flt-asset-q').val() || '';
+
+                    return d;
                 }
             },
             scrollX: true,
