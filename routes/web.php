@@ -136,7 +136,7 @@ Route::middleware('ldap.session')->group(function () {
             Route::get('/brief/{uuid}',    [AssetsController::class, 'brief'])->name('brief');
 
             // DATATABLE
-            Route::post('/datatable',       [AssetsController::class, 'datatable'])->name('datatable');
+            Route::get('/datatable',       [AssetsController::class, 'datatable'])->name('datatable');
 
             // AJAX SELECT OPTIONS
             Route::get('/select-asset-parent',        [AssetsController::class, 'select_asset_parent'])->name('parent.options');
@@ -489,10 +489,13 @@ Route::middleware('ldap.session')->group(function () {
         Route::put('/users/{id}', [UserManagementController::class, 'update'])
             ->name('users.update')
             ->middleware('role.action:USER_MGMT,U');
+        // web.php
+        Route::put('/profile', [UserManagementController::class, 'profile_update'])
+            ->name('profile.update');
     });
 
     Route::get('/reporting', [ReportingController::class, 'index'])->name('reporting.index')->middleware('role.action:REPORTING,R');
-    Route::post('/reporting/asset-depr/datatable', [ReportingController::class, 'datatableAssetDepr'])->name('reporting.asset_depr.datatable');
+    Route::get('/reporting/asset-depr/datatable', [ReportingController::class, 'datatableAssetDepr'])->name('reporting.asset_depr.datatable');
     Route::get('/reporting/asset-depr/export', [ReportingController::class, 'exportAssetDepr'])->name('reporting.asset_depr.export');
 
     Route::get('users/select-user', [UserManagementController::class, 'select_users'])->name('users.options');
