@@ -27,7 +27,7 @@ class AuthController extends Controller
 
         $usernameInput = trim($request->input('username'));
         $password      = (string) $request->input('password');
-        $device        = $request->input('device_name', 'api');
+        $device        = trim((string) $request->input('device_name', 'api')) ?: 'api';
 
         $key = 'api-login:' . Str::lower($usernameInput) . '|' . $request->ip();
         if (RateLimiter::tooManyAttempts($key, 10)) {
@@ -102,55 +102,182 @@ class AuthController extends Controller
         }
 
         /* ------------------------------------------------------------------ *
-         * 3) LDAP LOGIN (same logic as AuthLdapController, but via LdapAuth)
-         *     - Only used when static admin & local DB login both fail.
-         *     - Does NOT set kode_department; roles remain internal.
+         * 3) LDAP LOGIN
+         *    Mendukung Active Directory dan OpenLDAP.
          * ------------------------------------------------------------------ */
-        $host    = config('ldap.host');
-        $port    = (int) config('ldap.port', 389);
-        $baseDn  = (string) config('ldap.base_dn');
-        $roDn    = config('ldap.bind_dn');
-        $roPass  = config('ldap.bind_pass');
-        $timeout = (int) config('ldap.timeout', 5);
+        $host     = trim((string) config('ldap.host'));
+        $port     = (int) config('ldap.port', 389);
+        $baseDn   = trim((string) config('ldap.base_dn'), " \t\n\r\0\x0B\"");
+        $roDn     = config('ldap.bind_dn');
+        $roPass   = config('ldap.bind_pass');
+        $domain   = trim((string) config('ldap.domain'));
+        $netbios  = trim((string) config('ldap.netbios'));
+        $timeout  = (int) config('ldap.timeout', 5);
+        $useSsl   = filter_var(config('ldap.ssl', false), FILTER_VALIDATE_BOOLEAN);
+        $useTls   = filter_var(config('ldap.tls', false), FILTER_VALIDATE_BOOLEAN);
 
-        $userDn = "uid={$username},{$baseDn}";
-        $ok     = $host && $baseDn && $this->ldap->bindDn($host, $port, $userDn, $password, $timeout);
+        if ($host === '' || $baseDn === '') {
+            \Log::error('API LDAP configuration incomplete', [
+                'host_exists'    => $host !== '',
+                'base_dn_exists' => $baseDn !== '',
+            ]);
 
-        if (! $ok && $host && $baseDn) {
-            $foundDn = $this->ldap->findUserDn($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-            if ($foundDn) {
-                $userDn = $foundDn;
-                $ok = $this->ldap->bindDn($host, $port, $foundDn, $password, $timeout);
+            return response()->json([
+                'message' => 'LDAP configuration is incomplete.'
+            ], 500);
+        }
+
+        if ($useSsl && $useTls) {
+            \Log::error('API LDAP SSL and TLS cannot both be enabled');
+
+            return response()->json([
+                'message' => 'LDAP configuration is invalid.'
+            ], 500);
+        }
+
+        // Active Directory menerima UPN atau NETBIOS\\username.
+        // uid=username,BASE_DN dipertahankan sebagai fallback OpenLDAP.
+        $candidateIdentities = [];
+
+        if (str_contains($username, '@') || str_contains($username, '\\')) {
+            $candidateIdentities[] = $username;
+        }
+
+        if ($domain !== '' && ! str_contains($username, '@') && ! str_contains($username, '\\')) {
+            $candidateIdentities[] = $username . '@' . $domain;
+        }
+
+        if ($netbios !== '' && ! str_contains($username, '\\') && ! str_contains($username, '@')) {
+            $candidateIdentities[] = $netbios . '\\' . $username;
+        }
+
+        $candidateIdentities[] = "uid={$username},{$baseDn}";
+        $candidateIdentities = array_values(array_unique(array_filter($candidateIdentities)));
+
+        $authenticated = false;
+        $authenticatedIdentity = null;
+
+        foreach ($candidateIdentities as $identity) {
+            try {
+                if ($this->ldap->bindDn(
+                    $host,
+                    $port,
+                    $identity,
+                    $password,
+                    $timeout,
+                    $useSsl,
+                    $useTls,
+                )) {
+                    $authenticated = true;
+                    $authenticatedIdentity = $identity;
+                    break;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('API LDAP direct bind exception', [
+                    'username' => $username,
+                    'error'    => $e->getMessage(),
+                ]);
             }
         }
 
-        if ($ok) {
-            $attrs = $this->ldap->fetchAttributes($host, $port, $roDn, $roPass, $baseDn, $username, $timeout);
-            $cn    = $attrs['cn'][0]   ?? $username;
-            $mail  = $attrs['mail'][0] ?? null;
+        // Fallback: bind akun pencarian, cari DN asli user, lalu bind sebagai user.
+        if (! $authenticated) {
+            try {
+                $foundDn = $this->ldap->findUserDn(
+                    $host,
+                    $port,
+                    $roDn,
+                    $roPass,
+                    $baseDn,
+                    $username,
+                    $timeout,
+                    $useSsl,
+                    $useTls,
+                    $domain !== '' ? $domain : null,
+                );
 
-            // Do NOT take kode_department from LDAP; internal only
-            $user = User::findForDirectoryIdentity($username, $mail);
+                if ($foundDn && $this->ldap->bindDn(
+                    $host,
+                    $port,
+                    $foundDn,
+                    $password,
+                    $timeout,
+                    $useSsl,
+                    $useTls,
+                )) {
+                    $authenticated = true;
+                    $authenticatedIdentity = $foundDn;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('API LDAP DN lookup/bind exception', [
+                    'username' => $username,
+                    'error'    => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($authenticated) {
+            try {
+                $attrs = $this->ldap->fetchAttributes(
+                    $host,
+                    $port,
+                    $roDn,
+                    $roPass,
+                    $baseDn,
+                    $username,
+                    $timeout,
+                    $useSsl,
+                    $useTls,
+                    $domain !== '' ? $domain : null,
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('API LDAP attribute fetch failed', [
+                    'username' => $username,
+                    'error'    => $e->getMessage(),
+                ]);
+                $attrs = [];
+            }
+
+            // ldap_get_entries() mengubah nama key atribut menjadi lowercase.
+            $directoryUsername = $attrs['samaccountname'][0]
+                ?? $attrs['uid'][0]
+                ?? (str_contains($username, '@') ? strstr($username, '@', true) : $username);
+
+            $cn = $attrs['displayname'][0]
+                ?? $attrs['cn'][0]
+                ?? $attrs['name'][0]
+                ?? $directoryUsername;
+
+            $mail = $attrs['mail'][0]
+                ?? $attrs['userprincipalname'][0]
+                ?? (str_contains($username, '@') ? $username : null);
+
+            $ou = $attrs['ou'][0]
+                ?? $attrs['department'][0]
+                ?? null;
+
+            // Role dan kode_department tetap dikelola dari aplikasi.
+            $user = User::findForDirectoryIdentity($directoryUsername, $mail);
             $isNew = $user === null;
 
             if (! $user) {
                 $user = User::create([
-                    'username' => $username,
+                    'username' => $directoryUsername,
                     'name'     => $cn,
                     'email'    => $mail,
-                    'password' => Hash::make(Str::random(32)),
+                    'ou'       => $ou,
+                    'password' => Hash::make(Str::random(64)),
                 ]);
             }
 
-            // Keep basic info in sync, like web syncAndLoginUser
             if (
-                strcasecmp((string) $user->username, $username) !== 0 &&
+                strcasecmp((string) $user->username, (string) $directoryUsername) !== 0 &&
                 ! User::query()
                     ->whereKeyNot($user->getKey())
-                    ->whereRaw('LOWER(username) = ?', [Str::lower($username)])
+                    ->whereRaw('LOWER(username) = ?', [Str::lower((string) $directoryUsername)])
                     ->exists()
             ) {
-                $user->username = $username;
+                $user->username = $directoryUsername;
             }
 
             $user->name = $cn;
@@ -164,9 +291,13 @@ class AuthController extends Controller
             ) {
                 $user->email = $mail;
             }
+
+            if ($ou) {
+                $user->ou = $ou;
+            }
+
             $user->save();
 
-            // Default role for brand new LDAP users (same as web: AUDITOR)
             if ($isNew && empty($user->role_kode)) {
                 $user->roles()->syncWithoutDetaching(['AUDITOR']);
                 $user->role_kode = 'AUDITOR';
@@ -176,12 +307,20 @@ class AuthController extends Controller
             $token = $user->createToken($device)->plainTextToken;
             RateLimiter::clear($key);
 
+            \Log::info('API LDAP login success', [
+                'username' => $directoryUsername,
+                'identity_type' => $authenticatedIdentity === null
+                    ? null
+                    : (str_contains($authenticatedIdentity, '@')
+                        ? 'upn'
+                        : (str_contains($authenticatedIdentity, '\\') ? 'netbios' : 'dn')),
+            ]);
+
             return response()->json([
                 'access_token' => $token,
                 'token_type'   => 'Bearer',
                 'user'         => $this->buildUserPayload($user, [
                     'auth' => 'ldap',
-                    'dn'   => $userDn,
                 ]),
             ], 201);
         }
