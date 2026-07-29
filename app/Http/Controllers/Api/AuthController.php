@@ -99,8 +99,12 @@ class AuthController extends Controller
 
         /* ------------------------------------------------------------------
          * 3) LDAP CONFIG
-         * config/ldap.php memakai struktur bawaan LdapRecord:
-         * ldap.connections.{connection-name}.*
+         *
+         * PENTING:
+         * config/ldap.php adalah konfigurasi LdapRecord.
+         * Jangan menambahkan option "domain" atau "netbios" ke dalam
+         * ldap.connections.default karena LdapRecord akan melempar:
+         * ConfigurationException: Option domain does not exist.
          * ------------------------------------------------------------------ */
         $connectionName = trim((string) config('ldap.default', 'default')) ?: 'default';
         $ldapConfig = (array) config("ldap.connections.{$connectionName}", []);
@@ -112,13 +116,15 @@ class AuthController extends Controller
 
         $port = (int) ($ldapConfig['port'] ?? 389);
         $baseDn = trim((string) ($ldapConfig['base_dn'] ?? ''), " \t\n\r\0\x0B\"'");
-        $bindDn = $ldapConfig['username'] ?? null;
-        $bindPassword = $ldapConfig['password'] ?? null;
+        $bindDn = isset($ldapConfig['username'])
+            ? trim((string) $ldapConfig['username'])
+            : null;
+        $bindPassword = isset($ldapConfig['password'])
+            ? (string) $ldapConfig['password']
+            : null;
         $timeout = (int) ($ldapConfig['timeout'] ?? 5);
         $useSsl = filter_var($ldapConfig['use_ssl'] ?? false, FILTER_VALIDATE_BOOLEAN);
         $useTls = filter_var($ldapConfig['use_tls'] ?? false, FILTER_VALIDATE_BOOLEAN);
-        $domain = trim((string) ($ldapConfig['domain'] ?? ''));
-        $netbios = trim((string) ($ldapConfig['netbios'] ?? ''));
 
         if ($host === '' || $baseDn === '') {
             \Log::error('API LDAP configuration incomplete', [
@@ -142,28 +148,42 @@ class AuthController extends Controller
             ], 503);
         }
 
+        /*
+         * Ambil domain UPN tanpa menambahkan option ilegal ke config LDAP:
+         * - dari username login jika berbentuk user@domain
+         * - bila username pendek, coba ambil suffix domain dari LDAP_USERNAME
+         */
+        $domain = $this->extractUpnDomain($username)
+            ?? $this->extractUpnDomain($bindDn);
+
         /* ------------------------------------------------------------------
          * 4) LDAP AUTHENTICATION
          * ------------------------------------------------------------------ */
         $shortUsername = $this->shortDirectoryUsername($username);
         $candidateIdentities = [];
 
-        // Input berupa email/UPN atau DOMAIN\\username dapat langsung di-bind.
+        // Email/UPN atau DOMAIN\username bisa langsung di-bind.
         if (str_contains($username, '@') || str_contains($username, '\\')) {
             $candidateIdentities[] = $username;
         }
 
-        if ($domain !== '' && ! str_contains($username, '@') && ! str_contains($username, '\\')) {
+        // Username pendek: coba username@domain dari service-account domain.
+        if (
+            $domain !== null &&
+            ! str_contains($username, '@') &&
+            ! str_contains($username, '\\')
+        ) {
             $candidateIdentities[] = $shortUsername . '@' . $domain;
         }
 
-        if ($netbios !== '' && ! str_contains($username, '@') && ! str_contains($username, '\\')) {
-            $candidateIdentities[] = $netbios . '\\' . $shortUsername;
-        }
-
-        // Fallback untuk OpenLDAP.
+        // OpenLDAP fallback.
         $candidateIdentities[] = "uid={$shortUsername},{$baseDn}";
-        $candidateIdentities = array_values(array_unique(array_filter($candidateIdentities)));
+
+        $candidateIdentities = array_values(
+            array_unique(
+                array_filter($candidateIdentities)
+            )
+        );
 
         $authenticated = false;
 
@@ -196,7 +216,7 @@ class AuthController extends Controller
             }
         }
 
-        // Bila direct bind gagal, cari distinguishedName user menggunakan akun bind.
+        // Bila direct bind gagal, cari DN user memakai service account.
         if (! $authenticated) {
             try {
                 $foundDn = $this->ldap->findUserDn(
@@ -209,18 +229,21 @@ class AuthController extends Controller
                     $timeout,
                     $useSsl,
                     $useTls,
-                    $domain !== '' ? $domain : null,
+                    $domain,
                 );
 
-                if ($foundDn && $this->ldap->bindDn(
-                    $host,
-                    $port,
-                    $foundDn,
-                    $password,
-                    $timeout,
-                    $useSsl,
-                    $useTls,
-                )) {
+                if (
+                    $foundDn &&
+                    $this->ldap->bindDn(
+                        $host,
+                        $port,
+                        $foundDn,
+                        $password,
+                        $timeout,
+                        $useSsl,
+                        $useTls,
+                    )
+                ) {
                     $authenticated = true;
 
                     \Log::info('API LDAP DN bind success', [
@@ -243,7 +266,6 @@ class AuthController extends Controller
 
         /* ------------------------------------------------------------------
          * 5) FETCH ATTRIBUTES + SYNC LOCAL USER
-         * Dibuat sama dengan perilaku web: username input dipertahankan.
          * ------------------------------------------------------------------ */
         try {
             $attrs = $this->ldap->fetchAttributes(
@@ -256,7 +278,7 @@ class AuthController extends Controller
                 $timeout,
                 $useSsl,
                 $useTls,
-                $domain !== '' ? $domain : null,
+                $domain,
             );
         } catch (\Throwable $e) {
             \Log::warning('API LDAP attribute fetch failed', [
@@ -267,7 +289,7 @@ class AuthController extends Controller
             $attrs = [];
         }
 
-        // ldap_get_entries() menurunkan nama key atribut menjadi lowercase.
+        // ldap_get_entries() mengubah key atribut menjadi lowercase.
         $name = $attrs['displayname'][0]
             ?? $attrs['cn'][0]
             ?? $attrs['name'][0]
@@ -413,6 +435,20 @@ class AuthController extends Controller
         return $username;
     }
 
+    private function extractUpnDomain(?string $identity): ?string
+    {
+        $identity = trim((string) $identity);
+
+        if ($identity === '' || ! str_contains($identity, '@')) {
+            return null;
+        }
+
+        [, $domain] = array_pad(explode('@', $identity, 2), 2, '');
+        $domain = trim($domain);
+
+        return $domain !== '' ? $domain : null;
+    }
+
     private function identityType(string $identity): string
     {
         if (str_contains($identity, '@')) {
@@ -449,7 +485,10 @@ class AuthController extends Controller
                     $actions = is_array($rm->actions) ? $rm->actions : [];
 
                     foreach ($actions as $action) {
-                        if ($action !== null && ! in_array($action, $permissionsMap[$menu], true)) {
+                        if (
+                            $action !== null &&
+                            ! in_array($action, $permissionsMap[$menu], true)
+                        ) {
                             $permissionsMap[$menu][] = $action;
                         }
                     }
@@ -460,6 +499,7 @@ class AuthController extends Controller
 
         foreach ($permissionsMap as $menuKode => $actions) {
             sort($actions);
+
             $permissions[] = [
                 'menu_kode' => $menuKode,
                 'actions' => array_values($actions),
