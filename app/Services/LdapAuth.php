@@ -20,7 +20,6 @@ class LdapAuth
             return null;
         }
 
-        // Hindari URI ganda saat ENV sudah berisi ldap:// atau ldaps://.
         $hostWithoutScheme = preg_replace('#^ldaps?://#i', '', $host) ?: $host;
         $uri = ($useSsl ? 'ldaps://' : 'ldap://') . $hostWithoutScheme;
 
@@ -65,9 +64,6 @@ class LdapAuth
         return (bool) $ok;
     }
 
-    /**
-     * Cari DN user. Mendukung Active Directory dan OpenLDAP.
-     */
     public function findUserDn(
         string $host,
         int $port,
@@ -111,9 +107,6 @@ class LdapAuth
             ?? null;
     }
 
-    /**
-     * Mengambil atribut dasar user dari Active Directory/OpenLDAP.
-     */
     public function fetchAttributes(
         string $host,
         int $port,
@@ -168,9 +161,6 @@ class LdapAuth
             : [];
     }
 
-    /**
-     * Bind akun pencarian/read-only. Anonymous bind tetap menjadi fallback.
-     */
     private function bindSearchConnection($conn, ?string $bindDn, ?string $bindPass): bool
     {
         if ($bindDn !== null && $bindDn !== '' && $bindPass !== null && $bindPass !== '') {
@@ -180,30 +170,23 @@ class LdapAuth
         return (bool) @ldap_bind($conn);
     }
 
-    /**
-     * Filter gabungan:
-     * - sAMAccountName untuk Active Directory
-     * - userPrincipalName untuk UPN
-     * - uid untuk OpenLDAP
-     * - mail sebagai fallback bila input berupa email
-     */
     private function buildUserFilter(string $username, ?string $domain = null): string
     {
         $identity = trim($username);
 
-        // DOMAIN\\username -> username
         $account = str_contains($identity, '\\')
             ? (string) substr($identity, strrpos($identity, '\\') + 1)
             : $identity;
 
-        // username@domain -> username untuk sAMAccountName/uid.
         $shortAccount = str_contains($account, '@')
             ? (string) strstr($account, '@', true)
             : $account;
 
         $upn = str_contains($account, '@')
             ? $account
-            : (trim((string) $domain) !== '' ? $shortAccount . '@' . trim((string) $domain) : null);
+            : (trim((string) $domain) !== ''
+                ? $shortAccount . '@' . trim((string) $domain)
+                : null);
 
         $filters = [];
 
