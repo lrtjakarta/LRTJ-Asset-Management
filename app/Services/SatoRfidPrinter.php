@@ -118,11 +118,11 @@ class SatoRfidPrinter
                 'qr_h_mm' => 68,
                 'qr_v_mm' => 6,
                 'qr_cell_size' => 6,
-                'description_length' => 28,
-                'text_font' => 'XS',
-                'title_font' => 'XM',
-                'title_scale' => '0101',
-                'text_scale' => '0101',
+                'description_line_length' => 28,
+                'text_font' => 'S',
+                'title_font' => 'M',
+                'title_scale' => '0202',
+                'text_scale' => '0202',
             ],
             '60x25' => [
                 'width_mm' => 60,
@@ -133,7 +133,7 @@ class SatoRfidPrinter
                 'qr_h_mm' => 42,
                 'qr_v_mm' => 3,
                 'qr_cell_size' => 3,
-                'description_length' => 18,
+                'description_line_length' => 18,
                 'text_font' => 'M',
                 'title_font' => 'M',
                 'title_scale' => '0101',
@@ -152,7 +152,7 @@ class SatoRfidPrinter
             'qr_h' => $layout['qr_h_mm'] * $dotsPerMm,
             'qr_v' => $layout['qr_v_mm'] * $dotsPerMm,
             'qr_cell_size' => $layout['qr_cell_size'],
-            'description_length' => $layout['description_length'],
+            'description_line_length' => $layout['description_line_length'],
             'text_font' => $layout['text_font'],
             'title_font' => $layout['title_font'],
             'title_scale' => $layout['title_scale'],
@@ -172,11 +172,15 @@ class SatoRfidPrinter
         $texts = [
             ['text' => 'PT. LRT JAKARTA', 'font' => $layout['title_font'], 'scale' => $layout['title_scale']],
             ['text' => $asset->asset_code ?? '-', 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => mb_substr($asset->description ?? '-', 0, $layout['description_length']), 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'Owner: ' . $owner, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'Lok: ' . $location, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
-            ['text' => 'RFID: ' . $epc, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
         ];
+
+        foreach ($this->wrapTextForLabel($asset->description ?? '-', $layout['description_line_length']) as $descriptionLine) {
+            $texts[] = ['text' => $descriptionLine, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']];
+        }
+
+        $texts[] = ['text' => 'Owner: ' . $owner, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']];
+        $texts[] = ['text' => 'Lok: ' . $location, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']];
+        $texts[] = ['text' => 'RFID: ' . $epc, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']];
 
         $lines = [];
         foreach ($texts as $index => $item) {
@@ -190,6 +194,52 @@ class SatoRfidPrinter
         }
 
         return $lines;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function wrapTextForLabel(string $text, int $maxChars): array
+    {
+        $text = $this->cleanPrintableText($text);
+
+        if ($text === '') {
+            return ['-'];
+        }
+
+        $words = preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $lines = [];
+        $line = '';
+
+        foreach ($words as $word) {
+            while (mb_strlen($word) > $maxChars) {
+                if ($line !== '') {
+                    $lines[] = $line;
+                    $line = '';
+                }
+
+                $lines[] = mb_substr($word, 0, $maxChars);
+                $word = mb_substr($word, $maxChars);
+            }
+
+            $candidate = $line === '' ? $word : $line . ' ' . $word;
+            if (mb_strlen($candidate) <= $maxChars) {
+                $line = $candidate;
+                continue;
+            }
+
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+
+            $line = $word;
+        }
+
+        if ($line !== '') {
+            $lines[] = $line;
+        }
+
+        return $lines ?: ['-'];
     }
 
     protected function shortRfidText(string $epc): string
