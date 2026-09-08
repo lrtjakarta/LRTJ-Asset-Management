@@ -118,11 +118,12 @@ class SatoRfidPrinter
                 'qr_h_mm' => 68,
                 'qr_v_mm' => 6,
                 'qr_cell_size' => 6,
-                'description_line_length' => 28,
+                'description_line_length' => 25,
+                'description_max_lines' => 2,
                 'text_font' => 'S',
                 'title_font' => 'M',
-                'title_scale' => '0202',
-                'text_scale' => '0202',
+                'title_scale' => '0101',
+                'text_scale' => '0101',
             ],
             '60x25' => [
                 'width_mm' => 60,
@@ -134,6 +135,7 @@ class SatoRfidPrinter
                 'qr_v_mm' => 3,
                 'qr_cell_size' => 3,
                 'description_line_length' => 18,
+                'description_max_lines' => 1,
                 'text_font' => 'M',
                 'title_font' => 'M',
                 'title_scale' => '0101',
@@ -153,6 +155,7 @@ class SatoRfidPrinter
             'qr_v' => $layout['qr_v_mm'] * $dotsPerMm,
             'qr_cell_size' => $layout['qr_cell_size'],
             'description_line_length' => $layout['description_line_length'],
+            'description_max_lines' => $layout['description_max_lines'],
             'text_font' => $layout['text_font'],
             'title_font' => $layout['title_font'],
             'title_scale' => $layout['title_scale'],
@@ -174,7 +177,13 @@ class SatoRfidPrinter
             ['text' => $asset->asset_code ?? '-', 'font' => $layout['text_font'], 'scale' => $layout['text_scale']],
         ];
 
-        foreach ($this->wrapTextForLabel($asset->description ?? '-', $layout['description_line_length']) as $descriptionLine) {
+        $descriptionLines = array_slice(
+            $this->wrapTextForLabel($asset->description ?? '-', $layout['description_line_length']),
+            0,
+            $layout['description_max_lines']
+        );
+
+        foreach ($descriptionLines as $descriptionLine) {
             $texts[] = ['text' => $descriptionLine, 'font' => $layout['text_font'], 'scale' => $layout['text_scale']];
         }
 
