@@ -77,6 +77,13 @@ class SatoRfidPrinter
                 . $esc . $this->v($line['v'])
                 . $esc . "L" . $line['scale']
                 . $esc . $line['font'] . $line['text'];
+
+            if ($layout['bold_offset'] > 0) {
+                $cmd .= $esc . $this->h($line['h'] + $layout['bold_offset'])
+                    . $esc . $this->v($line['v'])
+                    . $esc . "L" . $line['scale']
+                    . $esc . $line['font'] . $line['text'];
+            }
         }
 
         if ($qrData !== '') {
@@ -120,6 +127,7 @@ class SatoRfidPrinter
                 'qr_cell_size' => 6,
                 'description_line_length' => 25,
                 'description_max_lines' => 2,
+                'bold_offset' => 1,
                 'text_font' => 'M',
                 'title_font' => 'M',
                 'title_scale' => '0101',
@@ -136,6 +144,7 @@ class SatoRfidPrinter
                 'qr_cell_size' => 3,
                 'description_line_length' => 18,
                 'description_max_lines' => 1,
+                'bold_offset' => 0,
                 'text_font' => 'M',
                 'title_font' => 'M',
                 'title_scale' => '0101',
@@ -156,6 +165,7 @@ class SatoRfidPrinter
             'qr_cell_size' => $layout['qr_cell_size'],
             'description_line_length' => $layout['description_line_length'],
             'description_max_lines' => $layout['description_max_lines'],
+            'bold_offset' => $layout['bold_offset'],
             'text_font' => $layout['text_font'],
             'title_font' => $layout['title_font'],
             'title_scale' => $layout['title_scale'],
